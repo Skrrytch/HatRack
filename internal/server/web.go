@@ -112,6 +112,9 @@ type nowView struct {
 	SumSince int64
 	Running  bool // the time log is running (a hat is worn)
 	TL       timelineView
+	Detail   []core.DetailPart // of the running entry, Jira keys linked
+	DetailIn string            // its short form, for the field
+	Recent   []string          // recent details of this hat and activity
 }
 
 type segment struct {
@@ -184,6 +187,8 @@ type rowView struct {
 	Open                                       bool
 	Gap                                        bool   // a stretch without an entry
 	ID                                         string // the event that opened the entry
+	Detail                                     []core.DetailPart
+	DetailIn                                   string // short form, for the edit form
 	What                                       string // value of the choice: hat|activity
 	StartIn, EndIn                             string // HH:MM for the edit form
 }
@@ -194,7 +199,15 @@ type choiceGroup struct {
 	Options []option
 }
 
-type actTotal struct{ Name, Duration string }
+type actTotal struct {
+	Name, Duration string
+	Details        []detailTotal
+}
+
+type detailTotal struct {
+	Parts    []core.DetailPart // the detail, Jira keys linked
+	Duration string
+}
 
 type totalView struct {
 	Hat, Color, Duration, Delta string
@@ -495,6 +508,17 @@ func (s *Server) nowPage(w http.ResponseWriter, r *http.Request, acc access) {
 	n.Color = pal.color(st.Hat)
 	n.Activity = st.Activity
 	if st.Mode != core.ModeNone {
+		links, _ := s.st.TicketLinks(ctx)
+		n.Detail, n.DetailIn = core.SplitDetail(st.Detail, links), core.ShortDetail(st.Detail)
+		if ev, err := s.st.Effective(ctx, time.Time{}); err == nil {
+			for _, d := range core.RecentDetails(ev, s.Now().AddDate(0, 0, -14), 6)[st.Hat][st.Activity] {
+				if d != n.DetailIn && len(n.Recent) < 5 {
+					n.Recent = append(n.Recent, d)
+				}
+			}
+		}
+	}
+	if st.Mode != core.ModeNone {
 		n.Since = st.Since.In(loc).Format("15:04")
 		if st.Mode == core.ModeWearing {
 			n.Duration = core.FormatDuration(s.Now().Sub(st.Since))
@@ -571,6 +595,10 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request, _ access) {
 		ev, err = core.PlanOff(st, r.PostFormValue("neutral") != "", in)
 	case "resume":
 		ev, err = core.PlanOn(cfg, st, last, core.OnArgs{}, in)
+	case "detail":
+		ev, err = core.PlanDetail(st, r.PostFormValue("detail"), in)
+	case "detail-clear":
+		ev, err = core.PlanDetail(st, "-", in)
 	default:
 		err = fmt.Errorf("unknown action")
 	}
@@ -642,7 +670,7 @@ func dayLabel(lang string, t time.Time, year bool) string {
 	return wd + " " + t.Format("01-02")
 }
 
-func (s *Server) totalViews(tot []core.HatTotal, prev map[string]time.Duration, pal palette, nm map[string]string, lang string) []totalView {
+func (s *Server) totalViews(tot []core.HatTotal, prev map[string]time.Duration, pal palette, nm map[string]string, lang string, links core.TicketLinks) []totalView {
 	var max time.Duration
 	for _, t := range tot {
 		if t.Duration > max {
@@ -650,7 +678,7 @@ func (s *Server) totalViews(tot []core.HatTotal, prev map[string]time.Duration, 
 		}
 	}
 	var out []totalView
-	hatMin, actMin, _ := core.RoundTotals(tot) // rows add up to the sum
+	hatMin, actMin, detMin, _ := core.RoundTotalsDetails(tot) // rows add up to the sum
 	for i, t := range tot {
 		tv := totalView{Hat: nameOf(nm, t.Hat), Color: pal.color(t.Hat), Duration: core.FormatMinutes(hatMin[i])}
 		if max > 0 {
@@ -665,7 +693,15 @@ func (s *Server) totalViews(tot []core.HatTotal, prev map[string]time.Duration, 
 				if name == "" {
 					name = i18n.In(lang, "cli.log.noactivity")
 				}
-				tv.Activities = append(tv.Activities, actTotal{name, core.FormatMinutes(actMin[i][j])})
+				at := actTotal{Name: name, Duration: core.FormatMinutes(actMin[i][j])}
+				for k, d := range a.Details {
+					parts := core.SplitDetail(d.Detail, links)
+					if d.Detail == "" {
+						parts = []core.DetailPart{{Text: i18n.In(lang, "web.nodetail")}}
+					}
+					at.Details = append(at.Details, detailTotal{parts, core.FormatMinutes(detMin[i][j][k])})
+				}
+				tv.Activities = append(tv.Activities, at)
 			}
 		}
 		out = append(out, tv)
@@ -708,6 +744,7 @@ func (s *Server) dayPage(w http.ResponseWriter, r *http.Request, acc access) {
 	d.Title = dayLabel(lang, day, true)
 	d.Prev, d.Next = "/day?date="+dateStr(day.AddDate(0, 0, -1)), "/day?date="+dateStr(next)
 	d.TL = s.timeline(day, cfg, iv, lang)
+	links, _ := s.st.TicketLinks(r.Context())
 	d.Date = dateStr(day)
 	d.IsToday = v.Live
 	d.Done = r.URL.Query().Get("done")
@@ -727,7 +764,8 @@ func (s *Server) dayPage(w http.ResponseWriter, r *http.Request, acc access) {
 		if i.Open {
 			end = i18n.In(lang, "cli.log.now")
 		}
-		row := rowView{Start: i.Start.In(loc).Format("15:04"), End: end, Hat: nameOf(nm, i.Hat),
+		row := rowView{Detail: core.SplitDetail(i.Detail, links), DetailIn: core.ShortDetail(i.Detail),
+			Start: i.Start.In(loc).Format("15:04"), End: end, Hat: nameOf(nm, i.Hat),
 			Color: pal.color(i.Hat), Activity: i.Activity, Duration: core.FormatDuration(i.Duration()), Open: i.Open,
 			ID: i.StartID, What: i.Hat + "|" + i.Activity, StartIn: i.Start.In(loc).Format("15:04")}
 		if !i.Open {
@@ -735,7 +773,7 @@ func (s *Server) dayPage(w http.ResponseWriter, r *http.Request, acc access) {
 		}
 		d.Rows = append(d.Rows, row)
 	}
-	d.Totals = s.totalViews(tot, nil, pal, nm, lang)
+	d.Totals = s.totalViews(tot, nil, pal, nm, lang, links)
 	d.Sum = core.FormatDuration(sumOf(tot))
 	s.render(w, v, http.StatusOK)
 }
@@ -803,7 +841,8 @@ func (s *Server) weekPage(w http.ResponseWriter, r *http.Request, acc access) {
 		}
 		wv.Days = append(wv.Days, bar)
 	}
-	wv.Totals = s.totalViews(tot, prev, pal, nm, lang)
+	links, _ := s.st.TicketLinks(r.Context())
+	wv.Totals = s.totalViews(tot, prev, pal, nm, lang, links)
 	wv.Sum = core.FormatDuration(sumOf(tot))
 	wv.SumDelta = delta(sumOf(tot) - sumOf(prevTot))
 	s.render(w, v, http.StatusOK)
@@ -836,7 +875,7 @@ func (s *Server) weekCSV(w http.ResponseWriter, r *http.Request, _ access) {
 			ds := start.AddDate(0, 0, d)
 			for _, c := range core.Clip([]core.Interval{i}, ds, ds.AddDate(0, 0, 1)) {
 				list = append(list, csvRow{[]string{dateStr(ds), nameOf(nm, c.Hat), c.Activity,
-					c.Start.In(loc).Format("15:04"), c.End.In(loc).Format("15:04"), "", ""}, c.Duration()})
+					c.Start.In(loc).Format("15:04"), c.End.In(loc).Format("15:04"), "", core.ShortDetail(c.Detail)}, c.Duration()})
 			}
 		}
 	}

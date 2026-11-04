@@ -168,3 +168,43 @@ func TestDayWorkHours(t *testing.T) {
 		t.Fatalf("end before start: %d", r.StatusCode)
 	}
 }
+
+func TestWebDetails(t *testing.T) {
+	e, b := setupBrowser(t)
+	b.do("POST", "/action", url.Values{"op": {"on"}, "hat": {"venom"}, "activity": {"review"}})
+	e.now = e.now.Add(20 * time.Minute)
+	if r, _ := b.do("POST", "/action", url.Values{"op": {"detail"}, "detail": {"https://jira.example.org/browse/TAG-1366"}}); r.StatusCode != 303 {
+		t.Fatalf("detail: %d", r.StatusCode)
+	}
+	st, _ := e.st.CurrentState(context.Background())
+	if st.Detail == "" || !st.Since.Equal(e.now.Add(-20*time.Minute)) {
+		t.Fatalf("first detail names the running entry: %+v", st)
+	}
+	_, out := b.do("GET", "/", nil)
+	if !strings.Contains(out, `<a class="ticket" href="https://jira.example.org/browse/TAG-1366"`) || !strings.Contains(out, ">TAG-1366</a>") {
+		t.Fatal("Now shows the key, linked")
+	}
+	// a changed detail starts a new entry; the old one is offered again
+	e.now = e.now.Add(10 * time.Minute)
+	b.do("POST", "/action", url.Values{"op": {"detail"}, "detail": {"TAG-7"}})
+	e.now = e.now.Add(10 * time.Minute)
+	_, out = b.do("GET", "/", nil)
+	if !strings.Contains(out, `class="recent"`) || !strings.Contains(out, ">TAG-1366</button>") {
+		t.Fatal("recent details as one-click chips")
+	}
+	if !strings.Contains(out, `href="https://jira.example.org/browse/TAG-7"`) {
+		t.Fatal("a plain key of a learned project is linked")
+	}
+	_, out = b.do("GET", "/day?date=2026-11-04", nil)
+	if !strings.Contains(out, `class="dets"`) || !strings.Contains(out, `value="TAG-1366"`) {
+		t.Fatal("Day: activity unfolds into details; the edit form holds the short detail")
+	}
+	_, csvOut := b.do("GET", "/week.csv?date=2026-11-04", nil)
+	if !strings.Contains(csvOut, ",TAG-1366\n") || !strings.Contains(csvOut, ",TAG-7\n") {
+		t.Fatalf("CSV note column:\n%s", csvOut)
+	}
+	b.do("POST", "/action", url.Values{"op": {"detail-clear"}})
+	if st, _ := e.st.CurrentState(context.Background()); st.Detail != "" {
+		t.Fatal("clear")
+	}
+}

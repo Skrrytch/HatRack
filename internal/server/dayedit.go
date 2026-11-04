@@ -96,6 +96,7 @@ func (s *Server) dayEdit(w http.ResponseWriter, r *http.Request, _ access) {
 			}
 		}
 		ed.Hat, ed.Activity, _ = strings.Cut(r.PostFormValue("what"), "|")
+		ed.Detail = strings.TrimSpace(r.PostFormValue("detail"))
 		if ed.Hat == "" {
 			fail(i18n.In(lang, "web.day.needwhat"))
 			return

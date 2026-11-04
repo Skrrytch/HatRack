@@ -318,6 +318,15 @@ func Clip(in []Interval, from, to time.Time) []Interval {
 type ActivityTotal struct {
 	Activity string        `json:"activity"` // "" means no activity
 	Duration time.Duration `json:"duration"`
+	// Details splits the activity by detail (short form, "" for none);
+	// empty when no entry of the activity has a detail.
+	Details []DetailTotal `json:"details,omitempty"`
+}
+
+// DetailTotal is the time spent on one detail of an activity.
+type DetailTotal struct {
+	Detail   string        `json:"detail"`
+	Duration time.Duration `json:"duration"`
 }
 
 // HatTotal is the time spent in one hat, split by activity.
@@ -331,6 +340,8 @@ type HatTotal struct {
 func Totals(in []Interval) []HatTotal {
 	byHat := map[string]*HatTotal{}
 	byAct := map[string]map[string]time.Duration{}
+	byDet := map[string]map[string]map[string]time.Duration{}
+	hasDet := map[string]map[string]bool{}
 	var order []string
 	for _, i := range in {
 		t := byHat[i.Hat]
@@ -338,16 +349,38 @@ func Totals(in []Interval) []HatTotal {
 			t = &HatTotal{Hat: i.Hat}
 			byHat[i.Hat] = t
 			byAct[i.Hat] = map[string]time.Duration{}
+			byDet[i.Hat] = map[string]map[string]time.Duration{}
+			hasDet[i.Hat] = map[string]bool{}
 			order = append(order, i.Hat)
 		}
 		t.Duration += i.Duration()
 		byAct[i.Hat][i.Activity] += i.Duration()
+		if byDet[i.Hat][i.Activity] == nil {
+			byDet[i.Hat][i.Activity] = map[string]time.Duration{}
+		}
+		d := ShortDetail(i.Detail)
+		byDet[i.Hat][i.Activity][d] += i.Duration()
+		if d != "" {
+			hasDet[i.Hat][i.Activity] = true
+		}
 	}
 	out := make([]HatTotal, 0, len(order))
 	for _, h := range order {
 		t := byHat[h]
 		for a, d := range byAct[h] {
-			t.Activities = append(t.Activities, ActivityTotal{a, d})
+			at := ActivityTotal{Activity: a, Duration: d}
+			if hasDet[h][a] {
+				for det, dd := range byDet[h][a] {
+					at.Details = append(at.Details, DetailTotal{det, dd})
+				}
+				sort.Slice(at.Details, func(i, j int) bool {
+					if at.Details[i].Duration != at.Details[j].Duration {
+						return at.Details[i].Duration > at.Details[j].Duration
+					}
+					return at.Details[i].Detail < at.Details[j].Detail
+				})
+			}
+			t.Activities = append(t.Activities, at)
 		}
 		sort.Slice(t.Activities, func(i, j int) bool {
 			if t.Activities[i].Duration != t.Activities[j].Duration {

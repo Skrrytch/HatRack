@@ -37,13 +37,14 @@
         <label>{{t $.Lang "web.day.from"}}<input type="time" name="start" value="{{.StartIn}}" required></label>
         <label>{{t $.Lang "web.day.to"}}<input type="time" name="end" value="{{.EndIn}}" required></label>
         <label class="grow">{{t $.Lang "web.day.what"}}{{template "whatselect" (dict "Choices" $d.Choices "Sel" "")}}</label>
+        <label class="grow">{{t $.Lang "web.detail"}}<input type="text" name="detail" placeholder="{{t $.Lang "web.detail.placeholder"}}"></label>
         <button class="primary">{{t $.Lang "web.day.fill"}}</button>
       </form>
       {{end}}
     </details>
   {{else}}
     <details class="iv" style="--c:{{.Color}}">
-      <summary><span class="ivtime">{{.Start}}–{{.End}}</span><span class="ivwhat"><span class="dot"></span>{{.Hat}}{{if .Activity}} <span class="dim">· {{.Activity}}</span>{{end}}</span><span class="num">{{.Duration}}</span>{{if $.CanWrite}}<span class="ivedit" title="{{t $.Lang "web.day.edit"}}">{{template "icon" "edit"}}</span>{{end}}</summary>
+      <summary><span class="ivtime">{{.Start}}–{{.End}}</span><span class="ivwhat"><span class="dot"></span>{{.Hat}}{{if .Activity}} <span class="dim">· {{.Activity}}</span>{{end}}{{if .Detail}} <span class="dim">· {{template "detail" .Detail}}</span>{{end}}</span><span class="num">{{.Duration}}</span>{{if $.CanWrite}}<span class="ivedit" title="{{t $.Lang "web.day.edit"}}">{{template "icon" "edit"}}</span>{{end}}</summary>
       {{if $.CanWrite}}
       <form method="post" action="/day/edit" class="ivform">
         <input type="hidden" name="date" value="{{$d.Date}}"><input type="hidden" name="id" value="{{.ID}}">
@@ -52,6 +53,7 @@
         <label>{{t $.Lang "web.day.from"}}<input type="time" name="start" value="{{.StartIn}}" required></label>
         <label>{{t $.Lang "web.day.to"}}{{if .Open}}<input type="time" name="end" value="" placeholder="{{t $.Lang "web.day.running"}}" title="{{t $.Lang "web.day.running_hint"}}">{{else}}<input type="time" name="end" value="{{.EndIn}}" required>{{end}}</label>
         <label class="grow">{{t $.Lang "web.day.what"}}{{template "whatselect" (dict "Choices" $d.Choices "Sel" .What)}}</label>
+        <label class="grow">{{t $.Lang "web.detail"}}<input type="text" name="detail" value="{{.DetailIn}}" placeholder="{{t $.Lang "web.detail.placeholder"}}"></label>
         <span class="ivbtns">
           <button name="op" value="change" class="primary">{{t $.Lang "web.setup.save"}}</button>
           <button name="op" value="delete" class="danger" title="{{t $.Lang "web.day.delete_hint"}}">{{t $.Lang "web.day.delete"}}</button>
@@ -71,6 +73,7 @@
     <label>{{t $.Lang "web.day.from"}}<input type="time" name="start" required></label>
     <label>{{t $.Lang "web.day.to"}}<input type="time" name="end" placeholder="{{t $.Lang "web.day.running"}}" title="{{t $.Lang "web.day.running_hint"}}"></label>
     <label class="grow">{{t $.Lang "web.day.what"}}{{template "whatselect" (dict "Choices" .Choices "Sel" "")}}</label>
+    <label class="grow">{{t $.Lang "web.detail"}}<input type="text" name="detail" placeholder="{{t $.Lang "web.detail.placeholder"}}"></label>
     <button class="primary">{{t $.Lang "web.setup.add"}}</button>
   </form>
   <p class="dim small">{{if .IsToday}}{{t $.Lang "web.day.add_note_today"}}{{else}}{{t $.Lang "web.day.add_note"}}{{end}}</p>
@@ -82,7 +85,7 @@
   <table class="card">
     {{range .Totals}}
     <tr><td><span class="dot" style="--c:{{.Color}}"></span><strong>{{.Hat}}</strong></td><td class="num"><strong>{{.Duration}}</strong></td></tr>
-    {{range .Activities}}<tr><td class="dim" style="padding-left:1.8rem">{{.Name}}</td><td class="num dim">{{.Duration}}</td></tr>{{end}}
+    {{template "acttotals" (dict "Acts" .Activities "Cols" 2)}}
     {{end}}
     <tr><td>{{t $.Lang "cli.log.sum"}}</td><td class="num"><strong>{{.Sum}}</strong></td></tr>
   </table>

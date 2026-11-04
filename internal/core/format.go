@@ -57,22 +57,38 @@ func ApportionTo(ds []time.Duration, total int) []int {
 	return out
 }
 
-// RoundTotals rounds hat totals and their activities so that the activities
-// add up to their hat and the hats to the total.
+// RoundTotals rounds hat totals, their activities and the activities'
+// details so that each level adds up to the one above and the hats to the
+// total. dets[i][j] is empty for an activity without details.
 func RoundTotals(tot []HatTotal) (hats []int, acts [][]int, sum int) {
+	hats, acts, _, sum = RoundTotalsDetails(tot)
+	return hats, acts, sum
+}
+
+// RoundTotalsDetails is RoundTotals with the details' minutes.
+func RoundTotalsDetails(tot []HatTotal) (hats []int, acts [][]int, dets [][][]int, sum int) {
 	ds := make([]time.Duration, len(tot))
 	for i, t := range tot {
 		ds[i] = t.Duration
 	}
 	hats = Apportion(ds)
 	acts = make([][]int, len(tot))
+	dets = make([][][]int, len(tot))
 	for i, t := range tot {
 		ad := make([]time.Duration, len(t.Activities))
 		for j, a := range t.Activities {
 			ad[j] = a.Duration
 		}
 		acts[i] = ApportionTo(ad, hats[i])
+		dets[i] = make([][]int, len(t.Activities))
+		for j, a := range t.Activities {
+			dd := make([]time.Duration, len(a.Details))
+			for k, d := range a.Details {
+				dd[k] = d.Duration
+			}
+			dets[i][j] = ApportionTo(dd, acts[i][j])
+		}
 		sum += hats[i]
 	}
-	return hats, acts, sum
+	return hats, acts, dets, sum
 }

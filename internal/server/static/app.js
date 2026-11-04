@@ -24,6 +24,14 @@
     }
   }
   tick();
+  // opening "+ Detail" puts the cursor into its field
+  document.addEventListener("toggle", function (e) {
+    var d = e.target;
+    if (d.classList && d.classList.contains("detailedit") && d.open) {
+      var input = d.querySelector("input[name=detail]");
+      if (input) { input.focus(); input.select(); }
+    }
+  }, true);
   // "add a program": append the choice as a new line of the list field
   document.addEventListener("change", function (e) {
     var t = e.target;
@@ -49,7 +57,7 @@
   es.addEventListener("state", function () {
     if (first) { first = false; if (!reconnected) return; }
     // do not throw away an edit in progress
-    if (document.querySelector("details.iv[open], details.add[open]")) return;
+    if (document.querySelector("details.iv[open], details.add[open], details.detailedit[open]")) return;
     location.reload();
   });
 })();

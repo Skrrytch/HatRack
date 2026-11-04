@@ -404,9 +404,9 @@ func TestRoundTotals(t *testing.T) {
 	s := time.Second
 	// three hats of 40 s, one with two activities of 20 s: 2 minutes in all
 	tot := []HatTotal{
-		{Hat: "a", Duration: 40 * s, Activities: []ActivityTotal{{"x", 20 * s}, {"y", 20 * s}}},
-		{Hat: "b", Duration: 40 * s, Activities: []ActivityTotal{{"", 40 * s}}},
-		{Hat: "c", Duration: 40 * s, Activities: []ActivityTotal{{"", 40 * s}}},
+		{Hat: "a", Duration: 40 * s, Activities: []ActivityTotal{{Activity: "x", Duration: 20 * s}, {Activity: "y", Duration: 20 * s}}},
+		{Hat: "b", Duration: 40 * s, Activities: []ActivityTotal{{Activity: "", Duration: 40 * s}}},
+		{Hat: "c", Duration: 40 * s, Activities: []ActivityTotal{{Activity: "", Duration: 40 * s}}},
 	}
 	hats, acts, sum := RoundTotals(tot)
 	if sum != 2 || hats[0]+hats[1]+hats[2] != 2 {
