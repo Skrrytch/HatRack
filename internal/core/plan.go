@@ -86,6 +86,7 @@ type OnArgs struct {
 	Activity    string // from "do"; empty if not given
 	HasActivity bool
 	Answer      string // for resume_activity: ask
+	Detail      string // optional free text below the activity
 }
 
 // ResumeInfo tells the CLI whether it has to ask before putting on a hat.
@@ -129,15 +130,17 @@ func PlanOn(cfg Config, st State, last map[string]string, a OnArgs, in Input) (*
 		case ModeWearing:
 			return nil, nil
 		}
-		act := st.Activity
+		// resuming keeps the detail, unless a new activity is chosen
+		act, detail := st.Activity, st.Detail
 		if a.HasActivity {
 			h, _ := cfg.Hat(st.Hat)
 			if act, err = ResolveActivity(h, a.Activity); err != nil {
 				return nil, err
 			}
+			detail = a.Detail
 		}
 		ev := NewEvent(in.Device, EvSwitch, ts)
-		ev.Hat, ev.Activity = st.Hat, act
+		ev.Hat, ev.Activity, ev.Detail = st.Hat, act, detail
 		return &ev, nil
 	}
 
@@ -166,16 +169,18 @@ func PlanOn(cfg Config, st State, last map[string]string, a OnArgs, in Input) (*
 			}
 		}
 	}
-	if st.Mode == ModeWearing && st.Hat == h.Key && st.Activity == act {
+	detail := strings.TrimSpace(a.Detail)
+	if st.Mode == ModeWearing && st.Hat == h.Key && st.Activity == act && st.Detail == detail {
 		return nil, nil
 	}
 	ev := NewEvent(in.Device, EvSwitch, ts)
-	ev.Hat, ev.Activity = h.Key, act
+	ev.Hat, ev.Activity, ev.Detail = h.Key, act, detail
 	return &ev, nil
 }
 
-// PlanDo turns "hat do" into an event. activity "-" clears it.
-func PlanDo(cfg Config, st State, activity string, in Input) (*Event, error) {
+// PlanDo turns "hat do" into an event. activity "-" clears it. A new
+// activity starts without a detail unless one is given.
+func PlanDo(cfg Config, st State, activity, detail string, in Input) (*Event, error) {
 	ts, err := in.ts()
 	if err != nil {
 		return nil, err
@@ -193,11 +198,46 @@ func PlanDo(cfg Config, st State, activity string, in Input) (*Event, error) {
 			return nil, err
 		}
 	}
-	if act == st.Activity {
+	detail = strings.TrimSpace(detail)
+	if act == st.Activity && detail == st.Detail {
 		return nil, nil
 	}
+	if act == st.Activity && st.Detail == "" {
+		// the first detail of the running entry names it from its start
+		return PlanDetail(st, detail, in)
+	}
 	ev := NewEvent(in.Device, EvActivity, ts)
-	ev.Hat, ev.Activity = st.Hat, act
+	ev.Hat, ev.Activity, ev.Detail = st.Hat, act, detail
+	return &ev, nil
+}
+
+// PlanDetail sets the detail of the current activity. The first detail of a
+// running entry applies to all of it (a detail event); a changed detail
+// starts a new entry (an activity event). "-" clears it.
+func PlanDetail(st State, detail string, in Input) (*Event, error) {
+	ts, err := in.ts()
+	if err != nil {
+		return nil, err
+	}
+	switch st.Mode {
+	case ModeNone:
+		return nil, ErrNoHat
+	case ModePaused:
+		return nil, ErrPaused
+	}
+	detail = strings.TrimSpace(detail)
+	if detail == "-" {
+		detail = ""
+	}
+	if detail == st.Detail {
+		return nil, nil
+	}
+	typ := EvActivity
+	if st.Detail == "" {
+		typ = EvDetail
+	}
+	ev := NewEvent(in.Device, typ, ts)
+	ev.Hat, ev.Activity, ev.Detail = st.Hat, st.Activity, detail
 	return &ev, nil
 }
 

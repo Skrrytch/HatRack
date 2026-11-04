@@ -23,17 +23,77 @@ var (
 type Edit struct {
 	Start, End    time.Time
 	Hat, Activity string
+	Detail        string
 }
 
-// timeline returns the effective switch/activity/off events, sorted.
+// timeline returns the effective switch, activity, off and detail events,
+// sorted.
 func timeline(events []Event) []Event {
 	var out []Event
 	for _, e := range Effective(events) {
-		if e.Type == EvSwitch || e.Type == EvActivity || e.Type == EvOff {
+		if e.Type == EvSwitch || e.Type == EvActivity || e.Type == EvOff || e.Type == EvDetail {
 			out = append(out, e)
 		}
 	}
 	return out
+}
+
+// fold puts each detail event into the event that opened its entry, so an
+// edit can move or change entries without a detail ending up in the wrong
+// one. The opening event is replaced by a copy with the detail.
+func (p planner) fold(list []Event) ([]Event, map[string]string) {
+	var out []Event
+	ren := map[string]string{}
+	orig := map[int]string{} // index in out -> the id it had in list
+	open := -1
+	st := NewState()
+	for _, e := range list {
+		if e.Type == EvDetail {
+			if open >= 0 && st.Mode == ModeWearing && (e.Hat == "" || e.Hat == st.Hat) {
+				cp := out[open]
+				if _, ok := orig[open]; !ok {
+					orig[open] = cp.ID
+				}
+				cp.ID, cp.Detail = NewID(), e.Detail
+				out[open] = cp
+				ren[orig[open]] = cp.ID
+			}
+			st = st.Apply(e)
+			continue
+		}
+		st = st.Apply(e)
+		switch e.Type {
+		case EvSwitch, EvActivity:
+			open = len(out)
+		case EvOff:
+			open = -1
+		}
+		out = append(out, e)
+	}
+	return out, ren
+}
+
+// base is the starting point of an edit: the timeline as it is (to compare
+// against) and as it is worked on (details folded in, see fold), plus the
+// new ids of events that fold replaced.
+func (p planner) base(events []Event) (raw, work []Event, id func(string) string) {
+	raw = timeline(events)
+	work, ren := p.fold(raw)
+	return raw, work, func(x string) string {
+		if n, ok := ren[x]; ok {
+			return n
+		}
+		return x
+	}
+}
+
+// result turns an edit into a correction against the raw timeline, or
+// ErrNoChange if it changes nothing compared with the folded one.
+func (p planner) result(raw, work, next []Event, reason string) (*Event, error) {
+	if p.correction(work, next, reason) == nil {
+		return nil, ErrNoChange
+	}
+	return p.correction(raw, next, reason), nil
 }
 
 func without(list []Event, id string) []Event {
@@ -79,7 +139,7 @@ func (p planner) event(typ EventType, ts time.Time) Event {
 // paint makes [s, e) one stretch of hat/activity (hat "" is a gap). What ran
 // at e before goes on after it. With open (zero e), the stretch goes on and
 // every later event is dropped.
-func (p planner) paint(list []Event, s, e time.Time, hat, act string) []Event {
+func (p planner) paint(list []Event, s, e time.Time, hat, act, detail string) []Event {
 	open := e.IsZero()
 	var after State
 	hasAtE := false
@@ -99,7 +159,7 @@ func (p planner) paint(list []Event, s, e time.Time, hat, act string) []Event {
 	}
 	if hat != "" {
 		sw := p.event(EvSwitch, s)
-		sw.Hat, sw.Activity = hat, act
+		sw.Hat, sw.Activity, sw.Detail = hat, act, detail
 		out = append(out, sw)
 	} else if st := stateAt(out, s); st.Mode == ModeWearing {
 		off := p.event(EvOff, s)
@@ -110,7 +170,7 @@ func (p planner) paint(list []Event, s, e time.Time, hat, act string) []Event {
 		switch after.Mode {
 		case ModeWearing:
 			sw := p.event(EvSwitch, e)
-			sw.Hat, sw.Activity = after.Hat, after.Activity
+			sw.Hat, sw.Activity, sw.Detail = after.Hat, after.Activity, after.Detail
 			out = append(out, sw)
 		default:
 			if hat != "" {
@@ -206,7 +266,7 @@ func (p planner) correction(before, after []Event, reason string) *Event {
 }
 
 func sameKey(e Event) string {
-	return fmt.Sprintf("%d|%s|%s|%s|%t", e.TS.UnixNano(), e.Type, e.Hat, e.Activity, e.Neutral)
+	return fmt.Sprintf("%d|%s|%s|%s|%t|%s", e.TS.UnixNano(), e.Type, e.Hat, e.Activity, e.Neutral, e.Detail)
 }
 
 // PlanChange edits the interval that starts with event startID: its start,
@@ -217,7 +277,7 @@ func PlanChange(events []Event, startID string, ed Edit, in Input) (*Event, erro
 	if err := p.check(ed); err != nil {
 		return nil, err
 	}
-	list := timeline(events)
+	raw, list, id := p.base(events)
 	var iv *Interval
 	for _, i := range Intervals(events, in.Now) {
 		if i.StartID == startID {
@@ -228,7 +288,7 @@ func PlanChange(events []Event, startID string, ed Edit, in Input) (*Event, erro
 	if iv == nil {
 		return nil, ErrNoInterval
 	}
-	next := without(list, iv.StartID)
+	next := without(list, id(iv.StartID))
 	end := ed.End
 	if !iv.Open {
 		if end.IsZero() {
@@ -238,8 +298,8 @@ func PlanChange(events []Event, startID string, ed Edit, in Input) (*Event, erro
 			// shorter: the next entry (or the gap) starts earlier, where this
 			// one ends now. Longer is handled by paint: it covers what was
 			// there, and what ran at the new end goes on after it.
-			ev, _ := find(next, iv.EndID)
-			next = without(next, iv.EndID)
+			ev, _ := find(next, id(iv.EndID))
+			next = without(next, id(iv.EndID))
 			moved := ev
 			moved.ID, moved.TS, moved.Device = NewID(), end, in.Device
 			next = append(next, moved)
@@ -252,12 +312,8 @@ func PlanChange(events []Event, startID string, ed Edit, in Input) (*Event, erro
 		next = append(next, off)
 		SortEvents(next)
 	}
-	next = p.paint(next, ed.Start, end, ed.Hat, ed.Activity)
-	c := p.correction(list, next, "change")
-	if c == nil {
-		return nil, ErrNoChange
-	}
-	return c, nil
+	next = p.paint(next, ed.Start, end, ed.Hat, ed.Activity, ed.Detail)
+	return p.result(raw, list, next, "change")
 }
 
 // PlanInsert adds an entry, for example to fill a gap or for a forgotten
@@ -268,18 +324,14 @@ func PlanInsert(events []Event, ed Edit, in Input) (*Event, error) {
 	if err := p.check(ed); err != nil {
 		return nil, err
 	}
-	list := timeline(events)
-	c := p.correction(list, p.paint(list, ed.Start, ed.End, ed.Hat, ed.Activity), "insert")
-	if c == nil {
-		return nil, ErrNoChange
-	}
-	return c, nil
+	raw, list, _ := p.base(events)
+	return p.result(raw, list, p.paint(list, ed.Start, ed.End, ed.Hat, ed.Activity, ed.Detail), "insert")
 }
 
 // PlanDelete removes an entry; its time becomes a gap.
 func PlanDelete(events []Event, startID string, in Input) (*Event, error) {
 	p := planner{in}
-	list := timeline(events)
+	raw, list, id := p.base(events)
 	for _, i := range Intervals(events, in.Now) {
 		if i.StartID != startID {
 			continue
@@ -288,8 +340,8 @@ func PlanDelete(events []Event, startID string, in Input) (*Event, error) {
 		if i.Open {
 			end = time.Time{}
 		}
-		next := without(list, i.StartID)
-		next = p.paint(next, i.Start, end, "", "")
+		next := without(list, id(i.StartID))
+		next = p.paint(next, i.Start, end, "", "", "")
 		if i.Open {
 			// nothing runs from the start of the deleted entry on
 			if st := stateAt(next, i.Start); st.Mode == ModeWearing {
@@ -299,11 +351,7 @@ func PlanDelete(events []Event, startID string, in Input) (*Event, error) {
 				SortEvents(next)
 			}
 		}
-		c := p.correction(list, next, "delete")
-		if c == nil {
-			return nil, ErrNoChange
-		}
-		return c, nil
+		return p.result(raw, list, next, "delete")
 	}
 	return nil, ErrNoInterval
 }

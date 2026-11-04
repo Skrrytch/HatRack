@@ -216,3 +216,31 @@ func TestCorrections(t *testing.T) {
 		t.Fatalf("raw log: %+v", raw)
 	}
 }
+
+func TestDetailsAndTicketLinks(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	e := ev(0, core.EvSwitch, "venom", "review")
+	e.Detail = "https://jira.example.org/browse/TAG-1366"
+	d := ev(5, core.EvDetail, "venom", "review")
+	d.Detail = "TAG-2 from https://other.example/browse/TAG-2"
+	if _, err := s.AppendEvents(ctx, []core.Event{e, d}); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := s.CurrentState(ctx)
+	if st.Detail != d.Detail {
+		t.Fatalf("state detail: %+v", st)
+	}
+	raw, _ := s.EventsBetween(ctx, time.Time{}, time.Time{})
+	if raw[0].Detail != e.Detail || raw[1].Type != core.EvDetail {
+		t.Fatalf("stored: %+v", raw)
+	}
+	links, _ := s.TicketLinks(ctx)
+	if links["TAG"] != "https://jira.example.org/browse/" || len(links) != 1 {
+		t.Fatalf("learned, first wins: %v", links)
+	}
+	s.ResetTicketLink(ctx, "TAG")
+	if links, _ := s.TicketLinks(ctx); len(links) != 0 {
+		t.Fatal("reset")
+	}
+}

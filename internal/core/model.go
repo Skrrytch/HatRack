@@ -18,6 +18,10 @@ const (
 	EvOff         EventType = "off"
 	EvModuleError EventType = "module_error"
 	EvCorrection  EventType = "correction"
+	// EvDetail names the running entry more precisely from its start, without
+	// starting a new one (the first detail of an entry). A changed detail is
+	// an activity event instead, which starts a new entry.
+	EvDetail EventType = "detail"
 )
 
 // Status of a correction.
@@ -36,6 +40,7 @@ type Event struct {
 	Type     EventType `json:"type"`
 	Hat      string    `json:"hat,omitempty"`      // hat key
 	Activity string    `json:"activity,omitempty"` // activity name
+	Detail   string    `json:"detail,omitempty"`   // free text below the activity, as typed
 	Neutral  bool      `json:"neutral,omitempty"`  // off: restore the neutral look
 	Note     string    `json:"note,omitempty"`
 
@@ -76,7 +81,7 @@ func (e Event) Validate() error {
 		if e.Hat == "" {
 			return fmt.Errorf("switch event %s without hat", e.ID)
 		}
-	case EvActivity, EvOff, EvModuleError:
+	case EvActivity, EvOff, EvModuleError, EvDetail:
 	case EvCorrection:
 		if len(e.Supersedes) == 0 && len(e.Replacement) == 0 {
 			return fmt.Errorf("correction %s changes nothing", e.ID)
@@ -87,7 +92,7 @@ func (e Event) Validate() error {
 			return fmt.Errorf("correction %s has unknown status %q", e.ID, e.Status)
 		}
 		for _, r := range e.Replacement {
-			if r.Type == EvCorrection || r.Type == EvModuleError {
+			if r.Type == EvCorrection || r.Type == EvModuleError || r.Type == EvDetail {
 				return fmt.Errorf("correction %s: replacement %s must be a switch, activity or off", e.ID, r.ID)
 			}
 			if err := r.Validate(); err != nil {
@@ -120,6 +125,7 @@ type State struct {
 	Mode     Mode      `json:"mode"`
 	Hat      string    `json:"hat,omitempty"`
 	Activity string    `json:"activity,omitempty"`
+	Detail   string    `json:"detail,omitempty"`
 	Since    time.Time `json:"since,omitzero"`
 	// Neutral is set while paused when the neutral look was requested.
 	Neutral bool `json:"neutral,omitempty"`
@@ -143,13 +149,19 @@ func (s State) Apply(ev Event) State {
 	}
 	switch ev.Type {
 	case EvSwitch:
-		return State{Mode: ModeWearing, Hat: ev.Hat, Activity: ev.Activity,
+		return State{Mode: ModeWearing, Hat: ev.Hat, Activity: ev.Activity, Detail: ev.Detail,
 			Since: ev.TS, EventID: ev.ID, LastTS: ev.TS}
 	case EvActivity:
 		if s.Mode != ModeWearing {
 			return s
 		}
-		s.Activity, s.Since, s.EventID, s.LastTS = ev.Activity, ev.TS, ev.ID, ev.TS
+		s.Activity, s.Detail, s.Since, s.EventID, s.LastTS = ev.Activity, ev.Detail, ev.TS, ev.ID, ev.TS
+	case EvDetail:
+		// relabels the running entry; it does not start a new one
+		if s.Mode != ModeWearing || (ev.Hat != "" && ev.Hat != s.Hat) {
+			return s
+		}
+		s.Detail, s.LastTS = ev.Detail, ev.TS
 	case EvOff:
 		switch s.Mode {
 		case ModeWearing:
@@ -224,6 +236,7 @@ func (s State) Look() string {
 type Interval struct {
 	Hat      string    `json:"hat"`
 	Activity string    `json:"activity,omitempty"`
+	Detail   string    `json:"detail,omitempty"`
 	Start    time.Time `json:"start"`
 	End      time.Time `json:"end"`
 	Open     bool      `json:"open,omitempty"`
@@ -256,12 +269,16 @@ func Intervals(events []Event, now time.Time) []Interval {
 		switch e.Type {
 		case EvSwitch:
 			closeAt(e.TS)
-			cur = &Interval{Hat: e.Hat, Activity: e.Activity, Start: e.TS, StartID: e.ID}
+			cur = &Interval{Hat: e.Hat, Activity: e.Activity, Detail: e.Detail, Start: e.TS, StartID: e.ID}
 		case EvActivity:
 			if cur != nil {
 				hat := cur.Hat
 				closeAt(e.TS)
-				cur = &Interval{Hat: hat, Activity: e.Activity, Start: e.TS, StartID: e.ID}
+				cur = &Interval{Hat: hat, Activity: e.Activity, Detail: e.Detail, Start: e.TS, StartID: e.ID}
+			}
+		case EvDetail:
+			if cur != nil && (e.Hat == "" || e.Hat == cur.Hat) {
+				cur.Detail = e.Detail
 			}
 		case EvOff:
 			closeAt(e.TS)

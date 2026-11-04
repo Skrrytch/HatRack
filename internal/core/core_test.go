@@ -101,9 +101,9 @@ func TestIntervals(t *testing.T) {
 	}
 	got := Intervals(events, at(120))
 	want := []Interval{
-		{"venom", "review", at(0), at(30), false, events[0].ID, events[1].ID},
-		{"venom", "meeting", at(30), at(60), false, events[1].ID, events[2].ID},
-		{"tag", "", at(90), at(120), true, events[3].ID, ""},
+		{"venom", "review", "", at(0), at(30), false, events[0].ID, events[1].ID},
+		{"venom", "meeting", "", at(30), at(60), false, events[1].ID, events[2].ID},
+		{"tag", "", "", at(90), at(120), true, events[3].ID, ""},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v\nwant %+v", got, want)
@@ -204,17 +204,17 @@ func TestPlan(t *testing.T) {
 	}
 
 	// do
-	if _, err = PlanDo(cfg, none, "x", in); !errors.Is(err, ErrNoHat) {
+	if _, err = PlanDo(cfg, none, "x", "", in); !errors.Is(err, ErrNoHat) {
 		t.Fatalf("do none: %v", err)
 	}
-	if _, err = PlanDo(cfg, paused, "review", in); !errors.Is(err, ErrPaused) {
+	if _, err = PlanDo(cfg, paused, "review", "", in); !errors.Is(err, ErrPaused) {
 		t.Fatalf("do paused: %v", err)
 	}
-	e, err = PlanDo(cfg, wearing, "rev", in)
+	e, err = PlanDo(cfg, wearing, "rev", "", in)
 	if err != nil || e.Type != EvActivity || e.Activity != "review" {
 		t.Fatalf("do: %+v %v", e, err)
 	}
-	e, _ = PlanDo(cfg, wearing, "-", in)
+	e, _ = PlanDo(cfg, wearing, "-", "", in)
 	if e == nil || e.Activity != "" {
 		t.Fatalf("do -: %+v", e)
 	}

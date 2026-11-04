@@ -63,6 +63,10 @@ type Store interface {
 	MCPTokens(ctx context.Context) ([]MCPToken, error)
 	TouchMCPToken(ctx context.Context, id string) error
 	DeleteMCPToken(ctx context.Context, id string) error
+	// TicketLinks are the projects learned from issue links in details.
+	TicketLinks(ctx context.Context) (core.TicketLinks, error)
+	// ResetTicketLink forgets a project; the next issue link teaches it again.
+	ResetTicketLink(ctx context.Context, project string) error
 	// DeleteDevice removes a device; its token stops working at once.
 	DeleteDevice(ctx context.Context, id string) error
 	// HatUsed reports whether any event (or correction) refers to the hat.

@@ -24,6 +24,7 @@ type Request struct {
 	Activity    string `json:"activity,omitempty"`
 	HasActivity bool   `json:"has_activity,omitempty"`
 	Answer      string `json:"answer,omitempty"` // for resume_activity: ask
+	Detail      string `json:"detail,omitempty"` // free text below the activity
 	At          string `json:"at,omitempty"`     // RFC3339
 	Neutral     bool   `json:"neutral,omitempty"`
 	From        string `json:"from,omitempty"` // RFC3339, for log
@@ -178,7 +179,7 @@ func (a *Agent) change(ctx context.Context, req Request, in core.Input) Response
 		ev, err = core.PlanOn(a.config, a.state, a.last,
 			core.OnArgs{Hat: req.Hat, Activity: req.Activity, HasActivity: req.HasActivity, Answer: req.Answer}, in)
 	case "do":
-		ev, err = core.PlanDo(a.config, a.state, req.Activity, in)
+		ev, err = core.PlanDo(a.config, a.state, req.Activity, req.Detail, in)
 	case "off":
 		ev, err = core.PlanOff(a.state, req.Neutral, in)
 	}

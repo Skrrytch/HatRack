@@ -566,7 +566,7 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request, _ access) {
 		// "ask" is treated like "never": the activity buttons are right there.
 		ev, err = core.PlanOn(cfg, st, last, core.OnArgs{Hat: hat, Activity: act, HasActivity: act != ""}, in)
 	case "do":
-		ev, err = core.PlanDo(cfg, st, act, in)
+		ev, err = core.PlanDo(cfg, st, act, r.PostFormValue("detail"), in)
 	case "off":
 		ev, err = core.PlanOff(st, r.PostFormValue("neutral") != "", in)
 	case "resume":

@@ -49,6 +49,11 @@ CREATE TABLE IF NOT EXISTS sessions (
   token_hash TEXT PRIMARY KEY,
   expires    INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS ticket_links (
+  project TEXT PRIMARY KEY,
+  base    TEXT NOT NULL,
+  learned INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS mcp_tokens (
   id         TEXT PRIMARY KEY,
   name       TEXT NOT NULL UNIQUE,
@@ -102,6 +107,15 @@ func migrate(db *sql.DB) error {
 			return err
 		}
 	}
+	// MVP 2: details below the activity
+	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('events') WHERE name = 'detail'`).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		if _, err := db.Exec(`ALTER TABLE events ADD COLUMN detail TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -145,18 +159,32 @@ func (s *SQLite) AppendEvents(ctx context.Context, ev []core.Event) (int, error)
 	n := 0
 	for _, e := range ev {
 		res, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO events
-		  (id, ts, device, type, hat, activity, neutral, note, data) VALUES (?,?,?,?,?,?,?,?,?)`,
-			e.ID, e.TS.UnixNano(), e.Device, string(e.Type), e.Hat, e.Activity, b2i(e.Neutral), e.Note, eventData(e))
+		  (id, ts, device, type, hat, activity, neutral, note, data, detail) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+			e.ID, e.TS.UnixNano(), e.Device, string(e.Type), e.Hat, e.Activity, b2i(e.Neutral), e.Note, eventData(e), e.Detail)
 		if err != nil {
 			return 0, err
 		}
 		c, _ := res.RowsAffected()
 		n += int(c)
+		// ticket links in details teach where their projects live; the
+		// first link per project wins
+		texts := []string{e.Detail}
+		for _, r := range e.Replacement {
+			texts = append(texts, r.Detail)
+		}
+		for _, t := range texts {
+			for project, base := range core.LearnTicketLinks(t, nil) {
+				if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO ticket_links (project, base, learned) VALUES (?,?,?)`,
+					project, base, time.Now().UnixNano()); err != nil {
+					return 0, err
+				}
+			}
+		}
 	}
 	return n, tx.Commit()
 }
 
-const eventCols = `id, ts, device, type, hat, activity, neutral, note, data`
+const eventCols = `id, ts, device, type, hat, activity, neutral, note, data, detail`
 
 func scanEvents(rows *sql.Rows) ([]core.Event, error) {
 	defer rows.Close()
@@ -167,7 +195,7 @@ func scanEvents(rows *sql.Rows) ([]core.Event, error) {
 		var typ string
 		var neutral int
 		var data string
-		if err := rows.Scan(&e.ID, &ts, &e.Device, &typ, &e.Hat, &e.Activity, &neutral, &e.Note, &data); err != nil {
+		if err := rows.Scan(&e.ID, &ts, &e.Device, &typ, &e.Hat, &e.Activity, &neutral, &e.Note, &data, &e.Detail); err != nil {
 			return nil, err
 		}
 		e.TS, e.Type, e.Neutral = time.Unix(0, ts).UTC(), core.EventType(typ), neutral != 0
@@ -498,6 +526,28 @@ func (s *SQLite) TouchMCPToken(ctx context.Context, id string) error {
 
 func (s *SQLite) DeleteMCPToken(ctx context.Context, id string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM mcp_tokens WHERE id = ?`, id)
+	return err
+}
+
+func (s *SQLite) TicketLinks(ctx context.Context) (core.TicketLinks, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT project, base FROM ticket_links ORDER BY project`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := core.TicketLinks{}
+	for rows.Next() {
+		var p, b string
+		if err := rows.Scan(&p, &b); err != nil {
+			return nil, err
+		}
+		out[p] = b
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLite) ResetTicketLink(ctx context.Context, project string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM ticket_links WHERE project = ?`, project)
 	return err
 }
 
