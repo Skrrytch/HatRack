@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 
@@ -173,27 +174,68 @@ func (m *backendModule) Restore(ctx context.Context, snap json.RawMessage) error
 }
 
 // Validate checks the module settings of a configuration against the schemas
-// of the given registry. Modules the registry does not know are skipped,
-// because they may be external modules that exist only on devices.
+// of the given registry. A hat's settings are checked together with the
+// defaults they extend, so a hat may set only what differs; the defaults alone
+// are checked for types only, because required values may come from the hats.
+// Modules the registry does not know are skipped, because they may be
+// external modules that exist only on devices.
 func Validate(reg *Registry, cfg core.Config) error {
-	check := func(where, id string, m core.ModuleCfg) error {
+	for _, id := range sortedIDs(cfg.Modules) {
 		mod, ok := reg.Get(id)
 		if !ok {
-			return nil
+			continue
 		}
-		return validateAgainst(mod.ConfigSchema(), m, where+"."+id)
-	}
-	for id, m := range cfg.Modules {
-		if err := check("modules", id, m); err != nil {
+		if err := validateAgainst(withoutRequired(mod.ConfigSchema()), cfg.Modules[id], "modules."+id); err != nil {
 			return err
 		}
 	}
 	for _, h := range cfg.Hats {
+		if h.Archived {
+			continue
+		}
+		ids := map[string]core.ModuleCfg{}
+		for id, m := range cfg.Modules {
+			ids[id] = m
+		}
 		for id, m := range h.Modules {
-			if err := check("hats."+h.Key+".modules", id, m); err != nil {
+			ids[id] = m
+		}
+		for _, id := range sortedIDs(ids) {
+			mod, ok := reg.Get(id)
+			if !ok {
+				continue
+			}
+			merged, on := cfg.ModuleConfig(h, id)
+			if !on {
+				continue
+			}
+			if err := validateAgainst(mod.ConfigSchema(), merged, "hats."+h.Key+".modules."+id); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+func sortedIDs(m map[string]core.ModuleCfg) []string {
+	out := make([]string, 0, len(m))
+	for id := range m {
+		out = append(out, id)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// withoutRequired drops the top-level "required" list of a schema.
+func withoutRequired(schema []byte) []byte {
+	var m map[string]any
+	if json.Unmarshal(schema, &m) != nil {
+		return schema
+	}
+	delete(m, "required")
+	b, err := json.Marshal(m)
+	if err != nil {
+		return schema
+	}
+	return b
 }

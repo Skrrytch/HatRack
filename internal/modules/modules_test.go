@@ -235,6 +235,35 @@ hats:
 			t.Errorf("%s: expected a validation error", name)
 		}
 	}
+	// a hat may set only what differs from the defaults
+	layered, err := core.ParseConfig([]byte(`version: 1
+modules:
+  wallpaper: {image: /x.jpg}
+hats:
+  a:
+    modules:
+      wallpaper: {options: zoom}
+  b: {}
+  old:
+    archived: true
+    modules:
+      wallpaper: {image: ""}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Validate(reg, layered); err != nil {
+		t.Fatalf("layered settings: %v", err)
+	}
+	// defaults without the required image are fine until a hat lacks it
+	partial, _ := core.ParseConfig([]byte("version: 1\nmodules:\n  wallpaper: {options: zoom}\nhats:\n  a:\n    modules:\n      wallpaper: {image: /y.jpg}\n"))
+	if err := Validate(reg, partial); err != nil {
+		t.Fatalf("partial defaults: %v", err)
+	}
+	partial.Hats = append(partial.Hats, core.Hat{Key: "b"})
+	if err := Validate(reg, partial); err == nil || !strings.Contains(err.Error(), "hats.b") {
+		t.Fatalf("hat without image: %v", err)
+	}
 }
 
 func TestWallpaperRestoreEdgeCases(t *testing.T) {
