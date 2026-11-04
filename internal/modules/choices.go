@@ -217,7 +217,7 @@ func makeThumb(path string, w, h int) ([]byte, error) {
 }
 
 func (b *cinnamonWallpaper) Choices(ctx context.Context) map[string][]Choice {
-	var out []Choice
+	out := builtinChoices()
 	for _, p := range wallpapers(WallpaperDirs()) {
 		if ctx.Err() != nil {
 			break

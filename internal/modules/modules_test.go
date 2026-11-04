@@ -74,6 +74,15 @@ func TestWallpaperCinnamon(t *testing.T) {
 	if !strings.Contains(got, "file://") || !strings.Contains(got, "venom%20wall.jpg") {
 		t.Fatalf("picture-uri: %s", got)
 	}
+	// a built-in wallpaper is written to the data folder and used from there
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	cfg, _ = json.Marshal(map[string]string{"image": "hatrack:wp02-pink"})
+	if err := m.Enter(context.Background(), Switch{}, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if got := gs.vals["org.cinnamon.desktop.background picture-uri"]; !strings.Contains(got, "/hatrack/wallpapers/wp02-pink.jpg") {
+		t.Fatalf("built-in picture-uri: %s", got)
+	}
 }
 
 func TestWallpaperMissingFileAndOtherDesktop(t *testing.T) {

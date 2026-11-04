@@ -490,7 +490,7 @@ func (c Config) Warnings(checkFiles bool) []string {
 			if secretKeyRe.MatchString(k) && !envRe.MatchString(s) && s != "" {
 				w = append(w, fmt.Sprintf("%s.%s looks like a secret in plain text; use ${env:NAME}", where, k))
 			}
-			if checkFiles && (k == "image" || k == "file" || k == "path") && !envRe.MatchString(s) {
+			if checkFiles && (k == "image" || k == "file" || k == "path") && !envRe.MatchString(s) && !strings.HasPrefix(s, BuiltinPrefix) {
 				if _, err := os.Stat(ExpandPath(s)); err != nil {
 					w = append(w, fmt.Sprintf("%s.%s: file not found: %s", where, k, s))
 				}

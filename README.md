@@ -77,3 +77,9 @@ All parts are one Go binary, `hat`.
 ## License
 
 [MIT](LICENSE) © 2026 Bert Speckels
+
+## Wallpapers
+
+The built-in wallpapers (`internal/assets/wallpapers`, two for each of the six
+hat colours) are abstract colour gradients generated with Gemini for HatRack.
+They show nothing and are covered by the project's MIT licence.

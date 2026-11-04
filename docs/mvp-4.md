@@ -8,7 +8,7 @@ on [MVP 2](mvp-2.md) (panel, Setup, details) and is independent of
    weeks instead of 14 days.
 2. **A detail field on every hat card (done).** The panel gets a quiet input line at
    the bottom of each card; it is where the suggestions live.
-3. **Six colours with matching wallpapers.** Setup offers six named colours
+3. **Six colours with matching wallpapers (done).** Setup offers six named colours
    for hats and, for each, two built-in wallpapers.
 
 ## 1. Suggestions from eight weeks

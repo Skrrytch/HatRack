@@ -81,9 +81,13 @@ func (b *cinnamonWallpaper) Apply(ctx context.Context, raw json.RawMessage) erro
 	if cfg.Image == "" {
 		return nil // an empty snapshot: nothing to restore
 	}
-	uri := cfg.Image
+	img, err := ResolveWallpaper(cfg.Image)
+	if err != nil {
+		return err
+	}
+	uri := img
 	if !strings.Contains(uri, "://") {
-		abs, err := filepath.Abs(core.ExpandPath(cfg.Image))
+		abs, err := filepath.Abs(core.ExpandPath(img))
 		if err != nil {
 			return err
 		}

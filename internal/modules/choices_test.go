@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"hatrack/internal/core"
 )
 
 func writeJPEG(t *testing.T, path string, w, h int) {
@@ -88,5 +90,40 @@ func TestWallpaperChoices(t *testing.T) {
 	}
 	if Thumb(filepath.Join(home, "Bilder", "notes.txt")) != "" {
 		t.Fatal("no thumb for a non-image")
+	}
+}
+
+func TestBuiltinWallpapers(t *testing.T) {
+	data := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", data)
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(data, "cache"))
+	names := BuiltinWallpapers()
+	if len(names) != 2*len(core.HatColors) || names[0] != "wp01-purple" || names[1] != "wp02-purple" || names[len(names)-1] != "wp02-mint" {
+		t.Fatalf("built-ins grouped by colour: %v", names)
+	}
+	p, err := ResolveWallpaper("hatrack:wp01-aqua")
+	if err != nil || p != filepath.Join(data, "hatrack", "wallpapers", "wp01-aqua.jpg") {
+		t.Fatalf("resolve: %s %v", p, err)
+	}
+	fi, _ := os.Stat(p)
+	// unchanged files are not written again; changed ones are repaired
+	os.WriteFile(p, []byte("broken"), 0o644)
+	if p2, err := ResolveWallpaper("hatrack:wp01-aqua"); err != nil || p2 != p {
+		t.Fatal(err)
+	}
+	if fi2, _ := os.Stat(p); fi2.Size() != fi.Size() {
+		t.Fatal("a changed file is written again")
+	}
+	for _, bad := range []string{"hatrack:", "hatrack:../x", "hatrack:wp09-teal"} {
+		if _, err := ResolveWallpaper(bad); err == nil {
+			t.Fatalf("%s: no error", bad)
+		}
+	}
+	if p, _ := ResolveWallpaper("/tmp/x.jpg"); p != "/tmp/x.jpg" {
+		t.Fatal("paths stay")
+	}
+	ch := builtinChoices()
+	if len(ch) != len(names) || ch[0].Value != "hatrack:wp01-purple" || !strings.HasPrefix(ch[0].Thumb, "data:image/jpeg") {
+		t.Fatalf("choices: %+v", ch[0])
 	}
 }
