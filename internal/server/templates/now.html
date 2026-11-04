@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="30">
+<title>HatRack</title>
+<style>
+  :root { color-scheme: light dark; --hat: {{if .Color}}{{.Color}}{{else}}#888{{end}}; }
+  body { font: 18px/1.5 system-ui, sans-serif; max-width: 34rem; margin: 3rem auto; padding: 0 1rem; }
+  h1 { font-size: 1rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; opacity: .6; }
+  .hat { font-size: 2.6rem; font-weight: 700; border-left: .5rem solid var(--hat); padding-left: 1rem; }
+  .activity { font-size: 1.4rem; opacity: .85; }
+  .since { opacity: .6; }
+  ul { list-style: none; padding: 0; opacity: .8; }
+  .dot { display: inline-block; width: .6em; height: .6em; border-radius: 50%; background: #999; margin-right: .5em; }
+  .on { background: #3a3; }
+</style>
+</head>
+<body>
+<h1>HatRack</h1>
+{{if .Denied}}
+  <p>{{t .Lang "web.denied"}}</p>
+{{else if eq .Mode "none"}}
+  <p class="hat">{{t .Lang "web.nohat"}}</p>
+{{else}}
+  <p class="hat">{{.Hat}}{{if eq .Mode "paused"}} <small>({{t .Lang "web.paused"}})</small>{{end}}</p>
+  {{if .Activity}}<p class="activity">{{.Activity}}</p>{{end}}
+  <p class="since">{{t .Lang "web.since" .Since}}{{if .Duration}} · {{.Duration}}{{end}}</p>
+{{end}}
+{{if .Devices}}
+  <h1>{{t .Lang "web.devices"}}</h1>
+  <ul>{{range .Devices}}<li><span class="dot{{if .Online}} on{{end}}"></span>{{.Name}}{{if .Seen}} <small>{{.Seen}}</small>{{end}}</li>{{end}}</ul>
+{{end}}
+</body>
+</html>

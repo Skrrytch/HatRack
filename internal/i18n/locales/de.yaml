@@ -1,0 +1,6 @@
+web.denied: "Nicht angemeldet. Öffne diese Seite einmal mit ?token=<Gerätetoken>."
+web.nohat: "Kein Hut auf"
+web.paused: "pausiert"
+web.since: "seit %s"
+web.devices: "Geräte"
+notify.wearing: "Du trägst jetzt %s"

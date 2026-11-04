@@ -1,0 +1,6 @@
+web.denied: "Not signed in. Open this page once with ?token=<device token>."
+web.nohat: "No hat on"
+web.paused: "paused"
+web.since: "since %s"
+web.devices: "Devices"
+notify.wearing: "Now wearing %s"
