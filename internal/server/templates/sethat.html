@@ -5,7 +5,7 @@
 <section class="head">
   <div class="bighat">{{template "hat" .Color}}</div>
   <div><div class="kicker">{{t $.Lang "web.setup.editing"}}</div>
-  <div class="title">{{if .Name}}{{.Name}}{{else}}{{.Key}}{{end}} <span class="keytag" title="{{t $.Lang "web.setup.key"}}">{{.Key}}</span></div></div>
+  <div class="title">{{if .Name}}{{.Name}}{{else}}{{.Key}}{{end}}</div></div>
 </section>
 {{if .Saved}}<div class="ok">{{t $.Lang "web.setup.saved"}}</div>{{end}}
 <form method="post" action="/setup/hat">
