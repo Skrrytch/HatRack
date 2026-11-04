@@ -1,0 +1,15 @@
+{{define "content"}}
+<div class="login card">
+  <h1 style="margin-top:0">{{t .Lang "ui.login"}}</h1>
+  {{if .Login.NoPassword}}
+    <p>{{t .Lang "ui.nopassword"}}</p>
+    <p><code>hat server user set-password</code></p>
+  {{else}}
+    {{if .Login.Failed}}<div class="err">{{t .Lang "ui.wrongpassword"}}</div>{{end}}
+    <form method="post" action="/login">
+      <p><input type="password" name="password" placeholder="{{t .Lang "ui.password"}}" autofocus required></p>
+      <p><button>{{t .Lang "ui.login"}}</button></p>
+    </form>
+  {{end}}
+</div>
+{{end}}

@@ -36,7 +36,8 @@ hat server &                                   # listens on 127.0.0.1:8421
 hat server device add laptop                   # prints a token
 hat agent login http://127.0.0.1:8421 <token>
 hat agent install                              # systemd user service
-hat config import hats.yaml                    # see docs/mvp-1.md for the format
+hat config import hats.yaml                    # see docs/example.yaml for the format
+hat server user set-password                   # login for the web UI at http://127.0.0.1:8421
 hat on venom do review
 ```
 

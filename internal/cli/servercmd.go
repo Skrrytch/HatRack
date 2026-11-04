@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -9,10 +10,12 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"hatrack/internal/i18n"
 	"hatrack/internal/modules"
@@ -47,7 +50,7 @@ func openStore(dir string) (*store.SQLite, error) {
 }
 
 func (a *App) serverCmd() *cobra.Command {
-	var listen, data string
+	var listen, data, tz string
 	c := &cobra.Command{
 		Use: "server", Short: i18n.T("cli.server.short"), Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -56,10 +59,15 @@ func (a *App) serverCmd() *cobra.Command {
 				return err
 			}
 			defer st.Close()
-			srv := &http.Server{
-				Addr: listen, Handler: server.New(st, modules.Builtin(nil)).Handler(),
-				ReadHeaderTimeout: 10 * time.Second,
+			web := server.New(st, modules.Builtin(nil))
+			if tz != "" {
+				loc, err := time.LoadLocation(tz)
+				if err != nil {
+					return err
+				}
+				web.Loc = loc
 			}
+			srv := &http.Server{Addr: listen, Handler: web.Handler(), ReadHeaderTimeout: 10 * time.Second}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			go func() {
@@ -76,6 +84,7 @@ func (a *App) serverCmd() *cobra.Command {
 		},
 	}
 	c.PersistentFlags().StringVar(&data, "data", defaultData(), i18n.T("cli.server.data"))
+	c.Flags().StringVar(&tz, "timezone", os.Getenv("HATRACK_TZ"), i18n.T("cli.server.tz"))
 	c.Flags().StringVar(&listen, "listen", defaultListen(), i18n.T("cli.server.listen"))
 
 	device := &cobra.Command{Use: "device", Short: i18n.T("cli.device.short")}
@@ -135,6 +144,64 @@ func (a *App) serverCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.AddCommand(device, backup)
+	user := &cobra.Command{Use: "user", Short: i18n.T("cli.user.short")}
+	user.AddCommand(&cobra.Command{
+		Use: "set-password", Short: i18n.T("cli.user.setpassword"), Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			pw, err := a.readPassword()
+			if err != nil {
+				return err
+			}
+			hash, err := server.HashPassword(pw)
+			if err != nil {
+				return err
+			}
+			st, err := openStore(data)
+			if err != nil {
+				return err
+			}
+			defer st.Close()
+			if err := st.SetPasswordHash(cmd.Context(), hash); err != nil {
+				return err
+			}
+			fmt.Fprintln(a.Err, i18n.T("cli.password.done"))
+			return nil
+		},
+	})
+	c.AddCommand(device, backup, user)
 	return c
+}
+
+// readPassword asks twice on a terminal (without echo); from a pipe it reads
+// one line, so it can be scripted.
+func (a *App) readPassword() (string, error) {
+	if f, ok := a.In.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		read := func(prompt string) (string, error) {
+			fmt.Fprint(a.Err, prompt)
+			b, err := term.ReadPassword(int(f.Fd()))
+			fmt.Fprintln(a.Err)
+			return string(b), err
+		}
+		p1, err := read(i18n.T("cli.password.prompt"))
+		if err != nil {
+			return "", err
+		}
+		p2, err := read(i18n.T("cli.password.again"))
+		if err != nil {
+			return "", err
+		}
+		if p1 != p2 {
+			return "", errors.New(i18n.T("cli.password.mismatch"))
+		}
+		if p1 == "" {
+			return "", errors.New(i18n.T("cli.password.empty"))
+		}
+		return p1, nil
+	}
+	line, _ := bufio.NewReader(a.In).ReadString('\n')
+	line = strings.TrimRight(line, "\r\n")
+	if line == "" {
+		return "", errors.New(i18n.T("cli.password.empty"))
+	}
+	return line, nil
 }

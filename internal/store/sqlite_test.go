@@ -122,3 +122,37 @@ func TestBackup(t *testing.T) {
 		t.Fatal("backup overwrote an existing file")
 	}
 }
+
+func TestPasswordAndSessions(t *testing.T) {
+	s, ctx := open(t), context.Background()
+	if h, err := s.PasswordHash(ctx); err != nil || h != "" {
+		t.Fatalf("no password yet: %q %v", h, err)
+	}
+	if err := s.SetPasswordHash(ctx, "hash1"); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	s.CreateSession(ctx, "tok", now.Add(time.Hour))
+	s.CreateSession(ctx, "old", now.Add(-time.Hour))
+	if ok, _ := s.SessionValid(ctx, "tok", now); !ok {
+		t.Fatal("session should be valid")
+	}
+	if ok, _ := s.SessionValid(ctx, "old", now); ok {
+		t.Fatal("expired session accepted")
+	}
+	if ok, _ := s.SessionValid(ctx, "nope", now); ok {
+		t.Fatal("unknown session accepted")
+	}
+	s.DeleteSession(ctx, "tok")
+	if ok, _ := s.SessionValid(ctx, "tok", now); ok {
+		t.Fatal("deleted session accepted")
+	}
+	s.CreateSession(ctx, "tok2", now.Add(time.Hour))
+	s.SetPasswordHash(ctx, "hash2") // a new password ends all sessions
+	if ok, _ := s.SessionValid(ctx, "tok2", now); ok {
+		t.Fatal("session survived a password change")
+	}
+	if h, _ := s.PasswordHash(ctx); h != "hash2" {
+		t.Fatalf("hash: %q", h)
+	}
+}

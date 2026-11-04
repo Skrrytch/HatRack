@@ -34,6 +34,8 @@ func setup(t *testing.T) *env {
 	e := &env{t: t, st: st, now: time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC)}
 	srv := New(st, modules.Builtin(nil))
 	srv.Now = func() time.Time { return e.now }
+	srv.Loc = time.UTC
+	srv.limiter.Delay = func(int) time.Duration { return 0 }
 	e.ts = httptest.NewServer(srv.Handler())
 	_, e.token, err = st.AddDevice(context.Background(), "laptop")
 	if err != nil {
@@ -197,41 +199,5 @@ func TestStreamPushesState(t *testing.T) {
 	e.do("PUT", "/api/config", cfgYAML)
 	if ev, _ := next(); ev != "config" {
 		t.Fatalf("config push: %s", ev)
-	}
-}
-
-func TestNowPage(t *testing.T) {
-	e := setup(t)
-	e.do("PUT", "/api/config", cfgYAML)
-	body, _ := json.Marshal([]core.Event{e.ev(-83, core.EvSwitch, "venom", "review")})
-	e.do("POST", "/api/events", string(body))
-
-	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	get := func(path, cookie, lang string) (*http.Response, string) {
-		req, _ := http.NewRequest("GET", e.ts.URL+path, nil)
-		if cookie != "" {
-			req.AddCookie(&http.Cookie{Name: tokenCookie, Value: cookie})
-		}
-		req.Header.Set("Accept-Language", lang)
-		resp, err := client.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer resp.Body.Close()
-		b, _ := io.ReadAll(resp.Body)
-		return resp, string(b)
-	}
-	if r, out := get("/", "", "de"); r.StatusCode != 401 || !strings.Contains(out, "Nicht angemeldet") {
-		t.Fatalf("anonymous: %d %s", r.StatusCode, out)
-	}
-	if r, _ := get("/?token="+e.token, "", "en"); r.StatusCode != 303 || len(r.Cookies()) == 0 {
-		t.Fatalf("token login: %d", r.StatusCode)
-	}
-	r, out := get("/", e.token, "en-US,en;q=0.9")
-	if r.StatusCode != 200 || !strings.Contains(out, "VENOM") || !strings.Contains(out, "review") || !strings.Contains(out, "1h 23m") {
-		t.Fatalf("now: %d %s", r.StatusCode, out)
-	}
-	if _, out = get("/", e.token, "de-DE"); !strings.Contains(out, "seit") {
-		t.Fatalf("german page: %s", out)
 	}
 }

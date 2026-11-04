@@ -3,6 +3,7 @@ package main
 
 import (
 	"os"
+	_ "time/tzdata" // time zones for the scratch image, which has none
 
 	"hatrack/internal/cli"
 )

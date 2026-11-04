@@ -40,6 +40,14 @@ CREATE TABLE IF NOT EXISTS config (
   json TEXT NOT NULL,
   rev  INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash TEXT PRIMARY KEY,
+  expires    INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS devices (
   id         TEXT PRIMARY KEY,
   name       TEXT NOT NULL UNIQUE,
@@ -306,5 +314,53 @@ func (s *SQLite) Backup(ctx context.Context, path string) error {
 		return fmt.Errorf("%s already exists", path)
 	}
 	_, err := s.db.ExecContext(ctx, `VACUUM INTO ?`, path)
+	return err
+}
+
+func (s *SQLite) SetPasswordHash(ctx context.Context, hash string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES ('password_hash', ?)
+	  ON CONFLICT(key) DO UPDATE SET value = excluded.value`, hash); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM sessions`); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *SQLite) PasswordHash(ctx context.Context) (string, error) {
+	var h string
+	err := s.db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = 'password_hash'`).Scan(&h)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return h, err
+}
+
+func (s *SQLite) CreateSession(ctx context.Context, tokenHash string, expires time.Time) error {
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE expires < ?`, time.Now().UnixNano()); err != nil {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT OR REPLACE INTO sessions (token_hash, expires) VALUES (?, ?)`,
+		tokenHash, expires.UnixNano())
+	return err
+}
+
+func (s *SQLite) SessionValid(ctx context.Context, tokenHash string, now time.Time) (bool, error) {
+	var exp int64
+	err := s.db.QueryRowContext(ctx, `SELECT expires FROM sessions WHERE token_hash = ?`, tokenHash).Scan(&exp)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil && exp > now.UnixNano(), err
+}
+
+func (s *SQLite) DeleteSession(ctx context.Context, tokenHash string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE token_hash = ?`, tokenHash)
 	return err
 }

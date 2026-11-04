@@ -44,6 +44,15 @@ type Store interface {
 	Devices(ctx context.Context) ([]Device, error)
 	TouchDevice(ctx context.Context, id string, caps json.RawMessage) error
 
+	// SetPasswordHash stores the web UI password hash and ends all sessions.
+	SetPasswordHash(ctx context.Context, hash string) error
+	// PasswordHash returns the stored hash, or "" if no password is set.
+	PasswordHash(ctx context.Context) (string, error)
+	// CreateSession stores the hash of a session token until it expires.
+	CreateSession(ctx context.Context, tokenHash string, expires time.Time) error
+	SessionValid(ctx context.Context, tokenHash string, now time.Time) (bool, error)
+	DeleteSession(ctx context.Context, tokenHash string) error
+
 	// Backup writes a consistent copy of the database to path.
 	Backup(ctx context.Context, path string) error
 	Close() error

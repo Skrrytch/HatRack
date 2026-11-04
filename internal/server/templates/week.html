@@ -1,0 +1,29 @@
+{{define "content"}}
+{{with .Week}}
+<div class="nav2">
+  <a class="btn" href="{{.Prev}}">←</a>
+  <span class="t">{{.Title}}</span>
+  <a class="btn" href="/week">{{t $.Lang "ui.thisweek"}}</a>
+  <a class="btn" href="{{.Next}}">→</a>
+  <a class="btn" href="{{.CSV}}">CSV</a>
+</div>
+
+{{range .Days}}
+<div class="daybar">
+  <a href="/day?date={{.Date}}" style="color:inherit;text-decoration:none">{{.Label}}</a>
+  <div class="bar">{{range .Segments}}<i title="{{.Title}}" style="left:{{printf "%.3f" .Left}}%;width:{{printf "%.3f" .Width}}%;--c:{{.Color}}"></i>{{end}}</div>
+  <span class="dim" style="text-align:right">{{.Duration}}</span>
+</div>
+{{end}}
+
+<h1>{{t $.Lang "cli.log.totals"}}</h1>
+<table class="card">
+  <tr><th></th><th class="num">{{t $.Lang "ui.thisweek"}}</th><th class="num">{{t $.Lang "ui.vsprev"}}</th></tr>
+  {{range .Totals}}
+  <tr><td><span class="dot" style="--c:{{.Color}}"></span><strong>{{.Hat}}</strong></td><td class="num"><strong>{{.Duration}}</strong></td><td class="num dim">{{.Delta}}</td></tr>
+  {{range .Activities}}<tr><td class="dim" style="padding-left:1.8rem">{{.Name}}</td><td class="num dim">{{.Duration}}</td><td></td></tr>{{end}}
+  {{end}}
+  <tr><td>{{t $.Lang "cli.log.sum"}}</td><td class="num"><strong>{{.Sum}}</strong></td><td class="num dim">{{.SumDelta}}</td></tr>
+</table>
+{{end}}
+{{end}}

@@ -26,13 +26,17 @@ type Server struct {
 	hub *hub
 	// Now returns the current time; tests replace it.
 	Now func() time.Time
-	mux *http.ServeMux
+	// Loc is the time zone for pages when the browser does not tell its own.
+	Loc     *time.Location
+	limiter *loginLimiter
+	mux     *http.ServeMux
 }
 
 // New creates a server. The registry is used to validate module settings of
 // imported configurations.
 func New(st store.Store, reg *modules.Registry) *Server {
-	s := &Server{st: st, reg: reg, hub: newHub(), Now: time.Now, mux: http.NewServeMux()}
+	s := &Server{st: st, reg: reg, hub: newHub(), Now: time.Now, Loc: time.Local, mux: http.NewServeMux(),
+		limiter: &loginLimiter{Delay: defaultDelay}}
 	s.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "ok\n") })
 	s.mux.HandleFunc("POST /api/events", s.api(s.postEvents))
 	s.mux.HandleFunc("GET /api/events", s.api(s.getEvents))
@@ -42,7 +46,16 @@ func New(st store.Store, reg *modules.Registry) *Server {
 	s.mux.HandleFunc("PUT /api/config", s.api(s.putConfig))
 	s.mux.HandleFunc("GET /api/stream", s.api(s.stream))
 	s.mux.HandleFunc("POST /api/devices/hello", s.api(s.hello))
-	s.mux.HandleFunc("GET /{$}", s.nowPage)
+	s.mux.HandleFunc("GET /{$}", s.page(false, s.nowPage))
+	s.mux.HandleFunc("GET /day", s.page(false, s.dayPage))
+	s.mux.HandleFunc("GET /week", s.page(false, s.weekPage))
+	s.mux.HandleFunc("GET /week.csv", s.page(false, s.weekCSV))
+	s.mux.HandleFunc("POST /action", s.page(true, s.action))
+	s.mux.HandleFunc("GET /ui/stream", s.page(false, s.uiStream))
+	s.mux.HandleFunc("GET /login", s.loginPage)
+	s.mux.HandleFunc("POST /login", s.loginPage)
+	s.mux.HandleFunc("POST /logout", s.page(true, s.logout))
+	s.mux.HandleFunc("GET /static/{file}", s.static)
 	return s
 }
 

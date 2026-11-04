@@ -6,7 +6,7 @@ editable, adds MCP, and brings HatRack to more devices and desktops.
 
 MVP 2 is built in slices, each usable on its own:
 
-1. **Web UI, read-only:** login, Now with switch bar, Day, Week.
+1. **Web UI, read-only (done):** login, Now with switch bar, Day, Week, CSV.
 2. **HatTray:** icon and menu for switching.
 3. **Web UI, Setup:** hats, activities and module settings as forms.
 4. **Corrections:** editable Day view.
@@ -95,8 +95,10 @@ view and count only after confirmation.
 - **Devices:** name, last seen, detected backends per module, recent module
   errors, device-level settings.
 
-The web UI uses the same API as the agents; it is a session-based client with
-a login. A language switch (English/German) in the header overrides the
+The web UI is a session-based client with a login (one password, see
+[decisions.md](decisions.md)). Switches from the browser are written by the
+server with the same rules as the CLI (`core.PlanOn` and friends) and reach
+all agents through SSE. A language switch (English/German) in the header overrides the
 browser language and is stored in a cookie.
 
 ### MCP
@@ -186,6 +188,8 @@ hat server
 
 - Web UI, API and MCP call the same core functions; there is no logic in the
   templates or the MCP layer.
+- Pages are rendered with `html/template`; a few lines of JavaScript set the
+  time zone cookie and reload the page when the state changes.
 - The form renderer turns a JSON Schema into HTML inputs (string, number,
   boolean, enum, path, list of objects) and validates on the server.
 - `core` modules subscribe to state changes inside the server process.

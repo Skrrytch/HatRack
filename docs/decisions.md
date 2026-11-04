@@ -27,11 +27,12 @@
 | 2026-11-04 | Events refer to hats by key and to activities by name, not by an internal id. Keys are stable by design, and the log stays readable on its own. |
 | 2026-11-04 | `hat on X` while X is already worn changes nothing (it would otherwise reset the activity); `hat on X do Y` changes the activity. |
 | 2026-11-04 | After MVP 1 was built: the command line is the base, but the web UI and the HatTray are the tools used every day. HatTray moves from MVP 3 to MVP 2. MVP 2 is built in slices (read-only web UI, HatTray, Setup forms, corrections, the rest), each usable on its own. |
+| 2026-11-04 | Web UI login: one user per server, a password only. It is set with `hat server user set-password` (prompt, or one line from stdin). The password is stored as a bcrypt hash, sessions are random tokens (30 days, only their hash is stored, cookie `HttpOnly` and `SameSite=Strict`), a changed password ends all sessions. Posts also check the `Origin`. Failed logins are slowed down. A device token in `?token=` still gives a read-only view. |
+| 2026-11-04 | The web UI stays on `html/template` with a few lines of plain JavaScript (time zone cookie, reload on change) instead of `templ` + HTMX: pages are whole documents, forms work without scripts, and there is no generator and no third-party script to vendor. Times are shown in the browser's time zone (cookie), else the server's (`--timezone`). |
+| 2026-11-04 | In the web UI, `resume_activity: ask` counts as `never`: the activity buttons are right next to the hat. |
 
 ## Open
 
-- **Web UI login (MVP 2):** how are the user and password created (first-run
-  setup, `hat server user set-password`, environment variable)?
 - **Cinnamon `color_scheme`:** does Cinnamon evaluate a light/dark preference,
   or only the GTK theme? Test on the desktop early in MVP 1; if not, drop
   `prefer`.
