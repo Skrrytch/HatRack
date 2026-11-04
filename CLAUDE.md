@@ -6,8 +6,9 @@ Guidance for Claude Code when working in this repository.
 
 HatRack switches between work contexts ("hats") on a Linux desktop: look,
 apps, and a time log. Command `hat`, tray HatTray, optional HatRack Server with
-web UI and MCP. Status: concept, no code yet. Read `docs/concept.md` and
-`docs/decisions.md` first.
+web UI and MCP. Status: concept, no code yet. Read `docs/concept.md`,
+`docs/decisions.md` (open questions) and the stage plans `docs/mvp-1.md`,
+`docs/mvp-2.md`, `docs/mvp-3.md` first.
 
 ## Commits
 

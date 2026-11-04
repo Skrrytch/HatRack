@@ -1,12 +1,9 @@
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv/
-dist/
-build/
-.pytest_cache/
-.ruff_cache/
+# Go
+/hat
+/dist/
+*.test
+*.out
+coverage.*
 
 # Local data
 *.db
