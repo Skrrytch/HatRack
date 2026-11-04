@@ -56,6 +56,7 @@ func New(st store.Store, reg *modules.Registry) *Server {
 	s.mux.HandleFunc("POST /login", s.loginPage)
 	s.mux.HandleFunc("POST /logout", s.page(true, s.logout))
 	s.mux.HandleFunc("GET /static/{file}", s.static)
+	s.mux.HandleFunc("POST /day/edit", s.page(true, s.dayEdit))
 	s.mux.HandleFunc("GET /setup", s.page(true, s.setupPage))
 	s.mux.HandleFunc("POST /setup/hats", s.page(true, s.hatsAction))
 	s.mux.HandleFunc("GET /setup/hat", s.page(true, s.hatPage))
@@ -243,7 +244,7 @@ func (s *Server) getIntervals(w http.ResponseWriter, r *http.Request, _ store.De
 		to = now
 	}
 	// Intervals need the events before the period, so load everything up to `to`.
-	ev, err := s.st.EventsBetween(r.Context(), time.Time{}, to)
+	ev, err := s.st.Effective(r.Context(), to)
 	if err != nil {
 		serverError(w, err)
 		return

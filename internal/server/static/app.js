@@ -31,6 +31,8 @@
   es.onerror = function () { reconnected = true; first = true; };
   es.addEventListener("state", function () {
     if (first) { first = false; if (!reconnected) return; }
+    // do not throw away an edit in progress
+    if (document.querySelector("details.iv[open], details.add[open]")) return;
     location.reload();
   });
 })();

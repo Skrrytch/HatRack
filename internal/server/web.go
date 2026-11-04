@@ -32,6 +32,14 @@ const (
 
 var pageFuncs = template.FuncMap{
 	"t": func(lang, key string, args ...any) string { return i18n.In(lang, key, args...) },
+	// dict passes several values to a sub-template: dict "A" 1 "B" 2
+	"dict": func(kv ...any) map[string]any {
+		m := map[string]any{}
+		for i := 0; i+1 < len(kv); i += 2 {
+			m[fmt.Sprint(kv[i])] = kv[i+1]
+		}
+		return m
+	},
 }
 
 var pages = map[string]*template.Template{}
@@ -118,6 +126,16 @@ type segment struct {
 type rowView struct {
 	Start, End, Hat, Color, Activity, Duration string
 	Open                                       bool
+	Gap                                        bool   // a stretch without an entry
+	ID                                         string // the event that opened the entry
+	What                                       string // value of the choice: hat|activity
+	StartIn, EndIn                             string // HH:MM for the edit form
+}
+
+// choiceGroup is one hat in the "what" list of the edit forms.
+type choiceGroup struct {
+	Label   string
+	Options []option
 }
 
 type actTotal struct{ Name, Duration string }
@@ -130,11 +148,15 @@ type totalView struct {
 
 type dayView struct {
 	Title      string
+	Date       string
 	Prev, Next string
 	Segments   []segment
 	Rows       []rowView
 	Totals     []totalView
 	Sum        string
+	Choices    []choiceGroup
+	Done       string // id of the correction just made, for undo
+	IsToday    bool
 }
 
 type dayBar struct {
@@ -495,7 +517,7 @@ func parseDate(v string, loc *time.Location, now time.Time) time.Time {
 
 // intervalsIn returns the intervals of [from, to) and their totals.
 func (s *Server) intervalsIn(ctx context.Context, from, to time.Time) ([]core.Interval, []core.HatTotal, error) {
-	ev, err := s.st.EventsBetween(ctx, time.Time{}, to)
+	ev, err := s.st.Effective(ctx, to)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -570,7 +592,21 @@ func (s *Server) dayPage(w http.ResponseWriter, r *http.Request, acc access) {
 	d.Title = day.Format("Mon 2006-01-02")
 	d.Prev, d.Next = "/day?date="+dateStr(day.AddDate(0, 0, -1)), "/day?date="+dateStr(next)
 	span := float64(next.Sub(day))
+	d.Date = dateStr(day)
+	d.IsToday = v.Live
+	d.Done = r.URL.Query().Get("done")
+	if d.Done != "" {
+		v.Msg = i18n.In(lang, "web.day.saved")
+	}
+	d.Choices = choices(cfg, iv, lang)
+	var prevEnd time.Time
 	for _, i := range iv {
+		if !prevEnd.IsZero() && i.Start.Sub(prevEnd) >= time.Minute {
+			d.Rows = append(d.Rows, rowView{Gap: true, Start: prevEnd.In(loc).Format("15:04"), End: i.Start.In(loc).Format("15:04"),
+				StartIn: prevEnd.In(loc).Format("15:04"), EndIn: i.Start.In(loc).Format("15:04"),
+				Duration: core.FormatDuration(i.Start.Sub(prevEnd))})
+		}
+		prevEnd = i.End
 		what := nameOf(nm, i.Hat)
 		if i.Activity != "" {
 			what += " · " + i.Activity
@@ -582,8 +618,13 @@ func (s *Server) dayPage(w http.ResponseWriter, r *http.Request, acc access) {
 		d.Segments = append(d.Segments, segment{
 			Left: float64(i.Start.Sub(day)) / span * 100, Width: float64(i.Duration()) / span * 100,
 			Color: pal.color(i.Hat), Title: fmt.Sprintf("%s–%s %s", i.Start.In(loc).Format("15:04"), end, what)})
-		d.Rows = append(d.Rows, rowView{Start: i.Start.In(loc).Format("15:04"), End: end, Hat: nameOf(nm, i.Hat),
-			Color: pal.color(i.Hat), Activity: i.Activity, Duration: core.FormatDuration(i.Duration()), Open: i.Open})
+		row := rowView{Start: i.Start.In(loc).Format("15:04"), End: end, Hat: nameOf(nm, i.Hat),
+			Color: pal.color(i.Hat), Activity: i.Activity, Duration: core.FormatDuration(i.Duration()), Open: i.Open,
+			ID: i.StartID, What: i.Hat + "|" + i.Activity, StartIn: i.Start.In(loc).Format("15:04")}
+		if !i.Open {
+			row.EndIn = i.End.In(loc).Format("15:04")
+		}
+		d.Rows = append(d.Rows, row)
 	}
 	d.Totals = s.totalViews(tot, nil, pal, nm, lang)
 	d.Sum = core.FormatDuration(sumOf(tot))

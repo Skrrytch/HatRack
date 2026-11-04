@@ -1,26 +1,85 @@
+{{define "whatselect"}}
+<select name="what" required>
+  {{$sel := .Sel}}
+  {{range .Choices}}<optgroup label="{{.Label}}">{{range .Options}}<option value="{{.Value}}"{{if eq .Value $sel}} selected{{end}}>{{.Label}}</option>{{end}}</optgroup>{{end}}
+</select>
+{{end}}
+
 {{define "content"}}
 {{with .Day}}
 <div class="nav2">
-  <a class="btn" href="{{.Prev}}">←</a>
+  <a class="btn" href="{{.Prev}}" title="{{t $.Lang "web.day.prev"}}">←</a>
   <span class="t">{{.Title}}</span>
   <a class="btn" href="/day">{{t $.Lang "ui.today"}}</a>
-  <a class="btn" href="{{.Next}}">→</a>
+  <a class="btn" href="{{.Next}}" title="{{t $.Lang "web.day.next"}}">→</a>
 </div>
-{{if not .Rows}}
-  <p class="card dim">{{t $.Lang "cli.log.empty"}}</p>
-{{else}}
+{{if .Done}}{{if $.CanWrite}}
+<form method="post" action="/day/edit" class="undo">
+  <input type="hidden" name="date" value="{{.Date}}"><input type="hidden" name="op" value="undo"><input type="hidden" name="id" value="{{.Done}}">
+  <button>↶ {{t $.Lang "web.day.undo"}}</button>
+</form>
+{{end}}{{end}}
+
+{{if .Rows}}
   <div class="bar" style="margin-bottom:.1rem">{{range .Segments}}<i title="{{.Title}}" style="left:{{printf "%.3f" .Left}}%;width:{{printf "%.3f" .Width}}%;--c:{{.Color}}"></i>{{end}}</div>
   <div class="hours"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+{{end}}
 
-  <h1>{{t $.Lang "ui.timeline"}}</h1>
-  <table class="card">
-    {{range .Rows}}
-    <tr><td style="white-space:nowrap">{{.Start}}–{{.End}}</td>
-        <td><span class="dot" style="--c:{{.Color}}"></span>{{.Hat}}{{if .Activity}} <span class="dim">· {{.Activity}}</span>{{end}}</td>
-        <td class="num">{{.Duration}}</td></tr>
-    {{end}}
-  </table>
+<h1>{{t $.Lang "ui.timeline"}}</h1>
+{{if not .Rows}}<p class="card dim">{{t $.Lang "cli.log.empty"}}</p>{{end}}
+<div class="card ivlist">
+  {{$d := .}}
+  {{range .Rows}}
+  {{if .Gap}}
+    <details class="iv gap">
+      <summary><span class="ivtime">{{.Start}}–{{.End}}</span><span class="ivwhat dim">{{t $.Lang "web.day.gap"}}</span><span class="num dim">{{.Duration}}</span>{{if $.CanWrite}}<span class="ivedit">{{t $.Lang "web.day.fill"}}</span>{{end}}</summary>
+      {{if $.CanWrite}}
+      <form method="post" action="/day/edit" class="ivform">
+        <input type="hidden" name="date" value="{{$d.Date}}"><input type="hidden" name="op" value="insert">
+        <label>{{t $.Lang "web.day.from"}}<input type="time" name="start" value="{{.StartIn}}" required></label>
+        <label>{{t $.Lang "web.day.to"}}<input type="time" name="end" value="{{.EndIn}}" required></label>
+        <label class="grow">{{t $.Lang "web.day.what"}}{{template "whatselect" (dict "Choices" $d.Choices "Sel" "")}}</label>
+        <button class="primary">{{t $.Lang "web.day.fill"}}</button>
+      </form>
+      {{end}}
+    </details>
+  {{else}}
+    <details class="iv" style="--c:{{.Color}}">
+      <summary><span class="ivtime">{{.Start}}–{{.End}}</span><span class="ivwhat"><span class="dot"></span>{{.Hat}}{{if .Activity}} <span class="dim">· {{.Activity}}</span>{{end}}</span><span class="num">{{.Duration}}</span>{{if $.CanWrite}}<span class="ivedit" title="{{t $.Lang "web.day.edit"}}">✎</span>{{end}}</summary>
+      {{if $.CanWrite}}
+      <form method="post" action="/day/edit" class="ivform">
+        <input type="hidden" name="date" value="{{$d.Date}}"><input type="hidden" name="id" value="{{.ID}}">
+        <input type="hidden" name="shown_start" value="{{.StartIn}}"><input type="hidden" name="shown_end" value="{{.EndIn}}">
+        <button name="op" value="change" class="defaultbtn" tabindex="-1" aria-hidden="true"></button>
+        <label>{{t $.Lang "web.day.from"}}<input type="time" name="start" value="{{.StartIn}}" required></label>
+        <label>{{t $.Lang "web.day.to"}}{{if .Open}}<input type="time" name="end" value="" placeholder="{{t $.Lang "web.day.running"}}" title="{{t $.Lang "web.day.running_hint"}}">{{else}}<input type="time" name="end" value="{{.EndIn}}" required>{{end}}</label>
+        <label class="grow">{{t $.Lang "web.day.what"}}{{template "whatselect" (dict "Choices" $d.Choices "Sel" .What)}}</label>
+        <span class="ivbtns">
+          <button name="op" value="change" class="primary">{{t $.Lang "web.setup.save"}}</button>
+          <button name="op" value="delete" class="danger" title="{{t $.Lang "web.day.delete_hint"}}">{{t $.Lang "web.day.delete"}}</button>
+        </span>
+      </form>
+      {{end}}
+    </details>
+  {{end}}
+  {{end}}
+</div>
 
+{{if $.CanWrite}}
+<details class="card add">
+  <summary><strong>+ {{t $.Lang "web.day.add"}}</strong> <span class="dim">– {{t $.Lang "web.day.add_hint"}}</span></summary>
+  <form method="post" action="/day/edit" class="ivform">
+    <input type="hidden" name="date" value="{{.Date}}"><input type="hidden" name="op" value="insert">
+    <label>{{t $.Lang "web.day.from"}}<input type="time" name="start" required></label>
+    <label>{{t $.Lang "web.day.to"}}<input type="time" name="end" placeholder="{{t $.Lang "web.day.running"}}" title="{{t $.Lang "web.day.running_hint"}}"></label>
+    <label class="grow">{{t $.Lang "web.day.what"}}{{template "whatselect" (dict "Choices" .Choices "Sel" "")}}</label>
+    <button class="primary">{{t $.Lang "web.setup.add"}}</button>
+  </form>
+  <p class="dim small">{{if .IsToday}}{{t $.Lang "web.day.add_note_today"}}{{else}}{{t $.Lang "web.day.add_note"}}{{end}}</p>
+</details>
+{{end}}
+
+{{if .Totals}}
   <h1>{{t $.Lang "cli.log.totals"}}</h1>
   <table class="card">
     {{range .Totals}}
