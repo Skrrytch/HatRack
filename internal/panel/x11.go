@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jezek/xgb"
 	"github.com/jezek/xgb/randr"
@@ -236,7 +237,22 @@ func (x *xwin) create(w, h int) error {
 	return xproto.MapWindowChecked(x.c, wid).Check()
 }
 
+// grab takes keyboard and pointer. A click on a tray icon is often still
+// being handled by the desktop's panel, which holds a grab for a moment, so
+// a refused grab is retried for about a second.
 func (x *xwin) grab() error {
+	var err error
+	for i := 0; i < 50; i++ {
+		if err = x.tryGrab(); err == nil {
+			return nil
+		}
+		xproto.UngrabKeyboard(x.c, xproto.TimeCurrentTime)
+		time.Sleep(20 * time.Millisecond)
+	}
+	return err
+}
+
+func (x *xwin) tryGrab() error {
 	kr, err := xproto.GrabKeyboard(x.c, true, x.win, xproto.TimeCurrentTime, xproto.GrabModeAsync, xproto.GrabModeAsync).Reply()
 	if err != nil {
 		return err
