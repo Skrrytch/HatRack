@@ -1,0 +1,40 @@
+{{define "content"}}
+{{with .Hat}}
+<p class="nav2"><a class="btn" href="/setup">← {{t $.Lang "web.nav.setup"}}</a><span class="t">{{if .Name}}{{.Name}}{{else}}{{.Key}}{{end}}</span><span style="width:5rem"></span></p>
+{{if .Saved}}<div class="ok">{{t $.Lang "web.setup.saved"}}</div>{{end}}
+<form method="post" action="/setup/hat">
+  <input type="hidden" name="key" value="{{.Key}}">
+  <button name="op" value="save" class="defaultbtn" tabindex="-1" aria-hidden="true"></button>
+  <div class="card fields">
+    <label>{{t $.Lang "web.setup.name"}}<input type="text" name="name" value="{{.Name}}" placeholder="{{.Key}}"></label>
+    <label>{{t $.Lang "web.setup.color"}}<input type="color" name="color" value="{{.Color}}"></label>
+    <label>{{t $.Lang "web.setup.resume"}}<select name="resume">{{range .Resume}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+    <label>{{t $.Lang "web.setup.key"}}<input type="text" value="{{.Key}}" disabled></label>
+  </div>
+
+  <h1>{{t $.Lang "web.setup.activities"}}</h1>
+  <div class="card">
+    {{range .Activities}}
+    <div class="row">
+      <input type="text" name="act.{{.Index}}" value="{{.Name}}" class="grow">
+      <button name="op" value="up:{{.Index}}" title="{{t $.Lang "web.setup.up"}}"{{if .First}} disabled{{end}}>↑</button>
+      <button name="op" value="down:{{.Index}}" title="{{t $.Lang "web.setup.down"}}"{{if .Last}} disabled{{end}}>↓</button>
+      <button name="op" value="archive:{{.Index}}">{{t $.Lang "web.setup.archive"}}</button>
+    </div>
+    {{end}}
+    <div class="row"><input type="text" name="newact" placeholder="{{t $.Lang "web.setup.newact"}}" class="grow"><button name="op" value="add">{{t $.Lang "web.setup.add"}}</button></div>
+    <p class="dim">{{t $.Lang "web.setup.rename_note"}}</p>
+    {{if .Archived}}
+      <p><span class="dim">{{t $.Lang "web.setup.archived"}}:</span>
+      {{range .Archived}}<button name="op" value="restore:{{.}}" title="{{t $.Lang "web.setup.restore"}}">↺ {{.}}</button> {{end}}</p>
+    {{end}}
+  </div>
+
+  <h1>{{t $.Lang "web.setup.modules"}}</h1>
+  <p class="dim">{{t $.Lang "web.setup.modules_hat_note"}}</p>
+  {{template "modforms" .Modules}}
+
+  <p class="row"><span class="grow"></span><button name="op" value="save" class="primary">{{t $.Lang "web.setup.save"}}</button></p>
+</form>
+{{end}}
+{{end}}

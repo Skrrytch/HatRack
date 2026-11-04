@@ -32,7 +32,7 @@ func TestCatalogsHaveSameKeys(t *testing.T) {
 
 // Every message key used in the source must exist in the English catalog.
 func TestKeysInSourceExist(t *testing.T) {
-	re := regexp.MustCompile(`"((?:cli|err|web|notify|panel|ui|tray)\.[a-z_.]+)"`)
+	re := regexp.MustCompile(`"((?:cli|err|web|notify|panel|ui|tray)\.[a-z_.]*[a-z_])"`) // a key ending in "." is a prefix built at run time
 	known := map[string]bool{}
 	for _, k := range Keys("en") {
 		known[k] = true

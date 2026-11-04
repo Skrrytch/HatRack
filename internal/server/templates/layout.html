@@ -48,6 +48,30 @@
   .hours { display: flex; justify-content: space-between; font-size: .75rem; color: var(--dim); margin-top: .1rem; }
   input[type=password] { font: inherit; padding: .4rem .6rem; border: 1px solid var(--line); border-radius: .5rem; background: var(--bg); color: inherit; width: 100%; }
   .login { max-width: 22rem; margin: 4rem auto; }
+  input[type=text], input[type=number], select, textarea { font: inherit; padding: .35rem .6rem; border: 1px solid var(--line); border-radius: .5rem; background: var(--bg); color: inherit; }
+  textarea { width: 100%; font-family: ui-monospace, monospace; font-size: .9rem; }
+  input[type=color] { width: 2.6rem; height: 2.1rem; padding: .1rem; border: 1px solid var(--line); border-radius: .5rem; background: var(--bg); }
+  button:disabled { opacity: .35; cursor: default; }
+  button.primary { background: #2fa7e0; border-color: #2fa7e0; color: #fff; font-weight: 600; }
+  .ok { background: #3a34; border: 1px solid #3a3; border-radius: .5rem; padding: .5rem .9rem; margin-bottom: 1rem; }
+  .row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin: .4rem 0; }
+  .grow { flex: 1; }
+  .fields { display: grid; gap: .8rem 1rem; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); }
+  .fields label { display: flex; flex-direction: column; gap: .2rem; font-size: .9rem; color: var(--dim); }
+  .fields label > * { color: var(--fg); }
+  label.inline { display: inline-flex; gap: .3rem; align-items: center; }
+  table.list td { vertical-align: middle; }
+  td.acts { text-align: right; white-space: nowrap; }
+  td.acts form { margin: 0; display: inline; }
+  details.mod { margin: .5rem 0; padding: .6rem 1.2rem; }
+  details.mod summary { cursor: pointer; }
+  details.mod .fields { margin-top: .8rem; }
+  .preview { margin-top: .8rem; border-top: 1px solid var(--line); padding-top: .6rem; }
+  table.list a { color: inherit; text-decoration: none; }
+  table.list a:hover { text-decoration: underline; }
+  input:disabled { opacity: .6; }
+  .defaultbtn { position: absolute; left: -9999px; }
+  pre { background: var(--bg); padding: .5rem; border-radius: .4rem; overflow: auto; }
 </style>
 </head>
 <body{{if .Live}} data-live="1"{{end}}>
@@ -60,6 +84,7 @@
 </header>
 <main>
 {{if .Err}}<div class="err">{{.Err}}</div>{{end}}
+{{if .Msg}}<div class="ok">{{.Msg}}</div>{{end}}
 {{template "content" .}}
 </main>
 <script src="/static/app.js"></script>

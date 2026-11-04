@@ -1,0 +1,21 @@
+{{define "modforms"}}
+{{range .}}
+<details class="card mod"{{range .Fields}}{{if .Value}} open{{end}}{{end}}>
+  <summary><strong>{{.Title}}</strong>{{if .Desc}} <span class="dim">– {{.Desc}}</span>{{end}}</summary>
+  <div class="fields">
+  {{range .Fields}}
+    <label>{{.Label}}{{if .Required}} *{{end}}
+    {{if or (eq .Kind "bool") (eq .Kind "enum")}}
+      <select name="{{.Name}}">{{range .Options}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+    {{else if eq .Kind "number"}}
+      <input type="number" step="any" name="{{.Name}}" value="{{.Value}}"{{if .Inherited}} placeholder="{{.Inherited}}"{{end}}>
+    {{else}}
+      <input type="text" name="{{.Name}}" value="{{.Value}}"{{if .Inherited}} placeholder="{{.Inherited}}"{{end}}>
+    {{end}}
+    </label>
+  {{end}}
+  </div>
+  {{if .Extra}}<p class="dim">{{.ExtraNote}}</p><pre>{{.Extra}}</pre>{{end}}
+</details>
+{{end}}
+{{end}}

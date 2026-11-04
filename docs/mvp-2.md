@@ -9,7 +9,7 @@ MVP 2 is built in slices, each usable on its own:
 1. **Web UI, read-only (done):** login, Now with switch bar, Day, Week, CSV.
 2. **HatTray (done):** icon and menu for switching.
 2b. **Panel (done):** the quick switcher, opened by left click on the tray icon or a keyboard shortcut.
-3. **Web UI, Setup:** hats, activities and module settings as forms.
+3. **Web UI, Setup (done):** hats, activities and module settings as forms, YAML import and export.
 4. **Corrections:** editable Day view.
 5. **MCP, `launch`, `mqtt`, GNOME and KDE backends, several devices.**
 
@@ -92,7 +92,12 @@ view and count only after confirmation.
   week, CSV export (`date, hat, activity, start, end, minutes, note`).
 - **Setup:** hats and activities (add, rename, archive, sort), module settings
   per hat and default, forms generated from each module's JSON Schema, YAML
-  import and export.
+  import and export. Done as `/setup` (hat list, archived hats, defaults,
+  YAML with preview), `/setup/hat?key=…` and `/setup/defaults`. Every change
+  goes through the same merge and checks as `hat config import`, and the
+  agents get it at once over SSE. Empty fields on a hat fall back to the
+  defaults, which the form shows in grey. Buttons for single activities
+  submit the whole form, so nothing typed is lost; Enter saves.
 - **Devices:** name, last seen, detected backends per module, recent module
   errors, device-level settings.
 

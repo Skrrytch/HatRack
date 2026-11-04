@@ -1,0 +1,75 @@
+{{define "content"}}
+{{with .Setup}}
+<h1>{{t $.Lang "ui.hats"}}</h1>
+<div class="card">
+  {{if not .Hats}}<p class="dim">{{t $.Lang "web.setup.nohats"}}</p>{{end}}
+  <table class="list">
+  {{range .Hats}}
+    <tr>
+      <td><span class="dot" style="--c:{{.Color}}"></span><a href="/setup/hat?key={{.Key}}"><strong>{{.Name}}</strong></a> <small class="dim">{{.Key}}</small></td>
+      <td class="dim">{{t $.Lang "web.setup.nacts" .Activities}}</td>
+      <td class="acts">
+        <form method="post" action="/setup/hats"><input type="hidden" name="key" value="{{.Key}}">
+          <button name="op" value="up" title="{{t $.Lang "web.setup.up"}}"{{if .First}} disabled{{end}}>↑</button>
+          <button name="op" value="down" title="{{t $.Lang "web.setup.down"}}"{{if .Last}} disabled{{end}}>↓</button>
+          <a class="btn" href="/setup/hat?key={{.Key}}">{{t $.Lang "web.setup.edit"}}</a>
+          <button name="op" value="archive">{{t $.Lang "web.setup.archive"}}</button>
+        </form>
+      </td>
+    </tr>
+  {{end}}
+  </table>
+  <form method="post" action="/setup/hats" class="row">
+    <input type="hidden" name="op" value="add">
+    <input type="color" name="color" value="#4e79a7" title="{{t $.Lang "web.setup.color"}}">
+    <input type="text" name="name" placeholder="{{t $.Lang "web.setup.newhat"}}" required>
+    <button>{{t $.Lang "web.setup.add"}}</button>
+  </form>
+</div>
+
+{{if .Archived}}
+<h1>{{t $.Lang "web.setup.archived"}}</h1>
+<div class="card">
+  <table class="list">
+  {{range .Archived}}
+    <tr>
+      <td class="dim"><span class="dot" style="--c:{{.Color}}"></span>{{.Name}} <small>{{.Key}}</small></td>
+      <td class="acts"><form method="post" action="/setup/hats"><input type="hidden" name="key" value="{{.Key}}"><button name="op" value="restore">{{t $.Lang "web.setup.restore"}}</button></form></td>
+    </tr>
+  {{end}}
+  </table>
+  <p class="dim">{{t $.Lang "web.setup.archived_note"}}</p>
+</div>
+{{end}}
+
+<h1>{{t $.Lang "web.setup.defaults"}}</h1>
+<div class="card row">
+  <span class="grow">{{t $.Lang "web.setup.defaults_note"}}</span>
+  <a class="btn" href="/setup/defaults">{{t $.Lang "web.setup.edit"}}</a>
+</div>
+
+<h1>{{t $.Lang "web.setup.yaml"}}</h1>
+<div class="card">
+  <p>{{t $.Lang "web.setup.yaml_note"}} <a class="btn" href="/setup/export.yaml">{{t $.Lang "web.setup.export"}}</a></p>
+  <form method="post" action="/setup/import" enctype="multipart/form-data">
+    {{with .Import}}
+    <textarea name="data" rows="{{if .Data}}14{{else}}5{{end}}" placeholder="version: 1&#10;hats:&#10;  …">{{.Data}}</textarea>
+    <div class="row">
+      <input type="file" name="file" accept=".yaml,.yml,text/yaml">
+      <label class="inline"><input type="checkbox" name="replace" value="1"{{if .Replace}} checked{{end}}> {{t $.Lang "web.setup.replace"}}</label>
+      <span class="grow"></span>
+      <button name="op" value="preview">{{t $.Lang "web.setup.preview"}}</button>
+      {{if .Preview}}<button name="op" value="apply" class="primary"{{if not .Changes}} disabled{{end}}>{{t $.Lang "web.setup.apply"}}</button>{{end}}
+    </div>
+    {{if .Preview}}
+      <div class="preview">
+      {{if .Changes}}<strong>{{t $.Lang "web.setup.changes"}}</strong><ul>{{range .Changes}}<li>{{.}}</li>{{end}}</ul>
+      {{else}}<p class="dim">{{t $.Lang "web.setup.nochanges"}}</p>{{end}}
+      {{if .Warnings}}<strong>{{t $.Lang "web.setup.warnings"}}</strong><ul>{{range .Warnings}}<li>{{.}}</li>{{end}}</ul>{{end}}
+      </div>
+    {{end}}
+    {{end}}
+  </form>
+</div>
+{{end}}
+{{end}}

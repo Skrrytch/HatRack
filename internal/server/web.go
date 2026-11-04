@@ -37,9 +37,9 @@ var pageFuncs = template.FuncMap{
 var pages = map[string]*template.Template{}
 
 func init() {
-	for _, p := range []string{"login", "now", "day", "week"} {
+	for _, p := range []string{"login", "now", "day", "week", "setup", "sethat", "setdefaults"} {
 		pages[p] = template.Must(template.New("layout").Funcs(pageFuncs).
-			ParseFS(webFS, "templates/layout.html", "templates/"+p+".html"))
+			ParseFS(webFS, "templates/layout.html", "templates/"+p+".html", "templates/forms.html"))
 	}
 }
 
@@ -60,10 +60,13 @@ type view struct {
 	Err      string
 	Path     string
 
-	Login loginView
-	Now   nowView
-	Day   dayView
-	Week  weekView
+	Login    loginView
+	Now      nowView
+	Day      dayView
+	Week     weekView
+	Setup    setupView
+	Hat      hatEdit
+	Defaults defaultsEdit
 }
 
 type loginView struct {
@@ -210,6 +213,9 @@ func (s *Server) base(r *http.Request, page string, acc access) view {
 			{"now", "/", "ui.nav.now"}, {"day", "/day", "ui.nav.day"}, {"week", "/week", "ui.nav.week"},
 		} {
 			v.Nav = append(v.Nav, navItem{n.href, i18n.In(lang, n.key), n.page == page})
+		}
+		if acc == fullAccess {
+			v.Nav = append(v.Nav, navItem{"/setup", i18n.In(lang, "web.nav.setup"), strings.HasPrefix(page, "set")})
 		}
 	}
 	if m := r.URL.Query().Get("e"); m != "" {

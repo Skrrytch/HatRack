@@ -56,6 +56,14 @@ func New(st store.Store, reg *modules.Registry) *Server {
 	s.mux.HandleFunc("POST /login", s.loginPage)
 	s.mux.HandleFunc("POST /logout", s.page(true, s.logout))
 	s.mux.HandleFunc("GET /static/{file}", s.static)
+	s.mux.HandleFunc("GET /setup", s.page(true, s.setupPage))
+	s.mux.HandleFunc("POST /setup/hats", s.page(true, s.hatsAction))
+	s.mux.HandleFunc("GET /setup/hat", s.page(true, s.hatPage))
+	s.mux.HandleFunc("POST /setup/hat", s.page(true, s.hatSave))
+	s.mux.HandleFunc("GET /setup/defaults", s.page(true, s.defaultsPage))
+	s.mux.HandleFunc("POST /setup/defaults", s.page(true, s.defaultsSave))
+	s.mux.HandleFunc("POST /setup/import", s.page(true, s.importAction))
+	s.mux.HandleFunc("GET /setup/export.yaml", s.page(true, s.exportConfig))
 	return s
 }
 
@@ -297,46 +305,98 @@ func (s *Server) putConfig(w http.ResponseWriter, r *http.Request, _ store.Devic
 		httpError(w, http.StatusRequestEntityTooLarge, "body too large")
 		return
 	}
-	in, err := core.ParseConfig(body)
-	if err != nil {
-		httpError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if err := modules.Validate(s.reg, in); err != nil {
-		httpError(w, http.StatusBadRequest, err.Error())
-		return
-	}
 	q := r.URL.Query()
 	dry, replace := q.Get("dry_run") != "" && q.Get("dry_run") != "0", q.Get("replace") != "" && q.Get("replace") != "0"
-
-	putMu.Lock()
-	defer putMu.Unlock()
-	cur, rev, err := s.st.GetConfig(r.Context())
-	if err != nil {
-		serverError(w, err)
-		return
-	}
-	merged, changes := core.Merge(cur, in, replace)
-	if err := merged.Validate(); err != nil {
+	res, err := s.importConfig(r.Context(), body, dry, replace)
+	var bad badConfig
+	switch {
+	case errors.As(err, &bad):
 		httpError(w, http.StatusBadRequest, err.Error())
-		return
+	case err != nil:
+		serverError(w, err)
+	default:
+		writeJSON(w, http.StatusOK, res)
 	}
-	res := ImportResult{DryRun: dry, Changes: changes, Warnings: merged.Warnings(false), Rev: rev}
+}
+
+// badConfig is a configuration the user has to fix (as opposed to a failure
+// of the server).
+type badConfig struct{ error }
+
+// importConfig merges a YAML configuration into the stored one (see
+// core.Merge). With dry it only reports what would change.
+func (s *Server) importConfig(ctx context.Context, data []byte, dry, replace bool) (ImportResult, error) {
+	in, err := core.ParseConfig(data)
+	if err != nil {
+		return ImportResult{}, badConfig{err}
+	}
+	if err := modules.Validate(s.reg, in); err != nil {
+		return ImportResult{}, badConfig{err}
+	}
+	var res ImportResult
+	_, err = s.editConfig(ctx, dry, func(cur *core.Config) error {
+		merged, changes := core.Merge(*cur, in, replace)
+		*cur = merged
+		res = ImportResult{DryRun: dry, Changes: changes, Warnings: merged.Warnings(false)}
+		if len(changes) == 0 {
+			return errUnchanged
+		}
+		return nil
+	}, &res.Rev)
 	if res.Changes == nil {
 		res.Changes = []string{}
 	}
 	if res.Warnings == nil {
 		res.Warnings = []string{}
 	}
-	if !dry && len(changes) > 0 {
-		if res.Rev, err = s.st.PutConfig(r.Context(), merged); err != nil {
-			serverError(w, err)
-			return
-		}
-		b, _ := json.Marshal(map[string]int64{"rev": res.Rev})
-		s.hub.broadcast(message{Event: "config", Data: string(b)})
+	return res, err
+}
+
+// errUnchanged tells editConfig that there is nothing to store.
+var errUnchanged = errors.New("unchanged")
+
+// editConfig loads the configuration, lets fn change it, checks the result
+// and stores it, telling the agents. Unless dry, of course. rev, if given,
+// receives the revision of the stored (or current) configuration.
+func (s *Server) editConfig(ctx context.Context, dry bool, fn func(*core.Config) error, rev ...*int64) (core.Config, error) {
+	putMu.Lock()
+	defer putMu.Unlock()
+	cfg, cur, err := s.st.GetConfig(ctx)
+	if err != nil {
+		return cfg, err
 	}
-	writeJSON(w, http.StatusOK, res)
+	if cfg.Version == 0 {
+		cfg.Version = core.ConfigVersion
+	}
+	setRev := func(v int64) {
+		if len(rev) > 0 && rev[0] != nil {
+			*rev[0] = v
+		}
+	}
+	setRev(cur)
+	if err := fn(&cfg); err != nil {
+		if errors.Is(err, errUnchanged) {
+			return cfg, nil
+		}
+		return cfg, err
+	}
+	if err := cfg.Validate(); err != nil {
+		return cfg, badConfig{err}
+	}
+	if err := modules.Validate(s.reg, cfg); err != nil {
+		return cfg, badConfig{err}
+	}
+	if dry {
+		return cfg, nil
+	}
+	n, err := s.st.PutConfig(ctx, cfg)
+	if err != nil {
+		return cfg, err
+	}
+	setRev(n)
+	b, _ := json.Marshal(map[string]int64{"rev": n})
+	s.hub.broadcast(message{Event: "config", Data: string(b)})
+	return cfg, nil
 }
 
 func (s *Server) hello(w http.ResponseWriter, r *http.Request, dev store.Device) {
