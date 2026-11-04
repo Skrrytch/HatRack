@@ -11,7 +11,7 @@ MVP 2 is built in slices, each usable on its own:
 2b. **Panel (done):** the quick switcher, opened by left click on the tray icon or a keyboard shortcut.
 3. **Web UI, Setup (done):** hats, activities and module settings as forms, YAML import and export.
 3b. **Web UI, daily use (done):** Now in the panel's style (status in the hat colour, Pause and Take off as in the panel, live duration, today per hat, edit link on every hat), a new hat with its activities in one step, several activities at once, module sections that say what applies, devices and YAML moved down in Setup, a narrow layout for phones.
-4. **Corrections:** editable Day view.
+4. **Corrections (done):** editable Day view: change, delete, fill gaps, add entries, undo.
 5. **MCP, `launch`, `mqtt`, GNOME and KDE backends, several devices.**
 
 ## Capabilities

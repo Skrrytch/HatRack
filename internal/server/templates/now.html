@@ -36,7 +36,7 @@
     <div class="hathead">
       {{if $.CanWrite}}
         <form method="post" action="/action" class="grow"><input type="hidden" name="op" value="on"><input type="hidden" name="hat" value="{{.Key}}"><button class="hatbtn" title="{{t $.Lang "panel.hint.hat" .Name}}"><span class="dot"></span>{{.Name}}{{if .Current}} <span class="badge">{{t $.Lang "web.current"}}</span>{{end}}</button></form>
-        <a class="edit" href="/setup/hat?key={{.Key}}" title="{{t $.Lang "web.edit_hat" .Name}}">✎</a>
+        <a class="edit" href="/setup/hat?key={{.Key}}" title="{{t $.Lang "web.edit_hat" .Name}}">{{template "icon" "edit"}}</a>
       {{else}}
         <span class="hatbtn"><span class="dot"></span>{{.Name}}{{if .Current}} <span class="badge">{{t $.Lang "web.current"}}</span>{{end}}</span>
       {{end}}

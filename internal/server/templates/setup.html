@@ -10,8 +10,8 @@
       <td class="dim">{{t $.Lang "web.setup.nacts" .Activities}}</td>
       <td class="acts">
         <form method="post" action="/setup/hats"><input type="hidden" name="key" value="{{.Key}}">
-          <button name="op" value="up" title="{{t $.Lang "web.setup.up"}}"{{if .First}} disabled{{end}}>↑</button>
-          <button name="op" value="down" title="{{t $.Lang "web.setup.down"}}"{{if .Last}} disabled{{end}}>↓</button>
+          <button name="op" value="up" title="{{t $.Lang "web.setup.up"}}"{{if .First}} disabled{{end}} class="iconbtn">{{template "icon" "up"}}</button>
+          <button name="op" value="down" title="{{t $.Lang "web.setup.down"}}"{{if .Last}} disabled{{end}} class="iconbtn">{{template "icon" "down"}}</button>
           <a class="btn" href="/setup/hat?key={{.Key}}">{{t $.Lang "web.setup.edit"}}</a>
           <button name="op" value="archive">{{t $.Lang "web.setup.archive"}}</button>
         </form>

@@ -8,15 +8,15 @@
 {{define "content"}}
 {{with .Day}}
 <div class="nav2">
-  <a class="btn" href="{{.Prev}}" title="{{t $.Lang "web.day.prev"}}">←</a>
+  <a class="btn" href="{{.Prev}}" title="{{t $.Lang "web.day.prev"}}">{{template "icon" "left"}}</a>
   <span class="t">{{.Title}}</span>
   <a class="btn" href="/day">{{t $.Lang "ui.today"}}</a>
-  <a class="btn" href="{{.Next}}" title="{{t $.Lang "web.day.next"}}">→</a>
+  <a class="btn" href="{{.Next}}" title="{{t $.Lang "web.day.next"}}">{{template "icon" "right"}}</a>
 </div>
 {{if .Done}}{{if $.CanWrite}}
 <form method="post" action="/day/edit" class="undo">
   <input type="hidden" name="date" value="{{.Date}}"><input type="hidden" name="op" value="undo"><input type="hidden" name="id" value="{{.Done}}">
-  <button>↶ {{t $.Lang "web.day.undo"}}</button>
+  <button>{{template "icon" "undo"}} {{t $.Lang "web.day.undo"}}</button>
 </form>
 {{end}}{{end}}
 
@@ -45,7 +45,7 @@
     </details>
   {{else}}
     <details class="iv" style="--c:{{.Color}}">
-      <summary><span class="ivtime">{{.Start}}–{{.End}}</span><span class="ivwhat"><span class="dot"></span>{{.Hat}}{{if .Activity}} <span class="dim">· {{.Activity}}</span>{{end}}</span><span class="num">{{.Duration}}</span>{{if $.CanWrite}}<span class="ivedit" title="{{t $.Lang "web.day.edit"}}">✎</span>{{end}}</summary>
+      <summary><span class="ivtime">{{.Start}}–{{.End}}</span><span class="ivwhat"><span class="dot"></span>{{.Hat}}{{if .Activity}} <span class="dim">· {{.Activity}}</span>{{end}}</span><span class="num">{{.Duration}}</span>{{if $.CanWrite}}<span class="ivedit" title="{{t $.Lang "web.day.edit"}}">{{template "icon" "edit"}}</span>{{end}}</summary>
       {{if $.CanWrite}}
       <form method="post" action="/day/edit" class="ivform">
         <input type="hidden" name="date" value="{{$d.Date}}"><input type="hidden" name="id" value="{{.ID}}">

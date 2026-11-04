@@ -67,7 +67,6 @@ type field struct {
 type moduleForm struct {
 	ID, Title, Desc string
 	Summary         string // what applies, shown while the section is closed
-	Open            bool
 	Fields          []field
 	Extra           string // YAML of settings the form cannot show
 	ExtraNote       string
@@ -295,7 +294,7 @@ func (s *Server) moduleForms(lang string, own, inherited map[string]core.ModuleC
 			}
 			f.Fields = append(f.Fields, fl)
 		}
-		f.Summary, f.Open = summary(lang, f.Fields, hatPage)
+		f.Summary = summary(lang, f.Fields, hatPage)
 		if len(extra) > 0 {
 			b, _ := core.Config{Modules: map[string]core.ModuleCfg{id: extra}}.Export()
 			f.Extra = string(b)
@@ -307,7 +306,7 @@ func (s *Server) moduleForms(lang string, own, inherited map[string]core.ModuleC
 }
 
 // summary says in one line what a module section holds.
-func summary(lang string, fields []field, hatPage bool) (string, bool) {
+func summary(lang string, fields []field, hatPage bool) string {
 	var own []string
 	inherited := false
 	for _, f := range fields {
@@ -326,13 +325,13 @@ func summary(lang string, fields []field, hatPage bool) (string, bool) {
 	}
 	switch {
 	case len(own) > 0 && hatPage && inherited:
-		return strings.Join(own, " · ") + " · " + i18n.In(lang, "web.setup.sum_rest"), true
+		return strings.Join(own, " · ") + " · " + i18n.In(lang, "web.setup.sum_rest")
 	case len(own) > 0:
-		return strings.Join(own, " · "), true
+		return strings.Join(own, " · ")
 	case inherited:
-		return i18n.In(lang, "web.setup.sum_default"), false
+		return i18n.In(lang, "web.setup.sum_default")
 	}
-	return i18n.In(lang, "web.setup.sum_none"), false
+	return i18n.In(lang, "web.setup.sum_none")
 }
 
 // splitList reads several names from one field: separated by commas,

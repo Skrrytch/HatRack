@@ -1,14 +1,23 @@
 {{define "content"}}
 {{with .Hat}}
-<p class="nav2"><a class="btn" href="/setup">← {{t $.Lang "web.nav.setup"}}</a><span class="t">{{if .Name}}{{.Name}}{{else}}{{.Key}}{{end}} <small class="dim" title="{{t $.Lang "web.setup.key"}}">({{.Key}})</small></span><span style="width:5rem"></span></p>
+<div class="hatpage" style="--c:{{.Color}}">
+<nav class="crumbs"><a href="/setup">{{template "icon" "back"}} {{t $.Lang "web.nav.setup"}}</a> <span class="dim">/</span> <span>{{t $.Lang "web.setup.hats_crumb"}}</span></nav>
+<section class="status hathero">
+  <div class="status-main"><span class="bigdot"></span><div>
+    <div class="dim small">{{t $.Lang "web.setup.editing"}}</div>
+    <div class="status-hat">{{if .Name}}{{.Name}}{{else}}{{.Key}}{{end}} <small class="dim keytag" title="{{t $.Lang "web.setup.key"}}">{{.Key}}</small></div>
+  </div></div>
+</section>
 {{if .Saved}}<div class="ok">{{t $.Lang "web.setup.saved"}}</div>{{end}}
 <form method="post" action="/setup/hat">
   <input type="hidden" name="key" value="{{.Key}}">
   <button name="op" value="save" class="defaultbtn" tabindex="-1" aria-hidden="true"></button>
-  <div class="card fields">
-    <label>{{t $.Lang "web.setup.name"}}<input type="text" name="name" value="{{.Name}}" placeholder="{{.Key}}"></label>
-    <label>{{t $.Lang "web.setup.color"}}<input type="color" name="color" value="{{.Color}}"></label>
-    <label>{{t $.Lang "web.setup.resume"}}<select name="resume">{{range .Resume}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+  <div class="card">
+    <div class="namerow">
+      <label class="grow">{{t $.Lang "web.setup.name"}}<input type="text" name="name" value="{{.Name}}" placeholder="{{.Key}}"></label>
+      <label>{{t $.Lang "web.setup.color"}}<input type="color" name="color" value="{{.Color}}"></label>
+    </div>
+    {{template "resumeradios" (dict "Lang" $.Lang "Opts" .Resume)}}
   </div>
 
   <h1>{{t $.Lang "web.setup.activities"}}</h1>
@@ -16,8 +25,8 @@
     {{range .Activities}}
     <div class="row actrow">
       <input type="text" name="act.{{.Index}}" value="{{.Name}}" class="grow">
-      <button name="op" value="up:{{.Index}}" title="{{t $.Lang "web.setup.up"}}"{{if .First}} disabled{{end}}>↑</button>
-      <button name="op" value="down:{{.Index}}" title="{{t $.Lang "web.setup.down"}}"{{if .Last}} disabled{{end}}>↓</button>
+      <button name="op" value="up:{{.Index}}" title="{{t $.Lang "web.setup.up"}}"{{if .First}} disabled{{end}} class="iconbtn">{{template "icon" "up"}}</button>
+      <button name="op" value="down:{{.Index}}" title="{{t $.Lang "web.setup.down"}}"{{if .Last}} disabled{{end}} class="iconbtn">{{template "icon" "down"}}</button>
       <button name="op" value="archive:{{.Index}}">{{t $.Lang "web.setup.archive"}}</button>
     </div>
     {{end}}
@@ -25,7 +34,7 @@
     <p class="dim">{{t $.Lang "web.setup.rename_note"}}</p>
     {{if .Archived}}
       <p><span class="dim">{{t $.Lang "web.setup.archived"}}:</span>
-      {{range .Archived}}<button name="op" value="restore:{{.}}" title="{{t $.Lang "web.setup.restore"}}">↺ {{.}}</button> {{end}}</p>
+      {{range .Archived}}<button name="op" value="restore:{{.}}" title="{{t $.Lang "web.setup.restore"}}">{{template "icon" "restore"}} {{.}}</button> {{end}}</p>
     {{end}}
   </div>
 
@@ -35,5 +44,6 @@
 
   <p class="row"><span class="grow"></span><button name="op" value="save" class="primary">{{t $.Lang "web.setup.save"}}</button></p>
 </form>
+</div>
 {{end}}
 {{end}}

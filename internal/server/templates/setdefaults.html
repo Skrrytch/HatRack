@@ -1,11 +1,11 @@
 {{define "content"}}
 {{with .Defaults}}
-<p class="nav2"><a class="btn" href="/setup">← {{t $.Lang "web.nav.setup"}}</a><span class="t">{{t $.Lang "web.setup.defaults"}}</span><span style="width:5rem"></span></p>
+<p class="nav2"><a class="btn" href="/setup">{{template "icon" "back"}} {{t $.Lang "web.nav.setup"}}</a><span class="t">{{t $.Lang "web.setup.defaults"}}</span><span style="width:5rem"></span></p>
 {{if .Saved}}<div class="ok">{{t $.Lang "web.setup.saved"}}</div>{{end}}
 <form method="post" action="/setup/defaults">
   <button class="defaultbtn" tabindex="-1" aria-hidden="true"></button>
-  <div class="card fields">
-    <label>{{t $.Lang "web.setup.resume"}}<select name="resume">{{range .Resume}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+  <div class="card">
+    {{template "resumeradios" (dict "Lang" $.Lang "Opts" .Resume)}}
   </div>
   <h1>{{t $.Lang "web.setup.modules"}}</h1>
   <p class="dim">{{t $.Lang "web.setup.modules_def_note"}}</p>

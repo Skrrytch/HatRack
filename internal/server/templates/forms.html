@@ -1,6 +1,13 @@
+{{define "resumeradios"}}
+<fieldset class="radios">
+  <legend>{{t .Lang "web.setup.resume"}}</legend>
+  {{range .Opts}}<label><input type="radio" name="resume" value="{{.Value}}"{{if .Selected}} checked{{end}}> {{.Label}}</label>{{end}}
+</fieldset>
+{{end}}
+
 {{define "modforms"}}
 {{range .}}
-<details class="card mod"{{if .Open}} open{{end}}>
+<details class="card mod">
   <summary><strong>{{.Title}}</strong> <span class="dim">– {{.Summary}}</span>{{if .Desc}}<br><small class="dim desc">{{.Desc}}</small>{{end}}</summary>
   <div class="fields">
   {{range .Fields}}
