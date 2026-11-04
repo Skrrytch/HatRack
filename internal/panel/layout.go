@@ -187,8 +187,17 @@ func Build(snap agent.Snapshot, query string, scale float64, now time.Time) Layo
 			hdrColor = rgba(snap.Status.Color)
 		}
 	}
+	tint := 0.35
+	if st.Mode != core.ModeWearing {
+		tint = 0.18 // grey while paused or without a hat
+	}
+	hdrBG := mixc(cBG, hdrColor, tint)
 	dot := m.s6() * 5 / 3
-	l.Boxes = append(l.Boxes, Box{R: Rect{m.pad, (m.headerH - dot) / 2, dot, dot}, Radius: dot / 2, Color: hdrColor})
+	ringW := max(int(1.5*scale+.5), 1)
+	// a subtle light ring keeps the dot visible on the tinted header
+	l.Boxes = append(l.Boxes,
+		Box{R: Rect{m.pad - ringW, (m.headerH-dot)/2 - ringW, dot + 2*ringW, dot + 2*ringW}, Radius: dot/2 + ringW, Color: mixc(hdrBG, cFG, .55)},
+		Box{R: Rect{m.pad, (m.headerH - dot) / 2, dot, dot}, Radius: dot / 2, Color: hdrColor})
 	line := agent.StatusLine(snap.Status, now)
 	l.Texts = append(l.Texts, Text{X: m.pad + dot + m.gap, Y: (m.headerH - m.txPx) / 2, S: fit(line, true, m.txPx, W-2*m.pad-dot-m.gap), Bold: true, Px: m.txPx, Color: cFG})
 	y := m.headerH
@@ -288,11 +297,7 @@ func Build(snap agent.Snapshot, query string, scale float64, now time.Time) Layo
 	l.H = y
 	// the header is tinted with the hat colour, the footer a neutral band;
 	// the dark middle with lighter cards is where the choice happens
-	tint := 0.35
-	if st.Mode != core.ModeWearing {
-		tint = 0.18 // grey while paused or without a hat
-	}
-	l.Boxes = append([]Box{{R: Rect{0, 0, W, m.headerH - 1}, Color: mixc(cBG, hdrColor, tint)}, {R: Rect{0, footY, W, y - footY}, Color: cBar}}, l.Boxes...)
+	l.Boxes = append([]Box{{R: Rect{0, 0, W, m.headerH - 1}, Color: hdrBG}, {R: Rect{0, footY, W, y - footY}, Color: cBar}}, l.Boxes...)
 	return l
 }
 
