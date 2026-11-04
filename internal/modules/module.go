@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"hatrack/internal/core"
@@ -126,9 +127,15 @@ type backendModule struct {
 	id       string
 	schema   string
 	backends []Backend
+	mu       sync.Mutex
 	picked   Backend
-	checked  bool
+	tried    time.Time // last detection without a result
 }
+
+// detectRetry is how long a failed detection is trusted. At login the agent
+// may start before the desktop session (its notification daemon, its
+// settings); a later try then finds the backend.
+const detectRetry = 30 * time.Second
 
 func (m *backendModule) ID() string           { return m.id }
 func (m *backendModule) RunsIn() RunsIn       { return RunsInAgent }
@@ -137,14 +144,18 @@ func (m *backendModule) Backends() []Backend  { return m.backends }
 
 // Active returns the first backend whose Detect succeeds, or nil.
 func (m *backendModule) Active(ctx context.Context) Backend {
-	if !m.checked {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.picked == nil && (m.tried.IsZero() || time.Since(m.tried) >= detectRetry) {
 		for _, b := range m.backends {
 			if b.Detect(ctx) {
 				m.picked = b
 				break
 			}
 		}
-		m.checked = true
+		if m.picked == nil {
+			m.tried = time.Now()
+		}
 	}
 	return m.picked
 }

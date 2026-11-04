@@ -458,17 +458,17 @@ func (a *Agent) reconcile(ctx context.Context) {
 	a.report(ctx, fails)
 }
 
-// ensureNeutral takes the neutral snapshot of every module that has none,
-// while no hat look is applied.
+// ensureNeutral takes the neutral snapshot while no hat look is applied.
+// It is taken anew each time: what the desktop shows then is the user's own
+// look, perhaps changed by hand since the last time (a new wallpaper), and
+// that is what taking the hat off must bring back.
 func (a *Agent) ensureNeutral(ctx context.Context) {
 	if a.applied != "" {
 		return
 	}
 	snaps, fails := a.host.Snapshot(ctx)
 	for id, s := range snaps {
-		if _, ok := a.neutral[id]; !ok {
-			a.neutral[id] = s
-		}
+		a.neutral[id] = s
 	}
 	a.report(ctx, fails)
 }

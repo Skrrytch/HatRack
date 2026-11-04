@@ -2,6 +2,8 @@ package modules
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -108,11 +110,15 @@ func NewMQTT() *MQTTModule { return &MQTTModule{} }
 // the settings change, Publish sends the state.
 type MQTTModule struct {
 	mu      sync.Mutex
-	cfg     MQTTConfig
+	cfg     MQTTConfig // Enabled is nil here; on holds it
 	on      bool
 	client  paho.Client
 	last    *MQTTState
 	version string
+	// sendMu keeps state messages in order: whoever sends takes the newest
+	// state while holding it, so an older one can never arrive last
+	sendMu sync.Mutex
+	suffix string // makes the client ID unique per server process
 }
 
 func (m *MQTTModule) ID() string           { return "mqtt" }
@@ -147,11 +153,12 @@ func (m *MQTTModule) Configure(raw json.RawMessage) error {
 			return err
 		}
 		on = cfg.Enabled == nil || *cfg.Enabled
+		cfg.Enabled = nil // compared by value through on, not by pointer
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if on == m.on && cfg == m.cfg {
-		return nil
+		return nil // unchanged settings: keep the connection
 	}
 	// entities announced under the old settings go away unless they stay
 	keep := on && cfg.Discovery && cfg.topic() == m.cfg.topic() && cfg.prefix() == m.cfg.prefix()
@@ -169,8 +176,13 @@ func (m *MQTTModule) Configure(raw json.RawMessage) error {
 		return err
 	}
 	avail := cfg.topic() + "/availability"
+	if m.suffix == "" {
+		var b [3]byte
+		rand.Read(b[:])
+		m.suffix = hex.EncodeToString(b[:])
+	}
 	opts := paho.NewClientOptions().AddBroker(broker).
-		SetClientID("hatrack-"+sanitizeID(cfg.topic())).
+		SetClientID("hatrack-"+nodeID(cfg)+"-"+m.suffix). // a second server does not kick this one off
 		SetUsername(cfg.Username).SetPassword(cfg.Password).
 		SetCleanSession(true).SetAutoReconnect(true).SetConnectRetry(true).
 		SetConnectRetryInterval(10*time.Second).SetMaxReconnectInterval(time.Minute).
@@ -178,15 +190,13 @@ func (m *MQTTModule) Configure(raw json.RawMessage) error {
 	opts.SetOnConnectHandler(func(c paho.Client) {
 		// after every (re)connect: availability, discovery, the last state
 		m.mu.Lock()
-		cfg, last, version := m.cfg, m.last, m.version
+		cfg, version := m.cfg, m.version
 		m.mu.Unlock()
-		m.send(c, avail, "online")
+		m.send(c, avail, "online", sendWait)
 		if cfg.Discovery {
 			m.announce(c, cfg, version, true)
 		}
-		if last != nil {
-			m.sendState(c, cfg, *last)
-		}
+		m.flushState(c, cfg)
 	})
 	opts.SetConnectionLostHandler(func(_ paho.Client, err error) { log.Printf("mqtt: connection lost: %v", err) })
 	m.client = paho.NewClient(opts)
@@ -194,14 +204,27 @@ func (m *MQTTModule) Configure(raw json.RawMessage) error {
 	return nil
 }
 
-// Publish sends the state if the module is on; it never blocks for long.
+// Publish sends the state if the module is on. It does not wait: a slow or
+// half-open broker must not hold up a switch.
 func (m *MQTTModule) Publish(st MQTTState) {
 	m.mu.Lock()
 	m.last = &st
 	c, cfg, on := m.client, m.cfg, m.on
 	m.mu.Unlock()
 	if on && c != nil && c.IsConnectionOpen() {
-		m.sendState(c, cfg, st)
+		go m.flushState(c, cfg)
+	}
+}
+
+// flushState sends the newest state (read while holding sendMu).
+func (m *MQTTModule) flushState(c paho.Client, cfg MQTTConfig) {
+	m.sendMu.Lock()
+	defer m.sendMu.Unlock()
+	m.mu.Lock()
+	last := m.last
+	m.mu.Unlock()
+	if last != nil {
+		m.sendState(c, cfg, *last)
 	}
 }
 
@@ -220,7 +243,7 @@ func (m *MQTTModule) disconnect() {
 		return
 	}
 	if m.client.IsConnectionOpen() {
-		m.send(m.client, m.cfg.topic()+"/availability", "offline")
+		m.send(m.client, m.cfg.topic()+"/availability", "offline", goodbyeWait)
 	}
 	m.client.Disconnect(250)
 	m.client = nil
@@ -228,12 +251,19 @@ func (m *MQTTModule) disconnect() {
 
 func (m *MQTTModule) sendState(c paho.Client, cfg MQTTConfig, st MQTTState) {
 	b, _ := json.Marshal(st)
-	m.send(c, cfg.topic()+"/state", string(b))
+	m.send(c, cfg.topic()+"/state", string(b), sendWait)
 }
 
-func (m *MQTTModule) send(c paho.Client, topic, payload string) {
+// How long a publish may take: normal sends run in the background; the
+// goodbye on reconfigure or shutdown happens while others wait.
+const (
+	sendWait    = 5 * time.Second
+	goodbyeWait = time.Second
+)
+
+func (m *MQTTModule) send(c paho.Client, topic, payload string, wait time.Duration) {
 	t := c.Publish(topic, 1, true, payload)
-	if !t.WaitTimeout(5*time.Second) || t.Error() != nil {
+	if !t.WaitTimeout(wait) || t.Error() != nil {
 		log.Printf("mqtt: publish %s: %v", topic, errOrTimeout(t.Error()))
 	}
 }
@@ -275,13 +305,22 @@ func discoveryEntities() []discoveryEntity {
 
 // discoveryTopic is where Home Assistant expects an entity's configuration.
 func discoveryTopic(cfg MQTTConfig, e discoveryEntity) string {
-	return fmt.Sprintf("%s/%s/%s/%s/config", cfg.prefix(), e.component, sanitizeID(cfg.topic()), e.key)
+	return fmt.Sprintf("%s/%s/%s/%s/config", cfg.prefix(), e.component, nodeID(cfg), e.key)
+}
+
+// nodeID names the device in Home Assistant and the client: the topic,
+// made safe; "hatrack" if nothing of it is left.
+func nodeID(cfg MQTTConfig) string {
+	if id := sanitizeID(cfg.topic()); id != "" {
+		return id
+	}
+	return "hatrack"
 }
 
 // DiscoveryMessages returns topic -> payload of the Home Assistant discovery
 // messages for these settings.
 func DiscoveryMessages(cfg MQTTConfig, version string) map[string]string {
-	node := sanitizeID(cfg.topic())
+	node := nodeID(cfg)
 	device := map[string]any{"identifiers": []string{node}, "name": "HatRack", "manufacturer": "HatRack", "model": "HatRack Server"}
 	if version != "" {
 		device["sw_version"] = version
@@ -313,9 +352,10 @@ func DiscoveryMessages(cfg MQTTConfig, version string) map[string]string {
 // (an empty retained message deletes the entity in Home Assistant).
 func (m *MQTTModule) announce(c paho.Client, cfg MQTTConfig, version string, on bool) {
 	for topic, payload := range DiscoveryMessages(cfg, version) {
+		wait := sendWait
 		if !on {
-			payload = ""
+			payload, wait = "", goodbyeWait
 		}
-		m.send(c, topic, payload)
+		m.send(c, topic, payload, wait)
 	}
 }

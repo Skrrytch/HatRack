@@ -517,3 +517,23 @@ func TestRefusedEventDoesNotBlockTheQueue(t *testing.T) {
 		t.Fatalf("the refused event is set aside and counted: %+v", d)
 	}
 }
+
+func TestNeutralLookFollowsTheUser(t *testing.T) {
+	r := newRig(t)
+	r.importConfig()
+	a, look := r.agent("laptop")
+	r.start(a)
+	eventually(t, "config", func() bool { a.mu.Lock(); defer a.mu.Unlock(); return len(a.config.Hats) == 3 })
+	value := func() string { look.mu.Lock(); defer look.mu.Unlock(); return look.value }
+	call(t, a, Request{Cmd: "on", Hat: "venom"})
+	call(t, a, Request{Cmd: "off", Neutral: true})
+	eventually(t, "neutral again", func() bool { return value() == "neutral" })
+	// with no hat on, the user picks a new wallpaper by hand
+	look.mu.Lock()
+	look.value = "mine"
+	look.mu.Unlock()
+	call(t, a, Request{Cmd: "on", Hat: "venom"})
+	eventually(t, "hat look", func() bool { return value() == "purple" })
+	call(t, a, Request{Cmd: "off", Neutral: true})
+	eventually(t, "the user's own look comes back", func() bool { return value() == "mine" })
+}

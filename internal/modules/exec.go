@@ -54,8 +54,8 @@ func (execModule) run(ctx context.Context, hook string, sw Switch, raw json.RawM
 		"HAT_HOOK="+hook,
 		"HAT_KEY="+sw.Hat, "HAT_NAME="+sw.HatName, "HAT_ACTIVITY="+sw.Activity,
 		"HAT_PREV="+sw.Prev, "HAT_PREV_NAME="+sw.PrevName, "HAT_COLOR="+sw.Color)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("exec %s: %w: %s", hook, err, strings.TrimSpace(string(out)))
+	if out, errOut, err := runCaptured(cmd); err != nil {
+		return fmt.Errorf("exec %s: %w: %s", hook, err, strings.TrimSpace(string(out)+" "+string(errOut)))
 	}
 	return nil
 }

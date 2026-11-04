@@ -114,11 +114,9 @@ func (m *external) call(ctx context.Context, hook string, sw Switch, cfg json.Ra
 	cmd := exec.CommandContext(ctx, m.exe, hook)
 	cmd.Dir = m.dir
 	cmd.Stdin = bytes.NewReader(in)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	out, err := cmd.Output()
+	out, stderr, err := runCaptured(cmd)
 	if err != nil {
-		return nil, fmt.Errorf("%s %s: %w: %s", m.id, hook, err, bytes.TrimSpace(stderr.Bytes()))
+		return nil, fmt.Errorf("%s %s: %w: %s", m.id, hook, err, bytes.TrimSpace(stderr))
 	}
 	var reply struct {
 		OK       bool            `json:"ok"`

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"hatrack/internal/core"
 )
@@ -288,5 +289,21 @@ func TestWallpaperRestoreEdgeCases(t *testing.T) {
 	}
 	if got := gs.vals["org.cinnamon.desktop.background picture-uri"]; got != "'https://example.org/x.jpg'" {
 		t.Fatalf("uri: %s", got)
+	}
+}
+
+func TestExecDoesNotWaitForBackgroundPrograms(t *testing.T) {
+	m := NewExec()
+	cfg, _ := json.Marshal(map[string]string{"enter": "sleep 3 &"})
+	start := time.Now()
+	if err := m.Enter(context.Background(), Switch{Hat: "a"}, cfg); err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d > time.Second {
+		t.Fatalf("a program started in the background held the hook for %v", d)
+	}
+	cfg, _ = json.Marshal(map[string]string{"enter": "echo kaputt >&2; exit 3"})
+	if err := m.Enter(context.Background(), Switch{}, cfg); err == nil || !strings.Contains(err.Error(), "kaputt") {
+		t.Fatalf("errors keep the output: %v", err)
 	}
 }

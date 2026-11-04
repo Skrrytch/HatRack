@@ -2,6 +2,7 @@ package modules
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"log/slog"
@@ -167,5 +168,36 @@ func TestMQTTIsACoreModule(t *testing.T) {
 	}
 	if f := h.Run(t.Context(), "enter", Switch{}, map[string]json.RawMessage{"mqtt": []byte(`{"broker":"x"}`)}); len(f) != 0 {
 		t.Fatal(f)
+	}
+}
+
+func TestMQTTSameSettingsKeepTheConnection(t *testing.T) {
+	log.SetOutput(io.Discard)
+	defer log.SetOutput(os.Stderr)
+	b := newTestBroker(t)
+	m := NewMQTT()
+	defer m.Close()
+	cfg, _ := json.Marshal(map[string]any{"broker": "mqtt://" + b.addr, "enabled": true})
+	m.Configure(cfg)
+	b.wait(t, "online", func() bool { a, _ := b.get("hatrack/availability"); return a == "online" })
+	m.mu.Lock()
+	first := m.client
+	m.mu.Unlock()
+	// the same settings decoded again (a new *bool) change nothing
+	m.Configure(cfg)
+	m.mu.Lock()
+	same := m.client == first
+	m.mu.Unlock()
+	if !same {
+		t.Fatal("unchanged settings reconnected")
+	}
+	// many quick states: the newest one is what stays retained
+	for i := 0; i < 20; i++ {
+		m.Publish(MQTTState{Mode: "wearing", Hat: "h", Activity: fmt.Sprint(i)})
+	}
+	b.wait(t, "newest state", func() bool { s, _ := b.get("hatrack/state"); return strings.Contains(s, `"activity":"19"`) })
+	time.Sleep(200 * time.Millisecond)
+	if s, _ := b.get("hatrack/state"); !strings.Contains(s, `"activity":"19"`) {
+		t.Fatalf("an older state arrived last: %s", s)
 	}
 }

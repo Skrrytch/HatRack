@@ -64,12 +64,22 @@ func installUnit(name, desc string, args ...string) (string, error) {
 	if err := os.WriteFile(p, []byte(unitText(desc, exe, args...)), 0o644); err != nil {
 		return "", err
 	}
-	for _, args := range [][]string{{"daemon-reload"}, {"enable", "--now", name}} {
+	// restart, not just "enable --now": a running agent keeps its old server
+	// and token in memory, so a new setup would not take effect
+	for _, args := range [][]string{{"daemon-reload"}, {"enable", name}, {"restart", name}} {
 		if out, err := exec.Command("systemctl", append([]string{"--user"}, args...)...).CombinedOutput(); err != nil {
 			return "", fmt.Errorf("systemctl --user %v: %w\n%s", args, err, out)
 		}
 	}
 	return p, nil
+}
+
+// restartAgentUnit restarts the agent service if it runs; tests replace it.
+var restartAgentUnit = func() bool {
+	if exec.Command("systemctl", "--user", "is-active", "--quiet", unitName).Run() != nil {
+		return false
+	}
+	return exec.Command("systemctl", "--user", "restart", unitName).Run() == nil
 }
 
 // removeUnit stops and removes a systemd user unit.
@@ -103,6 +113,10 @@ func (a *App) agentCmd() *cobra.Command {
 				return err
 			}
 			fmt.Fprintln(a.Out, i18n.T("cli.login.done", agent.ConfigPath()))
+			// a running agent service picks up the new login only on restart
+			if restartAgentUnit() {
+				fmt.Fprintln(a.Out, i18n.T("cli.login.restarted"))
+			}
 			return nil
 		},
 	}
