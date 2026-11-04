@@ -272,3 +272,41 @@ func TestApportion(t *testing.T) {
 		}
 	}
 }
+
+func TestMCPDetails(t *testing.T) {
+	e, b := setupBrowser(t)
+	b.do("POST", "/action", url.Values{"op": {"on"}, "hat": {"venom"}, "activity": {"review"}})
+	e.now = e.now.Add(20 * time.Minute)
+	b.do("POST", "/action", url.Values{"op": {"detail"}, "detail": {"https://jira.example.org/browse/TAG-1366"}})
+	e.now = e.now.Add(10 * time.Minute)
+	b.do("POST", "/action", url.Values{"op": {"detail"}, "detail": {"PR 482"}})
+	e.now = e.now.Add(15 * time.Minute)
+	_, token, _ := e.st.AddMCPToken(context.Background(), "c", []string{"read"})
+	cs, _ := mcpSession(t, e, token)
+
+	var q queryTimeOut
+	if msg := call(t, cs, "query_time", map[string]any{"group_by": "detail", "hat": "venom"}, &q); msg != "" {
+		t.Fatal(msg)
+	}
+	got := map[string]int{}
+	for _, g := range q.Groups {
+		got[g.Activity+"/"+g.Detail] = g.Minutes
+		if g.Detail == "TAG-1366" && g.DetailURL != "https://jira.example.org/browse/TAG-1366" {
+			t.Errorf("detail url: %+v", g)
+		}
+	}
+	if got["review/TAG-1366"] != 30 || got["review/PR 482"] != 15 || got["development/"] != 60 {
+		t.Fatalf("by detail: %v", got)
+	}
+	var en entriesOut
+	call(t, cs, "list_entries", map[string]any{}, &en)
+	last := en.Entries[len(en.Entries)-1]
+	if last.Detail != "PR 482" || !last.Running {
+		t.Fatalf("entries: %+v", last)
+	}
+	var cur currentOut
+	call(t, cs, "get_current", nil, &cur)
+	if cur.Detail != "PR 482" {
+		t.Fatalf("current: %+v", cur)
+	}
+}

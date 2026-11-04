@@ -35,6 +35,7 @@ scripts/update.sh --setup     # first time: build, install to ~/.local/bin/hat,
                               # or elsewhere, web password, starter hats, tray
 hat panel                     # quick switcher; bind it to a keyboard shortcut
 hat on work do focus          # or switch from the command line
+hat detail TAG-1366           # name the activity more precisely (optional)
 ```
 
 After every change to the code: `scripts/update.sh` (add `--test` to run the

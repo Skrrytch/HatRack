@@ -169,13 +169,15 @@ type periodIn struct {
 
 type queryTimeIn struct {
 	periodIn
-	GroupBy string `json:"group_by,omitempty" jsonschema:"hat (default), activity (hat and activity), day or week"`
+	GroupBy string `json:"group_by,omitempty" jsonschema:"hat (default), activity (hat and activity), detail (hat, activity and detail), day or week"`
 }
 
 type timeGroup struct {
 	Hat            string `json:"hat,omitempty" jsonschema:"hat key"`
 	HatName        string `json:"hat_name,omitempty"`
 	Activity       string `json:"activity,omitempty" jsonschema:"empty: time without an activity"`
+	Detail         string `json:"detail,omitempty" jsonschema:"for group_by detail; Jira links shortened to their key"`
+	DetailURL      string `json:"detail_url,omitempty" jsonschema:"link of a Jira key in the detail, if known"`
 	Day            string `json:"day,omitempty" jsonschema:"YYYY-MM-DD; for week: the Monday"`
 	Minutes        int    `json:"minutes"`
 	Duration       string `json:"duration" jsonschema:"like 1h 23m"`
@@ -193,15 +195,17 @@ type queryTimeOut struct {
 }
 
 type entry struct {
-	Hat      string `json:"hat,omitempty"`
-	HatName  string `json:"hat_name,omitempty"`
-	Activity string `json:"activity,omitempty"`
-	Start    string `json:"start"`
-	End      string `json:"end"`
-	Minutes  int    `json:"minutes"`
-	Duration string `json:"duration"`
-	Running  bool   `json:"running,omitempty" jsonschema:"still running; end is now"`
-	Gap      bool   `json:"gap,omitempty" jsonschema:"nothing was recorded in this time"`
+	Hat       string `json:"hat,omitempty"`
+	HatName   string `json:"hat_name,omitempty"`
+	Activity  string `json:"activity,omitempty"`
+	Detail    string `json:"detail,omitempty" jsonschema:"free text below the activity, e.g. a ticket key"`
+	DetailURL string `json:"detail_url,omitempty" jsonschema:"link of a Jira key in the detail, if known"`
+	Start     string `json:"start"`
+	End       string `json:"end"`
+	Minutes   int    `json:"minutes"`
+	Duration  string `json:"duration"`
+	Running   bool   `json:"running,omitempty" jsonschema:"still running; end is now"`
+	Gap       bool   `json:"gap,omitempty" jsonschema:"nothing was recorded in this time"`
 }
 
 type entriesOut struct {
@@ -223,6 +227,8 @@ type currentOut struct {
 	Hat        string     `json:"hat,omitempty"`
 	HatName    string     `json:"hat_name,omitempty"`
 	Activity   string     `json:"activity,omitempty"`
+	Detail     string     `json:"detail,omitempty"`
+	DetailURL  string     `json:"detail_url,omitempty"`
 	Since      string     `json:"since,omitempty"`
 	Minutes    int        `json:"minutes,omitempty" jsonschema:"since then, while wearing"`
 	Today      []hatTotal `json:"today"`
@@ -262,7 +268,7 @@ func readOnly(title string) *mcp.ToolAnnotations {
 
 func (s *Server) addMCPTools(srv *mcp.Server) {
 	mcp.AddTool(srv, &mcp.Tool{Name: "query_time", Annotations: readOnly("Time per hat, activity, day or week"),
-		Description: "Total time in a period, grouped by hat, activity (hat and activity), day or week, optionally for one hat. " +
+		Description: "Total time in a period, grouped by hat, activity (hat and activity), detail (hat, activity and the free-text detail such as a ticket key), day or week, optionally for one hat. " +
 			"Corrections made in the Day view are included. Also tells how much was outside the working hours."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in queryTimeIn) (*mcp.CallToolResult, queryTimeOut, error) {
 			from, to, err := s.mcpPeriod(in.Period, in.From, in.To)
@@ -289,6 +295,7 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 				group = "hat"
 			}
 			nm, work := names(cfg), cfg.Work()
+			links, _ := s.st.TicketLinks(ctx)
 			out := queryTimeOut{From: from.Format(time.RFC3339), To: to.Format(time.RFC3339), GroupBy: group, Groups: []timeGroup{}}
 			idx := map[string]int{}
 			var durs, outs []time.Duration // exact per group, rounded at the end
@@ -321,6 +328,10 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 						add(p.Hat, timeGroup{Hat: p.Hat, HatName: nameOf(nm, p.Hat)}, d, o)
 					case "activity":
 						add(p.Hat+"\x00"+p.Activity, timeGroup{Hat: p.Hat, HatName: nameOf(nm, p.Hat), Activity: p.Activity}, d, o)
+					case "detail":
+						det := core.ShortDetail(p.Detail)
+						add(p.Hat+"\x00"+p.Activity+"\x00"+det, timeGroup{Hat: p.Hat, HatName: nameOf(nm, p.Hat), Activity: p.Activity,
+							Detail: det, DetailURL: core.DetailURL(p.Detail, links)}, d, o)
 					case "day":
 						day := dateStr(p.Start.In(s.Loc))
 						add(day, timeGroup{Day: day}, d, o)
@@ -328,7 +339,7 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 						wk := dateStr(weekStart(parseDate(dateStr(p.Start.In(s.Loc)), s.Loc, s.Now())))
 						add(wk, timeGroup{Day: wk}, d, o)
 					default:
-						return nil, queryTimeOut{}, fmt.Errorf("group_by %q: use hat, activity, day or week", in.GroupBy)
+						return nil, queryTimeOut{}, fmt.Errorf("group_by %q: use hat, activity, detail, day or week", in.GroupBy)
 					}
 				}
 			}
@@ -338,7 +349,7 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 				out.Groups[i].Minutes, out.Groups[i].OutsideMinutes = mins[i], min(outMins[i], mins[i])
 				out.Groups[i].Duration = core.FormatDuration(time.Duration(mins[i]) * time.Minute)
 			}
-			if group == "hat" || group == "activity" {
+			if group == "hat" || group == "activity" || group == "detail" {
 				sort.SliceStable(out.Groups, func(a, b int) bool { return out.Groups[a].Minutes > out.Groups[b].Minutes })
 			} else {
 				sort.SliceStable(out.Groups, func(a, b int) bool { return out.Groups[a].Day < out.Groups[b].Day })
@@ -371,6 +382,7 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 				iv = filterHat(iv, h.Key)
 			}
 			nm := names(cfg)
+			links, _ := s.st.TicketLinks(ctx)
 			out := entriesOut{From: from.Format(time.RFC3339), To: to.Format(time.RFC3339), Entries: []entry{}}
 			ts := func(t time.Time) string { return t.In(s.Loc).Format(time.RFC3339) }
 			var prevEnd time.Time
@@ -385,6 +397,7 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 				}
 				prevEnd = i.End
 				out.Entries = append(out.Entries, entry{Hat: i.Hat, HatName: nameOf(nm, i.Hat), Activity: i.Activity,
+					Detail: core.ShortDetail(i.Detail), DetailURL: core.DetailURL(i.Detail, links),
 					Start: ts(i.Start), End: ts(i.End), Minutes: minutes(i.Duration()), Duration: core.FormatDuration(i.Duration()), Running: i.Open})
 			}
 			return nil, out, nil
@@ -405,6 +418,8 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 			out := currentOut{State: string(st.Mode), Today: []hatTotal{}}
 			if st.Mode != core.ModeNone {
 				out.Hat, out.HatName, out.Activity = st.Hat, nameOf(nm, st.Hat), st.Activity
+				links, _ := s.st.TicketLinks(ctx)
+				out.Detail, out.DetailURL = core.ShortDetail(st.Detail), core.DetailURL(st.Detail, links)
 				out.Since = st.Since.In(s.Loc).Format(time.RFC3339)
 				if st.Mode == core.ModeWearing {
 					out.Minutes = minutes(s.Now().Sub(st.Since))

@@ -13,7 +13,7 @@ MVP 2 is built in slices, each usable on its own:
 3b. **Web UI, daily use (done):** Now in the panel's style (status in the hat colour, Pause and Take off as in the panel, live duration, today per hat, edit link on every hat), a new hat with its activities in one step, several activities at once, module sections that say what applies, devices and YAML moved down in Setup, a narrow layout for phones.
 4. **Corrections (done):** editable Day view: change, delete, fill gaps, add entries, undo.
 5. **MCP, `launch`, `mqtt`, GNOME and KDE backends, several devices.**
-6. **Details:** an optional free text below the activity ("VENOM · review · PR 482"), with Jira keys as learned links.
+6. **Details (done):** an optional free text below the activity ("VENOM · review · PR 482"), with Jira keys as learned links.
 
 ## Capabilities
 
@@ -141,11 +141,13 @@ weeks; what is not used for a while disappears by itself.
 
 **Model**
 
-- `switch` and `activity` events get a field `detail`. A new event type
-  `detail` changes only the detail: `retro: true` (the first detail of an
-  entry) relabels the running interval from its start, otherwise it starts a
-  new interval with the same hat and activity. This stays append-only and
-  works offline in the agent, without corrections.
+- `switch` and `activity` events carry a field `detail`. A changed detail is
+  an `activity` event with the same activity (a new entry). The first detail
+  of a running entry is an event of the new type `detail`, which relabels
+  the running interval from its start. This stays append-only and works
+  offline in the agent, without corrections. Corrections fold `detail`
+  events into the event that opened their entry, so moving boundaries never
+  carries a detail into a neighbour.
 - `State` and `Interval` carry the detail; the Day view's edits keep or change
   it. The events table gets a column `detail` (migration).
 
