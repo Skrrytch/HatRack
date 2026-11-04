@@ -17,9 +17,16 @@
     {{else if eq .Kind "number"}}
       <input type="number" step="any" name="{{.Name}}" value="{{.Value}}"{{if .Inherited}} placeholder="{{.Inherited}}"{{end}}>
     {{else}}
-      <input type="text" name="{{.Name}}" value="{{.Value}}"{{if .Inherited}} placeholder="{{.Inherited}}"{{end}}>
+      <input type="text" name="{{.Name}}" id="{{.ID}}" value="{{.Value}}"{{if .Inherited}} placeholder="{{.Inherited}}"{{end}}{{if and .Choices (not .Gallery)}} list="{{.ID}}-list"{{end}}>
+      {{if and .Choices (not .Gallery)}}<datalist id="{{.ID}}-list">{{range .Choices}}<option value="{{.Value}}">{{end}}</datalist>{{end}}
     {{end}}
     </label>
+    {{if .Gallery}}
+    {{$f := .}}
+    <div class="gallery">
+      {{range .Choices}}<label class="thumb{{if eq .Value $f.Value}} on{{end}}" title="{{.Value}}"><input type="radio" name="pick/{{$f.Name}}" value="{{.Value}}" data-target="{{$f.ID}}"{{if eq .Value $f.Value}} checked{{end}}><img src="{{.Thumb}}" alt="" loading="lazy"><span>{{.Label}}</span></label>{{end}}
+    </div>
+    {{end}}
   {{end}}
   </div>
   {{if .Extra}}<p class="dim">{{.ExtraNote}}</p><pre>{{.Extra}}</pre>{{end}}

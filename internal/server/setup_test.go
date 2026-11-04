@@ -253,3 +253,27 @@ func TestNowPage(t *testing.T) {
 		t.Error("Setup lists the devices")
 	}
 }
+
+func TestSetupChoicesFromDevices(t *testing.T) {
+	e, b := setupBrowser(t)
+	caps := `{"capabilities":{"color_scheme":{"backend":"cinnamon","available":true,"choices":{"theme":[{"value":"Mint-Y-Dark"},{"value":"Adwaita"}]}},
+	  "wallpaper":{"backend":"cinnamon","available":true,"choices":{"image":[{"value":"/pics/a.jpg","label":"a.jpg","thumb":"data:image/jpeg;base64,AAAA"}]}}}}`
+	if r, _ := e.do("POST", "/api/devices/hello", caps); r.StatusCode != 200 {
+		t.Fatalf("hello: %d", r.StatusCode)
+	}
+	_, out := b.do("GET", "/setup/hat?key=venom", nil)
+	for _, want := range []string{`list="f-color_scheme-theme-list"`, `<option value="Mint-Y-Dark">`, `class="gallery"`,
+		`name="pick/m/wallpaper/image" value="/pics/a.jpg" data-target="f-wallpaper-image"`, `src="data:image/jpeg;base64,AAAA"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("hat page lacks %s", want)
+		}
+	}
+	// the picked path arrives through the text field; the radio is ignored
+	r, _ := b.do("POST", "/setup/hat", hatForm(map[string]string{"m/wallpaper/image": "/pics/a.jpg", "pick/m/wallpaper/image": "/pics/a.jpg"}))
+	if r.StatusCode != 303 {
+		t.Fatalf("save: %d", r.StatusCode)
+	}
+	if h, _ := config(t, e).Hat("venom"); h.Modules["wallpaper"]["image"] != "/pics/a.jpg" {
+		t.Fatalf("image: %+v", h.Modules)
+	}
+}

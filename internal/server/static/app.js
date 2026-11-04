@@ -24,6 +24,15 @@
     }
   }
   tick();
+  // picking a wallpaper from the gallery fills in its path
+  document.addEventListener("change", function (e) {
+    var t = e.target;
+    if (!t.dataset || !t.dataset.target) return;
+    var input = document.getElementById(t.dataset.target);
+    if (input) input.value = t.value;
+    var g = t.closest(".gallery");
+    if (g) g.querySelectorAll(".thumb").forEach(function (l) { l.classList.toggle("on", l.contains(t)); });
+  });
   setInterval(tick, 20000);
   if (!document.body.dataset.live || !window.EventSource) return;
   var reconnected = false, first = true;

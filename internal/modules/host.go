@@ -20,8 +20,9 @@ func (f Failure) Error() string { return fmt.Sprintf("%s %s: %v", f.Module, f.Ho
 
 // Capability says what a module can do on this device.
 type Capability struct {
-	Backend   string `json:"backend,omitempty"`
-	Available bool   `json:"available"`
+	Backend   string              `json:"backend,omitempty"`
+	Available bool                `json:"available"`
+	Choices   map[string][]Choice `json:"choices,omitempty"` // see Host.Choices
 }
 
 // Host runs modules for the agent. A failing module never stops the others.

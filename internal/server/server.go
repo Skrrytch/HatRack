@@ -405,7 +405,8 @@ func (s *Server) hello(w http.ResponseWriter, r *http.Request, dev store.Device)
 		Capabilities json.RawMessage `json:"capabilities"`
 	}
 	if r.ContentLength != 0 {
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil && err != io.EOF {
+		// up to 8 MiB: the capabilities carry wallpaper previews
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<20)).Decode(&in); err != nil && err != io.EOF {
 			httpError(w, http.StatusBadRequest, err.Error())
 			return
 		}

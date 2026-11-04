@@ -167,6 +167,13 @@
   .days label { display: inline-flex; gap: .3rem; align-items: center; }
   details.archived summary { cursor: pointer; }
   details.card.archived { margin-top: 1.5rem; }
+  .gallery { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr)); gap: .5rem; max-height: 22rem; overflow-y: auto; padding: .2rem; }
+  .thumb { display: flex; flex-direction: column; gap: .2rem; cursor: pointer; border: 2px solid transparent; border-radius: .5rem; padding: .2rem; font-size: .75rem; color: var(--dim); }
+  .thumb input { position: absolute; opacity: 0; pointer-events: none; }
+  .thumb img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: .35rem; background: var(--line); }
+  .thumb span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .thumb:hover { border-color: var(--line); }
+  .thumb.on { border-color: #2fa7e0; color: var(--fg); }
   pre { background: var(--bg); padding: .5rem; border-radius: .4rem; overflow: auto; }
 </style>
 </head>

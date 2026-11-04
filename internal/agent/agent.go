@@ -178,6 +178,22 @@ func (a *Agent) onConnect(ctx context.Context) {
 	}
 	a.refreshConfig(ctx)
 	a.kickFlush()
+	// What is installed (themes, wallpapers with previews) takes longer to
+	// collect; it follows in a second hello, for the pick lists in Setup.
+	go func() {
+		ch := a.host.Choices(ctx)
+		if len(ch) == 0 || ctx.Err() != nil {
+			return
+		}
+		for id, c := range ch {
+			cp := caps[id]
+			cp.Choices = c
+			caps[id] = cp
+		}
+		if err := a.client.Hello(ctx, caps); err != nil && ctx.Err() == nil {
+			log.Printf("hello with choices: %v", err)
+		}
+	}()
 }
 
 func (a *Agent) refreshConfig(ctx context.Context) {

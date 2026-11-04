@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,6 +17,7 @@ import (
 
 	"hatrack/internal/core"
 	"hatrack/internal/i18n"
+	"hatrack/internal/modules"
 )
 
 // The Setup pages edit the configuration with forms. Every change goes through
@@ -62,6 +65,9 @@ type field struct {
 	Inherited   string // the value from the defaults (hat page)
 	Options     []option
 	Required    bool
+	ID          string // of the input, for the pick list
+	Choices     []pick // what the devices have installed
+	Gallery     bool   // the choices have previews
 }
 
 type moduleForm struct {
@@ -249,7 +255,57 @@ func valueString(v any) string {
 
 // moduleForms builds the forms for all known modules. own are the settings
 // edited here, inherited (hat page only) the defaults behind them.
-func (s *Server) moduleForms(lang string, own, inherited map[string]core.ModuleCfg, hatPage bool) []moduleForm {
+// pick is a choice ready for the template; Thumb is only set for a checked
+// JPEG data: URI, so a device cannot smuggle anything else into the page.
+type pick struct {
+	Value, Label string
+	Thumb        template.URL
+}
+
+var thumbRe = regexp.MustCompile(`^data:image/jpeg;base64,[A-Za-z0-9+/]+=*$`)
+
+func picks(list []modules.Choice) []pick {
+	out := make([]pick, len(list))
+	for i, c := range list {
+		out[i] = pick{Value: c.Value, Label: c.Label}
+		if thumbRe.MatchString(c.Thumb) {
+			out[i].Thumb = template.URL(c.Thumb)
+		}
+	}
+	return out
+}
+
+// deviceChoices merges what the devices report as installed (themes,
+// wallpapers): module -> setting -> choices.
+func (s *Server) deviceChoices(ctx context.Context) map[string]map[string][]modules.Choice {
+	out := map[string]map[string][]modules.Choice{}
+	seen := map[string]bool{}
+	devs, _ := s.st.Devices(ctx)
+	for _, d := range devs {
+		var caps map[string]modules.Capability
+		if json.Unmarshal(d.Capabilities, &caps) != nil {
+			continue
+		}
+		for id, c := range caps {
+			for prop, list := range c.Choices {
+				for _, ch := range list {
+					k := id + "/" + prop + "/" + ch.Value
+					if seen[k] {
+						continue
+					}
+					seen[k] = true
+					if out[id] == nil {
+						out[id] = map[string][]modules.Choice{}
+					}
+					out[id][prop] = append(out[id][prop], ch)
+				}
+			}
+		}
+	}
+	return out
+}
+
+func (s *Server) moduleForms(lang string, own, inherited map[string]core.ModuleCfg, hatPage bool, choices map[string]map[string][]modules.Choice) []moduleForm {
 	var out []moduleForm
 	for _, m := range s.reg.All() {
 		id := m.ID()
@@ -272,7 +328,13 @@ func (s *Server) moduleForms(lang string, own, inherited map[string]core.ModuleC
 				continue
 			}
 			fl := field{Name: "m/" + id + "/" + k, Label: tr(lang, "web.prop."+k, k), Kind: kind,
-				Value: valueString(own[id][k]), Required: req[k] && !hatPage}
+				Value: valueString(own[id][k]), Required: req[k] && !hatPage, ID: "f-" + id + "-" + k}
+			if kind == "text" {
+				fl.Choices = picks(choices[id][k])
+				for _, c := range fl.Choices {
+					fl.Gallery = fl.Gallery || c.Thumb != ""
+				}
+			}
 			if hatPage {
 				fl.Inherited = valueString(inherited[id][k])
 			}
@@ -546,7 +608,7 @@ func (s *Server) fillHat(v *view, cfg core.Config, h core.Hat) {
 	v.Hat = hatEdit{Key: h.Key, Name: h.Name, Color: color,
 		Resume:   resumeOptions(v.Lang, h.ResumeActivity, false, cfg.Defaults.ResumeActivity),
 		Archived: h.ArchivedActivity,
-		Modules:  s.moduleForms(v.Lang, h.Modules, cfg.Modules, true)}
+		Modules:  s.moduleForms(v.Lang, h.Modules, cfg.Modules, true, s.deviceChoices(context.Background()))}
 	for i, a := range h.Activities {
 		v.Hat.Activities = append(v.Hat.Activities, actRow{i, a, i == 0, i == len(h.Activities)-1})
 	}
@@ -655,7 +717,7 @@ func (s *Server) fillDefaults(v *view, cfg core.Config) {
 	w := cfg.Work()
 	v.Defaults = defaultsEdit{Resume: resumeOptions(v.Lang, cfg.Defaults.ResumeActivity, true, ""),
 		WorkStart: w.Start, WorkEnd: w.End,
-		Modules: s.moduleForms(v.Lang, cfg.Modules, nil, false)}
+		Modules: s.moduleForms(v.Lang, cfg.Modules, nil, false, s.deviceChoices(context.Background()))}
 	for i := 1; i <= 7; i++ {
 		d := core.Weekdays[i%7]
 		v.Defaults.WorkDays = append(v.Defaults.WorkDays, option{Value: d, Label: i18n.In(v.Lang, "web.wd."+d), Selected: w.IsWorkday(time.Weekday(i % 7))})
