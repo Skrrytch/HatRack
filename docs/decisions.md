@@ -22,6 +22,10 @@
 | 2026-11-04 | State transitions: `do` and `off` without a worn hat are errors that write no event. `hat on` / `hat on X` resumes a paused hat with a `switch` event. A backdated event (`--at`) changes the look only if it is the newest event. See [MVP 1](mvp-1.md). |
 | 2026-11-04 | Hats are identified by `key`, activities by name within the hat. Renaming a key or an activity creates a new one; history stays with the old one. |
 | 2026-11-04 | MVP 1 needs a server (local on `127.0.0.1` is fine); the agent caches the configuration for outages. Standalone mode stays in MVP 3. |
+| 2026-11-04 | MVP 1 deviations from the first plan: the "Now" page uses `html/template` with a meta refresh instead of `templ` + HTMX (one read-only page does not justify a generator and a script; both come with the full web UI in MVP 2); messages come from a small embedded catalog (`internal/i18n`) instead of `go-i18n` (only `%s` placeholders are needed so far); the module is called `hatrack`; Go 1.24 or newer (`omitzero`). |
+| 2026-11-04 | The "Now" page needs a device token, given once as `/?token=…` and kept in a cookie, so a server on the network does not show what you are working on. A real login follows with the web UI in MVP 2. |
+| 2026-11-04 | Events refer to hats by key and to activities by name, not by an internal id. Keys are stable by design, and the log stays readable on its own. |
+| 2026-11-04 | `hat on X` while X is already worn changes nothing (it would otherwise reset the activity); `hat on X do Y` changes the activity. |
 
 ## Open
 

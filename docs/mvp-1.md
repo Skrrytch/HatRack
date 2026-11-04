@@ -77,7 +77,7 @@ Transitions that are not in the diagram:
 
 | Command | none | paused(X) | wearing(X, a?) |
 |---|---|---|---|
-| `hat on <hat>` | wear | wear (also for X itself) | switch hat |
+| `hat on <hat>` | wear | wear (also for X itself) | switch hat; no change if it is the worn hat |
 | `hat on` | error: no hat to resume | resume X | no change |
 | `hat do <activity>` | error: no hat on | error: no hat on, use `hat on` first | change activity |
 | `hat off` | error: no hat on | no change | pause |
@@ -107,9 +107,9 @@ only if the look is not currently applied, that is after `off --neutral`.
 | `hat config export [-o file]` | write the configuration as YAML |
 | `hat config import <file> [--dry-run] [--replace]` | read a configuration |
 | `hat agent login <url> <token>` | connect this device to a server (writes `agent.yaml`, works without a running agent) |
-| `hat agent run` / `hat agent install` | run the agent in the foreground / install and enable the `systemd --user` unit |
+| `hat agent run` / `install` / `uninstall` | run the agent in the foreground / install and enable the `systemd --user` unit / remove it and restore the neutral look |
 | `hat server [--listen addr] [--data dir]` | run the server |
-| `hat server device add <name>` | register a device, print its token |
+| `hat server device add <name>` / `list` | register a device and print its token / list devices |
 | `hat server backup <file>` | write a consistent copy of the database |
 
 `hat server …` works directly on the server's data directory; it does not go
@@ -254,16 +254,16 @@ hatrack/
 │  ├─ core/            model, events, intervals, names, config (no desktop or network I/O)
 │  ├─ store/           storage interface, SQLite implementation
 │  ├─ agent/           socket server, SSE client, offline queue, module host
-│  ├─ server/          HTTP API, SSE, "Now" page (templ + HTMX, embedded)
+│  ├─ server/          HTTP API, SSE, "Now" page (html/template, embedded)
 │  ├─ cli/             commands and output
 │  └─ modules/         wallpaper, color_scheme, notify, exec (+ backends)
-├─ web/                templ templates, static files (embedded)
+├─ test/               end-to-end test with the real binary
 ├─ deploy/             Dockerfile, systemd user unit
 ├─ docs/
 └─ go.mod
 ```
 
-Go 1.23+. One statically linked binary `hat` (`CGO_ENABLED=0`), released for
+Go 1.24+. One statically linked binary `hat` (`CGO_ENABLED=0`), released for
 `linux/amd64` and `linux/arm64`.
 
 | Purpose | Library |
@@ -273,8 +273,8 @@ Go 1.23+. One statically linked binary `hat` (`CGO_ENABLED=0`), released for
 | SQLite | `modernc.org/sqlite` |
 | YAML | `goccy/go-yaml` |
 | JSON Schema validation | `santhosh-tekuri/jsonschema` |
-| HTML | `a-h/templ` + HTMX |
-| Translations | `nicksnyder/go-i18n/v2`, catalogs `internal/i18n/locales/{en,de}.yaml`, embedded |
+| HTML | `html/template` (full web UI with `templ` + HTMX in MVP 2) |
+| Translations | own small catalog, `internal/i18n/locales/{en,de}.yaml`, embedded; a test keeps both in sync |
 
 **Language:** every user-visible text goes through the catalog; English is
 the fallback for missing German strings. The agent and CLI resolve the
@@ -386,6 +386,8 @@ is added with `hat server device add <name>`, which prints the token for
   `--at`, out-of-order and offline events), config import/export round trip.
 - Agent: modules run against fake backends; socket protocol tests.
 - Server: API tests with a temporary SQLite file.
+- End to end: `test/` builds the binary and runs server, agent and CLI as
+  processes, with `gsettings` replaced by a script, so no desktop is touched.
 - The Cinnamon backends are tested by hand on Bert's desktop.
 
 ## Done

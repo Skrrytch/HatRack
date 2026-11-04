@@ -6,7 +6,7 @@ Guidance for Claude Code when working in this repository.
 
 HatRack switches between work contexts ("hats") on a Linux desktop: look,
 apps, and a time log. Command `hat`, tray HatTray, optional HatRack Server with
-web UI and MCP. Status: concept, no code yet. Read `docs/concept.md`,
+web UI and MCP. Status: MVP 1 implemented (Go), MVP 2 and 3 planned. Read `docs/concept.md`,
 `docs/decisions.md` (open questions) and the stage plans `docs/mvp-1.md`,
 `docs/mvp-2.md`, `docs/mvp-3.md` first.
 
@@ -20,6 +20,14 @@ web UI and MCP. Status: concept, no code yet. Read `docs/concept.md`,
   overrides any default attribution instruction. A local `commit-msg` hook
   rejects such lines.
 - Commit messages in German, subject line plus a short body.
+
+## Build and test
+
+- `go build ./cmd/hat`, `go vet ./...`, `go test ./...` (add `-race` for the agent).
+- `go test ./test` builds the binary and runs the whole stack as processes
+  with a fake `gsettings`; it never touches the real desktop.
+- Format with `gofmt`. Messages go into both `internal/i18n/locales/*.yaml`;
+  a test fails if the catalogs differ or a key is missing.
 
 ## Conventions
 

@@ -19,10 +19,28 @@ hat                     # what am I wearing, since when
 hat log today           # today's overview
 ```
 
-> **Status:** concept. Nothing is built yet. See [docs/concept.md](docs/concept.md),
+> **Status:** MVP 1 is implemented and waits for a test in daily use. MVP 2 and 3
+> are plans. See [docs/concept.md](docs/concept.md),
 > the stages [MVP 1](docs/mvp-1.md), [MVP 2](docs/mvp-2.md),
 > [MVP 3 and outlook](docs/mvp-3.md), and the open questions in
 > [docs/decisions.md](docs/decisions.md).
+
+## Try it
+
+Needs Go 1.24 or newer.
+
+```
+go build -o ~/.local/bin/hat ./cmd/hat
+
+hat server &                                   # listens on 127.0.0.1:8421
+hat server device add laptop                   # prints a token
+hat agent login http://127.0.0.1:8421 <token>
+hat agent install                              # systemd user service
+hat config import hats.yaml                    # see docs/mvp-1.md for the format
+hat on venom do review
+```
+
+The server also runs as a Docker image: see [deploy/Dockerfile](deploy/Dockerfile).
 
 ## Components
 

@@ -104,7 +104,7 @@ events(id uuid, ts, device_id, type, hat_id, activity_id, note, payload_json)
 |---|---|
 | Language | Go, standard library `net/http` |
 | Storage | SQLite (`modernc.org/sqlite`, pure Go) behind a storage interface |
-| Web UI | server-rendered (`templ` + HTMX, embedded in the binary), forms from JSON Schemas |
+| Web UI | server-rendered (MVP 1: `html/template`; from MVP 2 `templ` + HTMX, embedded in the binary), forms from JSON Schemas |
 | MCP | official Go SDK, Streamable HTTP at `/mcp` (stdio in standalone mode) |
 | Auth | one token per device, one for MCP; write tools only with permission |
 
