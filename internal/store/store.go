@@ -34,6 +34,9 @@ type Store interface {
 	CurrentState(ctx context.Context) (core.State, error)
 	// LastActivities returns, per hat key, the last activity used.
 	LastActivities(ctx context.Context) (map[string]string, error)
+	// EventRev grows with every stored event. Clients use it to tell a
+	// fresh state from one sent before their own events arrived.
+	EventRev(ctx context.Context) (int64, error)
 
 	GetConfig(ctx context.Context) (core.Config, int64, error)
 	PutConfig(ctx context.Context, c core.Config) (int64, error)

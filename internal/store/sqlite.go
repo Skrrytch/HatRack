@@ -168,6 +168,12 @@ func (s *SQLite) CurrentState(ctx context.Context) (core.State, error) {
 	return core.Fold(ev), nil
 }
 
+func (s *SQLite) EventRev(ctx context.Context) (int64, error) {
+	var rev int64
+	err := s.db.QueryRowContext(ctx, `SELECT COALESCE(MAX(seq), 0) FROM events`).Scan(&rev)
+	return rev, err
+}
+
 func (s *SQLite) LastActivities(ctx context.Context) (map[string]string, error) {
 	rows, err := s.db.QueryContext(ctx, `
 	  SELECT e.hat, e.activity FROM events e

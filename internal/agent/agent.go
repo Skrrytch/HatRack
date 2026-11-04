@@ -31,6 +31,9 @@ type Agent struct {
 	connected bool
 	authFail  bool
 	neutral   map[string]json.RawMessage // module id -> neutral snapshot
+	// minRev is the server's event revision after our last sent events; a
+	// state with a lower revision was sent before they arrived and is stale.
+	minRev int64
 
 	kick chan struct{}
 
@@ -208,7 +211,7 @@ func (a *Agent) onMessage(ctx context.Context, event, data string) {
 func (a *Agent) adoptState(ctx context.Context, resp server.StateResponse) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.db.QueueLen() > 0 {
+	if a.db.QueueLen() > 0 || resp.EventRev < a.minRev {
 		return
 	}
 	a.state = resp.State
@@ -260,9 +263,14 @@ func (a *Agent) flush(ctx context.Context) error {
 		if len(batch) == 0 {
 			break
 		}
-		if err := a.client.PostEvents(ctx, batch); err != nil {
+		rev, err := a.client.PostEvents(ctx, batch)
+		if err != nil {
 			return err
 		}
+		// raise minRev before the queue empties, so no stale state slips in
+		a.mu.Lock()
+		a.minRev = max(a.minRev, rev)
+		a.mu.Unlock()
 		if err := a.db.Dequeue(batch); err != nil {
 			return err
 		}

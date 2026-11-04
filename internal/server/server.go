@@ -105,6 +105,7 @@ type StateResponse struct {
 	State          core.State        `json:"state"`
 	LastActivities map[string]string `json:"last_activities"`
 	ConfigRev      int64             `json:"config_rev"`
+	EventRev       int64             `json:"event_rev"` // grows with every stored event
 	ServerTime     time.Time         `json:"server_time"`
 }
 
@@ -121,7 +122,11 @@ func (s *Server) stateResponse(ctx context.Context) (StateResponse, error) {
 	if err != nil {
 		return StateResponse{}, err
 	}
-	return StateResponse{State: st, LastActivities: last, ConfigRev: rev, ServerTime: s.Now().UTC()}, nil
+	erev, err := s.st.EventRev(ctx)
+	if err != nil {
+		return StateResponse{}, err
+	}
+	return StateResponse{State: st, LastActivities: last, ConfigRev: rev, EventRev: erev, ServerTime: s.Now().UTC()}, nil
 }
 
 func (s *Server) broadcastState(ctx context.Context) {
@@ -174,7 +179,7 @@ func (s *Server) postEvents(w http.ResponseWriter, r *http.Request, dev store.De
 	if n > 0 {
 		s.broadcastState(r.Context())
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"inserted": n, "state": resp.State})
+	writeJSON(w, http.StatusOK, map[string]any{"inserted": n, "state": resp.State, "event_rev": resp.EventRev})
 }
 
 func parseTime(v string) (time.Time, error) {

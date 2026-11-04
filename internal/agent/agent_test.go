@@ -297,7 +297,7 @@ func TestOtherDeviceSwitchIsApplied(t *testing.T) {
 	// a second device (here: a direct post) switches
 	ev := core.NewEvent("pc", core.EvSwitch, time.Now())
 	ev.Hat = "venom"
-	if err := NewClient(r.srv.URL, r.token).PostEvents(context.Background(), []core.Event{ev}); err != nil {
+	if _, err := NewClient(r.srv.URL, r.token).PostEvents(context.Background(), []core.Event{ev}); err != nil {
 		t.Fatal(err)
 	}
 	eventually(t, "push applied", func() bool { v, _ := look.snapshotLog(); return v == "purple" })
@@ -431,4 +431,28 @@ func TestHatsAndWatch(t *testing.T) {
 		}
 	}
 	t.Fatal("no snapshot with the new hat")
+}
+
+// A state the server sent before our own events arrived (for example the
+// one from connecting) must not undo them when it is handled late.
+func TestStaleStateIgnored(t *testing.T) {
+	r := newRig(t)
+	r.importConfig()
+	a, _ := r.agent("laptop")
+	r.start(a)
+	eventually(t, "config", func() bool { a.mu.Lock(); defer a.mu.Unlock(); return len(a.config.Hats) == 3 })
+	stale, err := NewClient(r.srv.URL, r.token).State(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	call(t, a, Request{Cmd: "on", Hat: "venom", HasActivity: true, Activity: "review"})
+	eventually(t, "sent", func() bool { return a.db.QueueLen() == 0 })
+	eventually(t, "rev", func() bool { a.mu.Lock(); defer a.mu.Unlock(); return a.minRev > stale.EventRev })
+	a.adoptState(context.Background(), stale)
+	a.mu.Lock()
+	st, last := a.state, a.last["venom"]
+	a.mu.Unlock()
+	if st.Hat != "venom" || st.Activity != "review" || last != "review" {
+		t.Fatalf("stale state was adopted: %+v last=%q", st, last)
+	}
 }

@@ -83,10 +83,15 @@ func (c *Client) do(ctx context.Context, method, path string, body []byte, ctype
 }
 
 // PostEvents sends events; the server skips ones it already has.
-func (c *Client) PostEvents(ctx context.Context, ev []core.Event) error {
+// PostEvents sends events and returns the server's event revision after
+// storing them (0 from servers that do not report it).
+func (c *Client) PostEvents(ctx context.Context, ev []core.Event) (int64, error) {
 	b, _ := json.Marshal(ev)
-	_, err := c.do(ctx, "POST", "/api/events", b, "application/json", nil)
-	return err
+	var out struct {
+		EventRev int64 `json:"event_rev"`
+	}
+	_, err := c.do(ctx, "POST", "/api/events", b, "application/json", &out)
+	return out.EventRev, err
 }
 
 // State fetches the current state.
