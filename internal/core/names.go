@@ -14,6 +14,7 @@ type Named struct {
 
 // NotFoundError is returned when no candidate matches.
 type NotFoundError struct {
+	Kind      string // "hat" or "activity", set by ResolveHat / ResolveActivity
 	Input     string
 	Available []string
 }
@@ -24,6 +25,7 @@ func (e *NotFoundError) Error() string {
 
 // AmbiguousError is returned when several candidates match a prefix.
 type AmbiguousError struct {
+	Kind       string // "hat" or "activity"
 	Input      string
 	Candidates []string
 }

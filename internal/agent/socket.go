@@ -1,0 +1,329 @@
+package agent
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"hatrack/internal/core"
+	"hatrack/internal/i18n"
+	"hatrack/internal/server"
+)
+
+// Request is one line the CLI sends over the agent socket.
+type Request struct {
+	Cmd         string `json:"cmd"`
+	Hat         string `json:"hat,omitempty"`
+	Activity    string `json:"activity,omitempty"`
+	HasActivity bool   `json:"has_activity,omitempty"`
+	Answer      string `json:"answer,omitempty"` // for resume_activity: ask
+	At          string `json:"at,omitempty"`     // RFC3339
+	Neutral     bool   `json:"neutral,omitempty"`
+	From        string `json:"from,omitempty"` // RFC3339, for log
+	To          string `json:"to,omitempty"`
+	Data        string `json:"data,omitempty"` // YAML for config_import
+	DryRun      bool   `json:"dry_run,omitempty"`
+	Replace     bool   `json:"replace,omitempty"`
+}
+
+// Response is the answer: one line of JSON.
+type Response struct {
+	OK    bool            `json:"ok"`
+	Error string          `json:"error,omitempty"`
+	State *core.State     `json:"state,omitempty"`
+	Data  json.RawMessage `json:"data,omitempty"`
+}
+
+// StatusData is the data of a status answer.
+type StatusData struct {
+	State     core.State `json:"state"`
+	HatName   string     `json:"hat_name,omitempty"`
+	Color     string     `json:"color,omitempty"`
+	Connected bool       `json:"connected"`
+	Queued    int        `json:"queued"`
+	Changed   bool       `json:"changed"` // false if the command was a no-op
+}
+
+// InfoData is the data of an info answer (resume settings of a hat).
+type InfoData struct {
+	Hat  string `json:"hat"`
+	Name string `json:"name"`
+	Mode string `json:"mode"`
+	Last string `json:"last,omitempty"`
+}
+
+// LogData is the data of a log answer.
+type LogData struct {
+	server.IntervalsResponse
+	Names map[string]string `json:"names"`
+}
+
+// ImportData is the data of a config_import answer.
+type ImportData struct {
+	server.ImportResult
+}
+
+func ok(data any) Response {
+	r := Response{OK: true}
+	if data != nil {
+		r.Data, _ = json.Marshal(data)
+	}
+	return r
+}
+
+func fail(msg string) Response { return Response{Error: msg} }
+
+// errText turns an error into a message in the user's language.
+func errText(err error) string {
+	var nf *core.NotFoundError
+	var am *core.AmbiguousError
+	switch {
+	case errors.As(err, &nf):
+		if len(nf.Available) == 0 {
+			return i18n.T("err."+nf.Kind+".none", nf.Input)
+		}
+		return i18n.T("err."+nf.Kind+".notfound", nf.Input, strings.Join(nf.Available, ", "))
+	case errors.As(err, &am):
+		return i18n.T("err."+am.Kind+".ambiguous", am.Input, strings.Join(am.Candidates, ", "))
+	case errors.Is(err, core.ErrNoHatToResume):
+		return i18n.T("err.noresume")
+	case errors.Is(err, core.ErrNoHat):
+		return i18n.T("err.nohat")
+	case errors.Is(err, core.ErrPaused):
+		return i18n.T("err.paused")
+	case errors.Is(err, core.ErrFuture):
+		return i18n.T("err.future")
+	case errors.Is(err, ErrUnauthorized):
+		return i18n.T("err.unauthorized")
+	}
+	return err.Error()
+}
+
+// Handle executes one request.
+func (a *Agent) Handle(ctx context.Context, req Request) Response {
+	in := core.Input{Device: a.cfg.Device, Now: a.Now()}
+	if req.At != "" {
+		t, err := time.Parse(time.RFC3339, req.At)
+		if err != nil {
+			return fail(i18n.T("err.badtime", req.At))
+		}
+		in.At = t
+	}
+	switch req.Cmd {
+	case "ping":
+		return ok(nil)
+	case "status":
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		return a.status(false)
+	case "info":
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		ri, err := core.InfoOn(a.config, a.last, req.Hat)
+		if err != nil {
+			return fail(errText(err))
+		}
+		return ok(InfoData{Hat: ri.Hat.Key, Name: ri.Hat.DisplayName(), Mode: ri.Mode, Last: ri.Last})
+	case "on", "do", "off":
+		return a.change(ctx, req, in)
+	case "log":
+		return a.log(ctx, req)
+	case "config_export":
+		return a.configExport(ctx)
+	case "config_import":
+		return a.configImport(ctx, req)
+	}
+	return fail(i18n.T("err.unknowncmd", req.Cmd))
+}
+
+func (a *Agent) change(ctx context.Context, req Request, in core.Input) Response {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	var ev *core.Event
+	var err error
+	if len(a.config.ActiveHats()) == 0 && req.Cmd == "on" {
+		return fail(i18n.T("err.nohats"))
+	}
+	switch req.Cmd {
+	case "on":
+		ev, err = core.PlanOn(a.config, a.state, a.last,
+			core.OnArgs{Hat: req.Hat, Activity: req.Activity, HasActivity: req.HasActivity, Answer: req.Answer}, in)
+	case "do":
+		ev, err = core.PlanDo(a.config, a.state, req.Activity, in)
+	case "off":
+		ev, err = core.PlanOff(a.state, req.Neutral, in)
+	}
+	if err != nil {
+		return fail(errText(err))
+	}
+	if ev == nil {
+		return a.status(false)
+	}
+	if err := a.submit(ctx, *ev); err != nil {
+		return fail(err.Error())
+	}
+	return a.status(true)
+}
+
+// status builds the answer for status and for changes. Caller holds a.mu.
+func (a *Agent) status(changed bool) Response {
+	d := StatusData{State: a.state, Connected: a.connected, Queued: a.db.QueueLen(), Changed: changed}
+	if h, found := a.config.Hat(a.state.Hat); found {
+		d.HatName, d.Color = h.DisplayName(), h.Color
+	} else {
+		d.HatName = a.state.Hat
+	}
+	r := ok(d)
+	r.State = &a.state
+	return r
+}
+
+func (a *Agent) log(ctx context.Context, req Request) Response {
+	from, err1 := time.Parse(time.RFC3339, req.From)
+	to, err2 := time.Parse(time.RFC3339, req.To)
+	if err1 != nil || err2 != nil {
+		return fail(i18n.T("err.badtime", req.From+" "+req.To))
+	}
+	res, err := a.client.Intervals(ctx, from, to)
+	if err != nil {
+		return fail(a.serverErr(err))
+	}
+	a.mu.Lock()
+	names := map[string]string{}
+	for _, h := range a.config.Hats {
+		names[h.Key] = h.DisplayName()
+	}
+	a.mu.Unlock()
+	return ok(LogData{IntervalsResponse: res, Names: names})
+}
+
+func (a *Agent) serverErr(err error) string {
+	var api *APIError
+	if errors.As(err, &api) || errors.Is(err, ErrUnauthorized) {
+		return errText(err)
+	}
+	return i18n.T("err.unreachable", a.cfg.Server)
+}
+
+// configExport answers from the server, or from the cache while offline.
+func (a *Agent) configExport(ctx context.Context) Response {
+	_, b, err := a.client.Config(ctx)
+	if err != nil {
+		a.mu.Lock()
+		cfg := a.config
+		a.mu.Unlock()
+		if b, err = cfg.Export(); err != nil {
+			return fail(err.Error())
+		}
+	}
+	return ok(string(b))
+}
+
+func (a *Agent) configImport(ctx context.Context, req Request) Response {
+	cfg, err := core.ParseConfig([]byte(req.Data))
+	if err != nil {
+		return fail(err.Error())
+	}
+	res, err := a.client.PutConfig(ctx, []byte(req.Data), req.DryRun, req.Replace)
+	if err != nil {
+		return fail(a.serverErr(err))
+	}
+	// Files are checked here, on the machine where the import happens.
+	res.Warnings = append(cfg.Warnings(true), res.Warnings...)
+	res.Warnings = dedupe(res.Warnings)
+	if !req.DryRun {
+		a.refreshConfig(ctx)
+	}
+	return ok(ImportData{res})
+}
+
+func dedupe(in []string) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	for _, s := range in {
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// Serve listens on the agent socket until ctx is cancelled.
+func (a *Agent) Serve(ctx context.Context, path string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	if c, err := net.DialTimeout("unix", path, time.Second); err == nil {
+		c.Close()
+		return fmt.Errorf("another agent is already running (%s)", path)
+	}
+	os.Remove(path)
+	l, err := net.Listen("unix", path)
+	if err != nil {
+		return err
+	}
+	os.Chmod(path, 0o600)
+	go func() { <-ctx.Done(); l.Close(); os.Remove(path) }()
+	for {
+		c, err := l.Accept()
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return err
+		}
+		go a.serveConn(ctx, c)
+	}
+}
+
+func (a *Agent) serveConn(ctx context.Context, c net.Conn) {
+	defer c.Close()
+	r := bufio.NewReader(c)
+	enc := json.NewEncoder(c)
+	for {
+		c.SetReadDeadline(time.Now().Add(30 * time.Second))
+		line, _ := r.ReadBytes('\n')
+		if len(line) == 0 {
+			return
+		}
+		var req Request
+		if err := json.Unmarshal(line, &req); err != nil {
+			enc.Encode(fail("bad request: " + err.Error()))
+			continue
+		}
+		c.SetWriteDeadline(time.Now().Add(60 * time.Second))
+		if err := enc.Encode(a.Handle(ctx, req)); err != nil {
+			return
+		}
+	}
+}
+
+// Call sends one request to the agent at path and returns its answer. If no
+// agent runs, it returns ErrNotRunning.
+func Call(path string, req Request) (Response, error) {
+	c, err := net.DialTimeout("unix", path, 2*time.Second)
+	if err != nil {
+		return Response{}, ErrNotRunning
+	}
+	defer c.Close()
+	c.SetDeadline(time.Now().Add(90 * time.Second))
+	if err := json.NewEncoder(c).Encode(req); err != nil {
+		return Response{}, err
+	}
+	var resp Response
+	if err := json.NewDecoder(bufio.NewReader(c)).Decode(&resp); err != nil {
+		return Response{}, err
+	}
+	return resp, nil
+}
+
+// ErrNotRunning means the agent socket is not there.
+var ErrNotRunning = errors.New("agent not running")

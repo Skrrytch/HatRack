@@ -65,7 +65,7 @@ func activityItems(h Hat) []Named {
 func ResolveHat(cfg Config, name string) (Hat, error) {
 	n, err := Resolve(name, hatItems(cfg.ActiveHats()))
 	if err != nil {
-		return Hat{}, err
+		return Hat{}, withKind(err, "hat")
 	}
 	h, _ := cfg.Hat(n.Key)
 	return h, nil
@@ -75,7 +75,7 @@ func ResolveHat(cfg Config, name string) (Hat, error) {
 func ResolveActivity(h Hat, name string) (string, error) {
 	n, err := Resolve(name, activityItems(h))
 	if err != nil {
-		return "", err
+		return "", withKind(err, "activity")
 	}
 	return n.Key, nil
 }
@@ -218,4 +218,16 @@ func PlanOff(st State, neutral bool, in Input) (*Event, error) {
 	ev := NewEvent(in.Device, EvOff, ts)
 	ev.Hat, ev.Neutral = st.Hat, neutral
 	return &ev, nil
+}
+
+func withKind(err error, kind string) error {
+	var nf *NotFoundError
+	var am *AmbiguousError
+	switch {
+	case errors.As(err, &nf):
+		nf.Kind = kind
+	case errors.As(err, &am):
+		am.Kind = kind
+	}
+	return err
 }
