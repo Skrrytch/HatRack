@@ -8,24 +8,27 @@
   <a class="btn" href="{{.CSV}}">CSV</a>
 </div>
 
+<div class="week">
 {{range .Days}}
 <a class="daybar" href="/day?date={{.Date}}" title="{{t $.Lang "web.week.open_day" .Label}}">
   <span class="dlabel">{{.Label}}</span>
-  <div class="bar">{{range .Segments}}<i title="{{.Title}}" style="left:{{printf "%.3f" .Left}}%;width:{{printf "%.3f" .Width}}%;--c:{{.Color}}"></i>{{end}}</div>
+  <div class="bar">{{range .TL.Segments}}<i title="{{.Title}}" style="left:{{printf "%.3f" .Left}}%;width:{{printf "%.3f" .Width}}%;--c:{{.Color}}"></i>{{end}}{{range .TL.Off}}<b class="off" style="left:{{printf "%.3f" .Left}}%;width:{{printf "%.3f" .Width}}%"></b>{{end}}{{if .TL.ShowNow}}<span class="nowline" style="left:{{printf "%.3f" .TL.NowLeft}}%"></span>{{end}}</div>
   <span class="dim num" style="text-align:right">{{.Duration}} {{template "icon" "right"}}</span>
 </a>
 {{end}}
+<div class="daybar axis"><span></span><div class="ticks">{{range .Ticks}}<span style="left:{{printf "%.3f" .Left}}%">{{.Label}}</span>{{end}}</div><span></span></div>
+</div>
 
 <h1>{{t $.Lang "cli.log.totals"}}</h1>
 <table class="card">
-  <tr><th></th><th class="num">{{t $.Lang "ui.thisweek"}}</th><th class="num">{{t $.Lang "ui.vsprev"}}</th></tr>
+  <tr><th></th><th class="num">{{t $.Lang "ui.thisweek"}}</th>{{if .Compare}}<th class="num">{{t $.Lang "ui.vsprev"}}</th>{{end}}</tr>
   {{range .Totals}}{{if not .NotWork}}
-  <tr><td><span class="dot" style="--c:{{.Color}}"></span><strong>{{.Hat}}</strong></td><td class="num"><strong>{{.Duration}}</strong></td><td class="num dim">{{.Delta}}</td></tr>
-  {{template "acttotals" (dict "Acts" .Activities "Cols" 3)}}
+  <tr><td><span class="dot" style="--c:{{.Color}}"></span><strong>{{.Hat}}</strong></td><td class="num"><strong>{{.Duration}}</strong></td>{{if $.Week.Compare}}<td class="num dim">{{.Delta}}</td>{{end}}</tr>
+  {{template "acttotals" (dict "Acts" .Activities "Cols" (or (and $.Week.Compare 3) 2))}}
   {{end}}{{end}}
-  <tr><td>{{t $.Lang "cli.log.sum"}}</td><td class="num"><strong>{{.Sum}}</strong></td><td class="num dim">{{.SumDelta}}</td></tr>
+  <tr><td>{{t $.Lang "cli.log.sum"}}</td><td class="num"><strong>{{.Sum}}</strong></td>{{if .Compare}}<td class="num dim">{{.SumDelta}}</td>{{end}}</tr>
   {{range .Totals}}{{if .NotWork}}
-  <tr class="notwork"><td><span class="dot" style="--c:{{.Color}}"></span>{{.Hat}} <small class="dim">{{t $.Lang "web.notwork"}}</small></td><td class="num dim">{{.Duration}}</td><td class="num dim">{{.Delta}}</td></tr>
+  <tr class="notwork"><td><span class="dot" style="--c:{{.Color}}"></span>{{.Hat}} <small class="dim">{{t $.Lang "web.notwork"}}</small></td><td class="num dim">{{.Duration}}</td>{{if $.Week.Compare}}<td class="num dim">{{.Delta}}</td>{{end}}</tr>
   {{end}}{{end}}
 </table>
 {{end}}

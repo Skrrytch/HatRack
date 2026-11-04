@@ -10,12 +10,12 @@ and a new entry in the log. Over the day, that log becomes a time sheet: which
 hat, which activity, how long.
 
 ```
-hat on venom            # put on the VENOM hat
+hat on venom            # work on VENOM
 hat on venom do review  # ... with an activity
 hat do meeting          # change the activity, keep the hat
 hat off                 # pause: the look stays, the clock stops
 hat on                  # resume
-hat                     # what am I wearing, since when
+hat                     # what am I working on, since when
 hat log today           # today's overview
 ```
 

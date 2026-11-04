@@ -63,7 +63,7 @@ func TestMenuPausedAndNone(t *testing.T) {
 	if find(none, "Pause") != nil || find(none, "Resume") != nil {
 		t.Fatal("no pause or resume without a hat")
 	}
-	if m[0].Label == "" || none[0].Label != "No hat on" {
+	if m[0].Label == "" || none[0].Label != "No hat active" {
 		t.Fatalf("status line: %q", none[0].Label)
 	}
 	empty := agent.Snapshot{Status: agent.StatusData{Connected: true, State: core.NewState()}}

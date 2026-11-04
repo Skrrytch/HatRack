@@ -62,7 +62,7 @@ func TestStatusLineAndLog(t *testing.T) {
 	if got := agent.StatusLine(agent.StatusData{HatName: "VENOM", State: core.State{Mode: core.ModePaused, Since: since}}, time.Now()); !strings.HasPrefix(got, "paused (VENOM) since ") {
 		t.Fatalf("paused: %q", got)
 	}
-	if got := agent.StatusLine(agent.StatusData{}, time.Now()); got != "No hat on" {
+	if got := agent.StatusLine(agent.StatusData{}, time.Now()); got != "No hat active" {
 		t.Fatalf("none: %q", got)
 	}
 

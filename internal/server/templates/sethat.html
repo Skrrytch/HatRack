@@ -28,7 +28,7 @@
       <input type="text" name="act.{{.Index}}" value="{{.Name}}" class="grow">
       <button name="op" value="up:{{.Index}}" title="{{t $.Lang "web.setup.up"}}"{{if .First}} disabled{{end}} class="iconbtn">{{template "icon" "up"}}</button>
       <button name="op" value="down:{{.Index}}" title="{{t $.Lang "web.setup.down"}}"{{if .Last}} disabled{{end}} class="iconbtn">{{template "icon" "down"}}</button>
-      <button name="op" value="archive:{{.Index}}">{{t $.Lang "web.setup.archive"}}</button>
+      <button name="op" value="archive:{{.Index}}" class="archbtn" title="{{t $.Lang "web.setup.archive"}}">{{template "icon" "archive"}}<span>{{t $.Lang "web.setup.archive"}}</span></button>
     </div>
     {{end}}
     <div class="row actrow"><input type="text" name="newact" placeholder="{{t $.Lang "web.setup.newacts"}}" class="grow"><button name="op" value="add">{{t $.Lang "web.setup.add"}}</button></div>

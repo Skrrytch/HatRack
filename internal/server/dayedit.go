@@ -70,11 +70,12 @@ func (s *Server) dayEdit(w http.ResponseWriter, r *http.Request, _ access) {
 	back := "/day?date=" + dateStr(day)
 	fail := func(msg string) { http.Redirect(w, r, back+"&e="+url.QueryEscape(msg), http.StatusSeeOther) }
 
-	events, err := s.st.Effective(ctx, time.Time{})
+	h, err := s.history(ctx)
 	if err != nil {
 		serverError(w, err)
 		return
 	}
+	events := h.Events
 	// undo needs the corrections themselves, so read the raw log for it
 	in := core.Input{Device: "web", Now: s.Now()}
 	op, id := r.PostFormValue("op"), r.PostFormValue("id")

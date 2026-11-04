@@ -254,7 +254,7 @@ func TestNowPage(t *testing.T) {
 	_, b := setupBrowser(t)
 	b.do("POST", "/action", url.Values{"op": {"on"}, "hat": {"venom"}, "activity": {"review"}})
 	_, out := b.do("GET", "/", nil)
-	for _, want := range []string{"Take off", "Pause", `data-since="`, `href="/setup/hat?key=venom"`, `>Today</a>`, "hatcard cur", "You are wearing", `class="stamp num"`} {
+	for _, want := range []string{"Stop", "Pause", `data-since="`, `href="/setup/hat?key=venom"`, `>Today</a>`, "hatcard cur", "You are working on", `class="stamp num"`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("Now page lacks %q", want)
 		}

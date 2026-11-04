@@ -75,10 +75,11 @@ func (s *Server) publishCore(ctx context.Context) {
 	if len(pubs) == 0 {
 		return
 	}
-	st, err := s.st.CurrentState(ctx)
+	h, err := s.history(ctx)
 	if err != nil {
 		return
 	}
+	st := h.State
 	cfg, _, err := s.st.GetConfig(ctx)
 	if err != nil {
 		return

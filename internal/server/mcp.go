@@ -411,10 +411,11 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 	mcp.AddTool(srv, &mcp.Tool{Name: "get_current", Annotations: readOnly("What runs now"),
 		Description: "The hat and activity worn now (or paused, or none), since when, and today's time per hat."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, currentOut, error) {
-			st, err := s.st.CurrentState(ctx)
+			h, err := s.history(ctx)
 			if err != nil {
 				return nil, currentOut{}, err
 			}
+			st := h.State
 			cfg, _, err := s.st.GetConfig(ctx)
 			if err != nil {
 				return nil, currentOut{}, err

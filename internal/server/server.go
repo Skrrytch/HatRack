@@ -33,6 +33,7 @@ type Server struct {
 	Loc     *time.Location
 	limiter *loginLimiter
 	mux     *http.ServeMux
+	hist    historyCache // the effective log in memory, see history.go
 }
 
 // New creates a server. The registry is used to validate module settings of
@@ -134,11 +135,7 @@ type StateResponse struct {
 const recentPerHat = 50
 
 func (s *Server) stateResponse(ctx context.Context) (StateResponse, error) {
-	st, err := s.st.CurrentState(ctx)
-	if err != nil {
-		return StateResponse{}, err
-	}
-	last, err := s.st.LastActivities(ctx)
+	h, err := s.history(ctx) // revision first, then the data: never older than its label
 	if err != nil {
 		return StateResponse{}, err
 	}
@@ -146,16 +143,8 @@ func (s *Server) stateResponse(ctx context.Context) (StateResponse, error) {
 	if err != nil {
 		return StateResponse{}, err
 	}
-	erev, err := s.st.EventRev(ctx)
-	if err != nil {
-		return StateResponse{}, err
-	}
-	resp := StateResponse{State: st, LastActivities: last, ConfigRev: rev, EventRev: erev, ServerTime: s.Now().UTC()}
-	since := s.Now().Add(-core.RecentWindow)
-	if ev, err := s.st.Effective(ctx, time.Time{}); err == nil {
-		resp.Recent = core.RecentByHat(ev, since, recentPerHat)
-	}
-	return resp, nil
+	return StateResponse{State: h.State, LastActivities: h.Last, ConfigRev: rev, EventRev: h.Rev,
+		ServerTime: s.Now().UTC(), Recent: s.recentDetails(h)}, nil
 }
 
 func (s *Server) broadcastState(ctx context.Context) {
@@ -270,11 +259,12 @@ func (s *Server) getIntervals(w http.ResponseWriter, r *http.Request, _ store.De
 		to = now
 	}
 	// Intervals need the events before the period, so load everything up to `to`.
-	ev, err := s.st.Effective(r.Context(), to)
+	h, err := s.history(r.Context())
 	if err != nil {
 		serverError(w, err)
 		return
 	}
+	ev := h.Before(to)
 	iv := core.Settle(core.Intervals(ev, now))
 	if !from.IsZero() {
 		iv = core.Clip(iv, from, to)

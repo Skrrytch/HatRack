@@ -74,7 +74,7 @@ func TestResolveAndFallback(t *testing.T) {
 	if In("de", "nonexistent.key") != "nonexistent.key" {
 		t.Fatal("unknown key is returned as is")
 	}
-	if In("de", "cli.nohat") != "Kein Hut auf" || In("en", "cli.nohat") != "No hat on" {
+	if In("de", "cli.nohat") != "Kein Hut aktiv" || In("en", "cli.nohat") != "No hat active" {
 		t.Fatal("translation")
 	}
 }

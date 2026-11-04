@@ -239,3 +239,27 @@ func TestLoginOneAtATime(t *testing.T) {
 		t.Fatalf("parallel attempts wait in line: %v", d)
 	}
 }
+
+func TestHistoryCache(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "s.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	srv := New(st, modules.Builtin(nil))
+	ctx := context.Background()
+	h1, _ := srv.history(ctx)
+	if h2, _ := srv.history(ctx); h2 != h1 {
+		t.Fatal("unchanged log: the same history")
+	}
+	ev := core.NewEvent("laptop", core.EvSwitch, time.Now())
+	ev.Hat = "venom"
+	st.AppendEvents(ctx, []core.Event{ev})
+	h3, _ := srv.history(ctx)
+	if h3 == h1 || h3.State.Hat != "venom" || h3.Rev <= h1.Rev {
+		t.Fatalf("a new event loads the log again: %+v", h3.State)
+	}
+	if len(h3.Before(ev.TS)) != 0 || len(h3.Before(ev.TS.Add(time.Second))) != 1 {
+		t.Fatal("Before cuts at the time")
+	}
+}

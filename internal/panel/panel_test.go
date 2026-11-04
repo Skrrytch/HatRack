@@ -61,7 +61,7 @@ func TestBuildHatsAndActivities(t *testing.T) {
 	if hit(l, KindTool, "Pause") == nil || hit(l, KindTool, "Resume") != nil {
 		t.Fatal("wearing shows Pause")
 	}
-	if hit(l, KindTool, "Open HatRack") == nil || hit(l, KindTool, "Take off") == nil {
+	if hit(l, KindTool, "Open HatRack") == nil || hit(l, KindTool, "Stop") == nil {
 		t.Fatal("open and take-off tools")
 	}
 	if hit(l, KindTool, "About") != nil {

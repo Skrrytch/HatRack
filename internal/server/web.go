@@ -75,6 +75,7 @@ type view struct {
 	Msg      string
 	Err      string
 	Path     string
+	Langs    []langLink // the language switch, for the page shown
 
 	Login    loginView
 	Now      nowView
@@ -147,11 +148,17 @@ type timelineView struct {
 
 // timeline lays out the intervals of one day (see dayWindow).
 func (s *Server) timeline(day time.Time, cfg core.Config, iv []core.Interval, lang string) timelineView {
+	from, to, _, _, _ := dayWindow(day, cfg.Work(), iv)
+	return s.layout(day, from, to, cfg, iv, lang)
+}
+
+// layout places the intervals of one day on a band from `from` to `to`.
+func (s *Server) layout(day, from, to time.Time, cfg core.Config, iv []core.Interval, lang string) timelineView {
 	var tl timelineView
 	pal, nm := newPalette(cfg), names(cfg)
-	from, to, wFrom, wTo, workday := dayWindow(day, cfg.Work(), iv)
+	_, _, wFrom, wTo, workday := dayWindow(day, cfg.Work(), nil)
 	span := float64(to.Sub(from))
-	pct := func(t time.Time) float64 { return float64(t.Sub(from)) / span * 100 }
+	pct := func(t time.Time) float64 { return min(max(float64(t.Sub(from))/span*100, 0), 100) }
 	if workday {
 		tl.Work = wFrom.Format("15:04") + "–" + wTo.Format("15:04")
 		if wFrom.After(from) {
@@ -291,7 +298,7 @@ func dayWindow(day time.Time, work core.WorkHours, iv []core.Interval) (from, to
 
 type dayBar struct {
 	Label, Date, Duration string
-	Segments              []segment
+	TL                    timelineView
 }
 
 type weekView struct {
@@ -299,7 +306,9 @@ type weekView struct {
 	Prev, Next string
 	CSV        string
 	Days       []dayBar
+	Ticks      []tick // the hours, the same for every day
 	Totals     []totalView
+	Compare    bool // the previous week has entries to compare with
 	Sum        string
 	SumDelta   string
 }
@@ -386,9 +395,34 @@ func nameOf(m map[string]string, key string) string {
 	return key
 }
 
+// langLink switches the language and stays on the page shown, with its
+// query (the day, the week).
+type langLink struct {
+	Label, Href string
+	On          bool
+}
+
+func langLinks(r *http.Request, cur string) []langLink {
+	var out []langLink
+	for _, l := range []string{"en", "de"} {
+		q := r.URL.Query()
+		for _, k := range []string{"e", "done", "saved", "imported"} {
+			q.Del(k) // one-time messages
+		}
+		q.Set("lang", l)
+		out = append(out, langLink{strings.ToUpper(l), r.URL.Path + "?" + q.Encode(), l == cur})
+	}
+	return out
+}
+
 func (s *Server) base(r *http.Request, page string, acc access) view {
 	lang := s.langOf(r)
 	v := view{Lang: lang, Page: page, CanWrite: acc == fullAccess, Path: r.URL.Path}
+	if r.Method == http.MethodGet {
+		v.Langs = langLinks(r, lang)
+	} else {
+		v.Langs = langLinks(&http.Request{URL: &url.URL{Path: r.URL.Path}}, lang)
+	}
 	if acc != noAccess {
 		for _, n := range []struct{ page, href, key string }{
 			{"now", "/", "ui.nav.now"}, {"day", "/day", "ui.nav.day"}, {"week", "/week", "ui.nav.week"},
@@ -516,11 +550,12 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request, _ access) {
 
 func (s *Server) nowPage(w http.ResponseWriter, r *http.Request, acc access) {
 	ctx := r.Context()
-	st, err := s.st.CurrentState(ctx)
+	hist, err := s.history(ctx)
 	if err != nil {
 		serverError(w, err)
 		return
 	}
+	st := hist.State
 	cfg, _, _ := s.st.GetConfig(ctx)
 	pal := newPalette(cfg)
 	loc := s.locOf(r)
@@ -539,19 +574,17 @@ func (s *Server) nowPage(w http.ResponseWriter, r *http.Request, acc access) {
 		links, _ := s.st.TicketLinks(ctx)
 		n.Detail, n.DetailIn = core.SplitDetail(st.Detail, links), core.ShortDetail(st.Detail)
 		since := s.Now().Add(-core.RecentWindow)
-		if ev, err := s.st.Effective(ctx, time.Time{}); err == nil {
-			for _, d := range core.RecentDetails(ev, since, 6)[st.Hat][st.Activity] {
-				if d != n.DetailIn && len(n.Recent) < 5 {
-					n.Recent = append(n.Recent, d)
-				}
+		for _, d := range core.RecentDetails(hist.Events, since, 6)[st.Hat][st.Activity] {
+			if d != n.DetailIn && len(n.Recent) < 5 {
+				n.Recent = append(n.Recent, d)
 			}
-			// the field suggests every detail of the hat, the worn activity's first
-			byHat := core.RecentByHat(ev, since, recentPerHat)[st.Hat]
-			for _, own := range []bool{true, false} {
-				for _, d := range byHat {
-					if (d.Activity == st.Activity) == own && d.Detail != n.DetailIn {
-						n.Suggest = append(n.Suggest, d.Detail)
-					}
+		}
+		// the field suggests every detail of the hat, the worn activity's first
+		byHat := s.recentDetails(hist)[st.Hat]
+		for _, own := range []bool{true, false} {
+			for _, d := range byHat {
+				if (d.Activity == st.Activity) == own && d.Detail != n.DetailIn {
+					n.Suggest = append(n.Suggest, d.Detail)
 				}
 			}
 		}
@@ -614,12 +647,12 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request, _ access) {
 		serverError(w, err)
 		return
 	}
-	st, err := s.st.CurrentState(ctx)
+	hist, err := s.history(ctx)
 	if err != nil {
 		serverError(w, err)
 		return
 	}
-	last, _ := s.st.LastActivities(ctx)
+	st, last := hist.State, hist.Last
 	in := core.Input{Device: "web", Now: s.Now()}
 	hat, act := r.PostFormValue("hat"), r.PostFormValue("activity")
 	var ev *core.Event
@@ -683,10 +716,11 @@ func parseDate(v string, loc *time.Location, now time.Time) time.Time {
 
 // intervalsIn returns the intervals of [from, to) and their totals.
 func (s *Server) intervalsIn(ctx context.Context, from, to time.Time) ([]core.Interval, []core.HatTotal, error) {
-	ev, err := s.st.Effective(ctx, to)
+	h, err := s.history(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
+	ev := h.Before(to)
 	iv := core.Clip(core.Settle(core.Intervals(ev, s.Now())), from, to)
 	return iv, core.Totals(iv), nil
 }
@@ -824,6 +858,23 @@ func (s *Server) dayPage(w http.ResponseWriter, r *http.Request, acc access) {
 	s.render(w, v, http.StatusOK)
 }
 
+// clockOf returns t as the time of day on day (24h for the next midnight);
+// atClock is its reverse. Both go by the wall clock, so a day with a clock
+// change keeps its hours in line with the other days.
+func clockOf(day, t time.Time) time.Duration {
+	if !t.Before(day.AddDate(0, 0, 1)) {
+		return 24 * time.Hour
+	}
+	return time.Duration(t.Hour())*time.Hour + time.Duration(t.Minute())*time.Minute
+}
+
+func atClock(day time.Time, c time.Duration) time.Time {
+	if c >= 24*time.Hour {
+		return day.AddDate(0, 0, 1)
+	}
+	return time.Date(day.Year(), day.Month(), day.Day(), int(c/time.Hour), int(c%time.Hour/time.Minute), 0, 0, day.Location())
+}
+
 func weekStart(t time.Time) time.Time {
 	back := (int(t.Weekday()) + 6) % 7
 	return t.AddDate(0, 0, -back)
@@ -856,7 +907,7 @@ func (s *Server) weekPage(w http.ResponseWriter, r *http.Request, acc access) {
 	wv.Prev, wv.Next = "/week?date="+dateStr(start.AddDate(0, 0, -7)), "/week?date="+dateStr(end)
 	wv.CSV = "/week.csv?date=" + dateStr(start)
 
-	// one bar per day, scaled to the busiest day
+	// one band per day on a common time axis: the widest window of the days
 	perDay := make([][]core.Interval, 7)
 	for _, i := range core.Clip(iv, start, end) {
 		for d := 0; d < 7; d++ {
@@ -866,31 +917,36 @@ func (s *Server) weekPage(w http.ResponseWriter, r *http.Request, acc access) {
 			}
 		}
 	}
-	var busiest time.Duration
+	first, last := 24*time.Hour, time.Duration(0) // offsets from midnight
 	daySum := make([]time.Duration, 7)
 	for d, list := range perDay {
+		ds := start.AddDate(0, 0, d)
 		for _, i := range list {
 			daySum[d] += i.Duration()
 		}
-		busiest = max(busiest, daySum[d])
+		from, to, _, _, _ := dayWindow(ds, cfg.Work(), list)
+		first, last = min(first, clockOf(ds, from)), max(last, clockOf(ds, to))
 	}
 	dayMin := core.Apportion(daySum) // the days add up to the week
 	for d := 0; d < 7; d++ {
 		ds := start.AddDate(0, 0, d)
 		bar := dayBar{Label: dayLabel(lang, ds, false), Date: dateStr(ds), Duration: core.FormatMinutes(dayMin[d])}
-		var x float64
-		for _, i := range perDay[d] {
-			wd := float64(i.Duration()) / float64(max(busiest, time.Minute)) * 100
-			bar.Segments = append(bar.Segments, segment{Left: x, Width: wd, Color: pal.color(i.Hat),
-				Title: fmt.Sprintf("%s %s", nameOf(nm, i.Hat), core.FormatDuration(i.Duration()))})
-			x += wd
-		}
+		bar.TL = s.layout(ds, atClock(ds, first), atClock(ds, last), cfg, perDay[d], lang)
 		wv.Days = append(wv.Days, bar)
 	}
+	if len(wv.Days) > 0 {
+		wv.Ticks = wv.Days[0].TL.Ticks
+	}
 	links, _ := s.st.TicketLinks(r.Context())
+	if len(prevTot) == 0 {
+		prev = nil // nothing to compare with: no column of "+everything"
+	}
+	wv.Compare = prev != nil
 	wv.Totals = s.totalViews(tot, prev, pal, nm, lang, links, cfg)
 	wv.Sum = core.FormatDuration(sumOf(tot, cfg))
-	wv.SumDelta = delta(sumOf(tot, cfg) - sumOf(prevTot, cfg))
+	if wv.Compare {
+		wv.SumDelta = delta(sumOf(tot, cfg) - sumOf(prevTot, cfg))
+	}
 	s.render(w, v, http.StatusOK)
 }
 

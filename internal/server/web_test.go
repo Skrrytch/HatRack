@@ -226,6 +226,18 @@ func TestDayWeekAndCSV(t *testing.T) {
 			t.Errorf("week page lacks %q", want)
 		}
 	}
+	// the previous week is empty: no comparison column of "+everything"
+	if strings.Contains(week, "vs. previous") || strings.Contains(week, "+2h") {
+		t.Errorf("comparison with an empty week:\n%s", week)
+	}
+	// one week later the comparison is shown
+	if _, next := b.do("GET", "/week?date=2026-11-11", nil); !strings.Contains(next, "−2h 30m") {
+		t.Errorf("comparison with the week before lacks the delta:\n%s", next)
+	}
+	// the language switch stays on the day shown
+	if _, day := b.do("GET", "/day?date=2026-11-03", nil); !strings.Contains(day, `href="/day?date=2026-11-03&amp;lang=de"`) {
+		t.Errorf("language link loses the date:\n%s", day)
+	}
 	// empty day
 	if _, out := b.do("GET", "/day?date=2026-01-01", nil); !strings.Contains(out, "Nothing logged") {
 		t.Fatalf("empty day: %s", out)
