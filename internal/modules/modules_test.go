@@ -236,3 +236,19 @@ hats:
 		}
 	}
 }
+
+func TestWallpaperRestoreEdgeCases(t *testing.T) {
+	t.Setenv("XDG_CURRENT_DESKTOP", "X-Cinnamon")
+	gs := newFakeGS()
+	m := NewWallpaper(gs.run).(*backendModule)
+	// an empty snapshot is a no-op, a URI snapshot is passed on as it is
+	if err := m.Restore(context.Background(), json.RawMessage(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Restore(context.Background(), json.RawMessage(`{"image":"https://example.org/x.jpg"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if got := gs.vals["org.cinnamon.desktop.background picture-uri"]; got != "'https://example.org/x.jpg'" {
+		t.Fatalf("uri: %s", got)
+	}
+}

@@ -258,6 +258,9 @@ func dedupe(in []string) []string {
 
 // Serve listens on the agent socket until ctx is cancelled.
 func (a *Agent) Serve(ctx context.Context, path string) error {
+	if len(path) > 100 {
+		return fmt.Errorf("socket path too long for a Unix socket (%d characters): %s; set a shorter XDG_RUNTIME_DIR", len(path), path)
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}

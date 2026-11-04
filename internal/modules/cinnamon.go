@@ -79,16 +79,19 @@ func (b *cinnamonWallpaper) Apply(ctx context.Context, raw json.RawMessage) erro
 		return err
 	}
 	if cfg.Image == "" {
-		return fmt.Errorf("wallpaper: no image")
+		return nil // an empty snapshot: nothing to restore
 	}
-	abs, err := filepath.Abs(core.ExpandPath(cfg.Image))
-	if err != nil {
-		return err
+	uri := cfg.Image
+	if !strings.Contains(uri, "://") {
+		abs, err := filepath.Abs(core.ExpandPath(cfg.Image))
+		if err != nil {
+			return err
+		}
+		if _, err := os.Stat(abs); err != nil {
+			return fmt.Errorf("wallpaper: %w", err)
+		}
+		uri = (&url.URL{Scheme: "file", Path: abs}).String()
 	}
-	if _, err := os.Stat(abs); err != nil {
-		return fmt.Errorf("wallpaper: %w", err)
-	}
-	uri := (&url.URL{Scheme: "file", Path: abs}).String()
 	if err := gsSet(ctx, b.run, cinnamonBackground, "picture-uri", uri); err != nil {
 		return err
 	}
