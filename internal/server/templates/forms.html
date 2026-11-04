@@ -1,7 +1,7 @@
 {{define "modforms"}}
 {{range .}}
-<details class="card mod"{{range .Fields}}{{if .Value}} open{{end}}{{end}}>
-  <summary><strong>{{.Title}}</strong>{{if .Desc}} <span class="dim">– {{.Desc}}</span>{{end}}</summary>
+<details class="card mod"{{if .Open}} open{{end}}>
+  <summary><strong>{{.Title}}</strong> <span class="dim">– {{.Summary}}</span>{{if .Desc}}<br><small class="dim desc">{{.Desc}}</small>{{end}}</summary>
   <div class="fields">
   {{range .Fields}}
     <label>{{.Label}}{{if .Required}} *{{end}}

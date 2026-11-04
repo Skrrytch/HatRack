@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"hatrack/internal/core"
 	"hatrack/internal/i18n"
@@ -31,9 +33,17 @@ type setupHat struct {
 }
 
 type setupView struct {
-	Hats     []setupHat
-	Archived []setupHat
-	Import   importView
+	Hats      []setupHat
+	Archived  []setupHat
+	NextColor string // a colour no hat uses yet, for the next new hat
+	Devices   []deviceRow
+	Import    importView
+}
+
+type deviceRow struct {
+	Name   string
+	Online bool
+	Seen   string
 }
 
 type importView struct {
@@ -56,6 +66,8 @@ type field struct {
 
 type moduleForm struct {
 	ID, Title, Desc string
+	Summary         string // what applies, shown while the section is closed
+	Open            bool
 	Fields          []field
 	Extra           string // YAML of settings the form cannot show
 	ExtraNote       string
@@ -283,6 +295,7 @@ func (s *Server) moduleForms(lang string, own, inherited map[string]core.ModuleC
 			}
 			f.Fields = append(f.Fields, fl)
 		}
+		f.Summary, f.Open = summary(lang, f.Fields, hatPage)
 		if len(extra) > 0 {
 			b, _ := core.Config{Modules: map[string]core.ModuleCfg{id: extra}}.Export()
 			f.Extra = string(b)
@@ -291,6 +304,64 @@ func (s *Server) moduleForms(lang string, own, inherited map[string]core.ModuleC
 		out = append(out, f)
 	}
 	return out
+}
+
+// summary says in one line what a module section holds.
+func summary(lang string, fields []field, hatPage bool) (string, bool) {
+	var own []string
+	inherited := false
+	for _, f := range fields {
+		if f.Value != "" {
+			v := f.Value
+			for _, o := range f.Options {
+				if o.Value == f.Value {
+					v = o.Label
+				}
+			}
+			own = append(own, f.Label+": "+v)
+		}
+		if f.Inherited != "" {
+			inherited = true
+		}
+	}
+	switch {
+	case len(own) > 0 && hatPage && inherited:
+		return strings.Join(own, " · ") + " · " + i18n.In(lang, "web.setup.sum_rest"), true
+	case len(own) > 0:
+		return strings.Join(own, " · "), true
+	case inherited:
+		return i18n.In(lang, "web.setup.sum_default"), false
+	}
+	return i18n.In(lang, "web.setup.sum_none"), false
+}
+
+// splitList reads several names from one field: separated by commas,
+// semicolons or new lines. Duplicates (ignoring case) are dropped.
+func splitList(s string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, part := range strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ';' || r == '\n' || r == '\r' }) {
+		p := strings.TrimSpace(part)
+		if p != "" && !seen[strings.ToLower(p)] {
+			seen[strings.ToLower(p)] = true
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// freeColor returns the first palette colour no hat uses yet.
+func freeColor(cfg core.Config) string {
+	used := map[string]bool{}
+	for _, h := range cfg.Hats {
+		used[strings.ToLower(h.Color)] = true
+	}
+	for _, c := range fallbackColors {
+		if !used[c] {
+			return c
+		}
+	}
+	return fallbackColors[len(cfg.Hats)%len(fallbackColors)]
 }
 
 // readModules applies the module form fields to settings. Modules the server
@@ -373,6 +444,18 @@ func (s *Server) fillSetup(v *view, cfg core.Config) {
 		v.Setup.Hats = append(v.Setup.Hats, setupHat{Key: h.Key, Name: h.DisplayName(), Color: pal.color(h.Key),
 			Activities: len(h.Activities), First: i == 0, Last: i == len(active)-1})
 	}
+	v.Setup.NextColor = freeColor(cfg)
+	if devs, err := s.st.Devices(context.Background()); err == nil {
+		loc := s.Loc
+		for _, d := range devs {
+			row := deviceRow{Name: d.Name}
+			if !d.LastSeen.IsZero() {
+				row.Online = s.Now().Sub(d.LastSeen) < time.Minute
+				row.Seen = d.LastSeen.In(loc).Format("2006-01-02 15:04")
+			}
+			v.Setup.Devices = append(v.Setup.Devices, row)
+		}
+	}
 	for _, h := range cfg.Hats {
 		if h.Archived {
 			v.Setup.Archived = append(v.Setup.Archived, setupHat{Key: h.Key, Name: h.DisplayName(), Color: pal.color(h.Key), Archived: true})
@@ -395,7 +478,11 @@ func (s *Server) hatsAction(w http.ResponseWriter, r *http.Request, acc access) 
 			for n := 2; hatIndex(c, k) >= 0; n++ {
 				k = fmt.Sprintf("%s-%d", slug(name), n)
 			}
-			c.Hats = append(c.Hats, core.Hat{Key: k, Name: name, Color: strings.ToLower(r.PostFormValue("color")), Activities: []string{}})
+			acts := splitList(r.PostFormValue("activities"))
+			if acts == nil {
+				acts = []string{}
+			}
+			c.Hats = append(c.Hats, core.Hat{Key: k, Name: name, Color: strings.ToLower(r.PostFormValue("color")), Activities: acts})
 			dest = "/setup/hat?key=" + url.QueryEscape(k)
 			return nil
 		}
@@ -488,8 +575,14 @@ func (s *Server) hatSave(w http.ResponseWriter, r *http.Request, acc access) {
 			}
 			acts = append(acts, a)
 		}
-		if a := strings.TrimSpace(r.PostFormValue("newact")); a != "" {
-			acts = append(acts, a)
+		have := map[string]bool{}
+		for _, a := range acts {
+			have[strings.ToLower(a)] = true
+		}
+		for _, a := range splitList(r.PostFormValue("newact")) {
+			if !have[strings.ToLower(a)] {
+				acts = append(acts, a)
+			}
 		}
 		archived := append([]string(nil), h.ArchivedActivity...)
 		verb, arg, _ := strings.Cut(op, ":")

@@ -81,6 +81,7 @@ type activityChip struct {
 
 type hatCard struct {
 	Key, Name, Color string
+	Ink              string // text colour on the hat colour
 	Current          bool
 	Activities       []activityChip
 }
@@ -91,15 +92,21 @@ type nowView struct {
 	Color    string
 	Activity string
 	Since    string
+	SinceMS  int64 // for the live duration
 	Duration string
 	Cards    []hatCard
-	Devices  []nowDevice
+	Today    []todayRow
+	TodaySum string
+	SumBase  int64 // with Today[i].SinceMS, the sum keeps counting too
+	SumSince int64
+	Running  bool // the time log is running (a hat is worn)
 }
 
-type nowDevice struct {
-	Name   string
-	Online bool
-	Seen   string
+// todayRow is one hat in the "today" summary of the Now page.
+type todayRow struct {
+	Name, Color, Duration string
+	Pct                   float64
+	BaseMS, SinceMS       int64 // the worn hat keeps counting in the browser
 }
 
 type segment struct {
@@ -181,6 +188,18 @@ func newPalette(cfg core.Config) palette {
 		p[h.Key] = c
 	}
 	return p
+}
+
+// ink picks light or dark text for a background colour.
+func ink(hex string) string {
+	var r, g, b int
+	if _, err := fmt.Sscanf(strings.ToLower(hex), "#%02x%02x%02x", &r, &g, &b); err != nil {
+		return "#fff"
+	}
+	if 0.299*float64(r)+0.587*float64(g)+0.114*float64(b) > 150 {
+		return "#181a1e"
+	}
+	return "#fff"
 }
 
 func (p palette) color(key string) string {
@@ -357,23 +376,47 @@ func (s *Server) nowPage(w http.ResponseWriter, r *http.Request, acc access) {
 		n.Since = st.Since.In(loc).Format("15:04")
 		if st.Mode == core.ModeWearing {
 			n.Duration = core.FormatDuration(s.Now().Sub(st.Since))
+			n.SinceMS = st.Since.UnixMilli()
+			n.Running = true
 		}
 	}
 	for _, h := range cfg.ActiveHats() {
-		c := hatCard{Key: h.Key, Name: h.DisplayName(), Color: pal.color(h.Key), Current: st.Mode != core.ModeNone && st.Hat == h.Key}
+		col := pal.color(h.Key)
+		c := hatCard{Key: h.Key, Name: h.DisplayName(), Color: col, Ink: ink(col), Current: st.Mode != core.ModeNone && st.Hat == h.Key}
 		for _, a := range h.Activities {
 			c.Activities = append(c.Activities, activityChip{a, c.Current && st.Mode == core.ModeWearing && st.Activity == a})
 		}
 		n.Cards = append(n.Cards, c)
 	}
-	devs, _ := s.st.Devices(ctx)
-	for _, d := range devs {
-		nd := nowDevice{Name: d.Name}
-		if !d.LastSeen.IsZero() {
-			nd.Online = s.Now().Sub(d.LastSeen) < time.Minute
-			nd.Seen = d.LastSeen.In(loc).Format("15:04")
+	// today, per hat; the worn hat keeps counting in the browser
+	day := parseDate("", loc, s.Now())
+	if _, tot, err := s.intervalsIn(ctx, day, day.AddDate(0, 0, 1)); err == nil {
+		var most time.Duration
+		for _, t := range tot {
+			most = max(most, t.Duration)
 		}
-		n.Devices = append(n.Devices, nd)
+		for _, t := range tot {
+			row := todayRow{Name: nameOf(names(cfg), t.Hat), Color: pal.color(t.Hat), Duration: core.FormatDuration(t.Duration)}
+			if most > 0 {
+				row.Pct = float64(t.Duration) / float64(most) * 100
+			}
+			if n.Running && t.Hat == st.Hat {
+				since := st.Since
+				if since.Before(day) {
+					since = day
+				}
+				row.SinceMS = since.UnixMilli()
+				row.BaseMS = (t.Duration - s.Now().Sub(since)).Milliseconds()
+			}
+			n.Today = append(n.Today, row)
+		}
+		n.TodaySum = core.FormatDuration(sumOf(tot))
+		for _, r := range n.Today {
+			if r.SinceMS != 0 {
+				n.SumSince = r.SinceMS
+				n.SumBase = sumOf(tot).Milliseconds() - (s.Now().UnixMilli() - r.SinceMS)
+			}
+		}
 	}
 	s.render(w, v, http.StatusOK)
 }

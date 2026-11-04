@@ -9,6 +9,22 @@
       if (!m && document.cookie.indexOf("hatrack_tz=") >= 0) { location.reload(); return; }
     }
   } catch (e) {}
+  // durations that keep running: data-since (ms) plus data-base (ms)
+  function fmt(ms) {
+    var m = Math.max(0, Math.round(ms / 60000));
+    if (m < 60) return m + "m";
+    var r = m % 60;
+    return Math.floor(m / 60) + "h " + (r < 10 ? "0" : "") + r + "m";
+  }
+  function tick() {
+    var els = document.querySelectorAll("[data-since]");
+    for (var i = 0; i < els.length; i++) {
+      var s = +els[i].dataset.since;
+      if (s) els[i].textContent = fmt(Date.now() - s + (+els[i].dataset.base || 0));
+    }
+  }
+  tick();
+  setInterval(tick, 20000);
   if (!document.body.dataset.live || !window.EventSource) return;
   var reconnected = false, first = true;
   var es = new EventSource("/ui/stream");

@@ -1,53 +1,71 @@
 {{define "content"}}
 {{with .Now}}
-  {{if eq .Mode "none"}}
-    <p class="hero" style="--c:#888">{{t $.Lang "web.nohat"}}</p>
-  {{else}}
-    <p class="hero" style="--c:{{.Color}}">{{.Hat}}{{if eq .Mode "paused"}} <small>({{t $.Lang "web.paused"}})</small>{{end}}</p>
-    {{if .Activity}}<p class="sub">{{.Activity}}</p>{{end}}
-    <p class="meta">{{t $.Lang "web.since" .Since}}{{if .Duration}} · {{.Duration}}{{end}}</p>
-  {{end}}
-
-  {{if $.CanWrite}}
-  <p>
-    {{if eq .Mode "paused"}}
-      <form method="post" action="/action" style="display:inline"><input type="hidden" name="op" value="resume"><button>▶ {{t $.Lang "ui.resume"}}</button></form>
-      <form method="post" action="/action" style="display:inline"><input type="hidden" name="op" value="off"><input type="hidden" name="neutral" value="1"><button>{{t $.Lang "ui.neutral"}}</button></form>
-    {{else if eq .Mode "wearing"}}
-      <form method="post" action="/action" style="display:inline"><input type="hidden" name="op" value="off"><button>⏸ {{t $.Lang "ui.pause"}}</button></form>
-      <form method="post" action="/action" style="display:inline"><input type="hidden" name="op" value="off"><input type="hidden" name="neutral" value="1"><button>{{t $.Lang "ui.neutral"}}</button></form>
-    {{end}}
-  </p>
-  {{end}}
-
-  <h1>{{t $.Lang "ui.hats"}}</h1>
-  {{if not .Cards}}<p class="dim">{{t $.Lang "err.nohats"}}</p>{{end}}
-  <div class="rack">
-  {{range .Cards}}
-    <div class="card hatcard{{if .Current}} cur{{end}}" style="--c:{{.Color}}">
-      {{if $.CanWrite}}
-        <form method="post" action="/action"><input type="hidden" name="op" value="on"><input type="hidden" name="hat" value="{{.Key}}"><button class="name">{{.Name}}</button></form>
-        {{if .Activities}}
-        <div class="chips">
-          {{$key := .Key}}
-          {{range .Activities}}
-          <form method="post" action="/action"><input type="hidden" name="op" value="on"><input type="hidden" name="hat" value="{{$key}}"><input type="hidden" name="activity" value="{{.Name}}"><button{{if .Current}} class="cur"{{end}}>{{.Name}}</button></form>
-          {{end}}
-        </div>
-        {{end}}
+<section class="status" style="--c:{{if eq .Mode "none"}}#8a8f98{{else}}{{.Color}}{{end}}">
+  <div class="status-main">
+    <span class="bigdot"></span>
+    <div>
+      {{if eq .Mode "none"}}
+        <div class="status-hat">{{t $.Lang "web.nohat"}}</div>
+        <div class="dim">{{t $.Lang "web.pick"}}</div>
       {{else}}
-        <span class="name">{{.Name}}</span>
-        {{if .Activities}}<div class="chips dim">{{range .Activities}}{{.Name}} {{end}}</div>{{end}}
+        <div class="status-hat">{{.Hat}}{{if .Activity}} <span class="status-act">· {{.Activity}}</span>{{end}}</div>
+        <div class="dim">{{if eq .Mode "paused"}}{{t $.Lang "web.paused_since" .Since}}{{else}}{{t $.Lang "web.since" .Since}} · <span data-since="{{.SinceMS}}">{{.Duration}}</span>{{end}}</div>
       {{end}}
     </div>
-  {{end}}
   </div>
+  {{if $.CanWrite}}
+  <div class="status-tools">
+    {{if eq .Mode "paused"}}
+      <form method="post" action="/action"><input type="hidden" name="op" value="resume"><button class="tool" title="{{t $.Lang "panel.hint.resume_tool"}}">▶ {{t $.Lang "ui.resume"}}</button></form>
+    {{else if eq .Mode "wearing"}}
+      <form method="post" action="/action"><input type="hidden" name="op" value="off"><button class="tool" title="{{t $.Lang "panel.hint.pause"}}">❚❚ {{t $.Lang "ui.pause"}}</button></form>
+    {{end}}
+    {{if ne .Mode "none"}}
+      <form method="post" action="/action"><input type="hidden" name="op" value="off"><input type="hidden" name="neutral" value="1"><button class="tool" title="{{t $.Lang "panel.hint.takeoff"}}">■ {{t $.Lang "panel.takeoff"}}</button></form>
+    {{end}}
+  </div>
+  {{end}}
+</section>
+{{if and $.CanWrite (ne .Mode "none")}}<p class="hint">{{t $.Lang "web.pause_hint"}}</p>{{end}}
 
-  {{if .Devices}}
-  <h1>{{t $.Lang "web.devices"}}</h1>
-  <div class="card">
-    {{range .Devices}}<div><span class="dot{{if .Online}} on-dot{{end}}"></span>{{.Name}}{{if .Seen}} <small class="dim">{{.Seen}}</small>{{end}}</div>{{end}}
+<h1>{{t $.Lang "ui.hats"}}</h1>
+{{if not .Cards}}<p class="dim">{{t $.Lang "err.nohats"}}{{if $.CanWrite}} <a href="/setup">{{t $.Lang "web.nav.setup"}}</a>{{end}}</p>{{end}}
+<div class="rack">
+{{range .Cards}}
+  <div class="card hatcard{{if .Current}} cur{{end}}" style="--c:{{.Color}};--ink:{{.Ink}}">
+    <div class="hathead">
+      {{if $.CanWrite}}
+        <form method="post" action="/action" class="grow"><input type="hidden" name="op" value="on"><input type="hidden" name="hat" value="{{.Key}}"><button class="hatbtn" title="{{t $.Lang "panel.hint.hat" .Name}}"><span class="dot"></span>{{.Name}}{{if .Current}} <span class="badge">{{t $.Lang "web.current"}}</span>{{end}}</button></form>
+        <a class="edit" href="/setup/hat?key={{.Key}}" title="{{t $.Lang "web.edit_hat" .Name}}">✎</a>
+      {{else}}
+        <span class="hatbtn"><span class="dot"></span>{{.Name}}{{if .Current}} <span class="badge">{{t $.Lang "web.current"}}</span>{{end}}</span>
+      {{end}}
+    </div>
+    {{if .Activities}}
+    <div class="chips">
+      {{$key := .Key}}{{$name := .Name}}
+      {{range .Activities}}
+        {{if $.CanWrite}}
+        <form method="post" action="/action"><input type="hidden" name="op" value="on"><input type="hidden" name="hat" value="{{$key}}"><input type="hidden" name="activity" value="{{.Name}}"><button{{if .Current}} class="cur"{{end}} title="{{t $.Lang "panel.hint.act" $name .Name}}">{{.Name}}</button></form>
+        {{else}}<span class="chip{{if .Current}} cur{{end}}">{{.Name}}</span>{{end}}
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+{{end}}
+</div>
+
+{{if .Today}}
+<h1><a href="/day" class="plain">{{t $.Lang "ui.today"}} · <span{{if .SumSince}} data-since="{{.SumSince}}" data-base="{{.SumBase}}"{{end}}>{{.TodaySum}}</span></a></h1>
+<div class="card today">
+  {{range .Today}}
+  <div class="trow" style="--c:{{.Color}}">
+    <span><span class="dot"></span>{{.Name}}</span>
+    <span class="tbar"><i style="width:{{printf "%.1f" .Pct}}%"></i></span>
+    <span class="num"{{if .SinceMS}} data-since="{{.SinceMS}}" data-base="{{.BaseMS}}"{{end}}>{{.Duration}}</span>
   </div>
   {{end}}
+</div>
+{{end}}
 {{end}}
 {{end}}

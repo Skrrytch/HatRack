@@ -209,3 +209,47 @@ func TestSetupNeedsLogin(t *testing.T) {
 		t.Fatal("no Setup link without login")
 	}
 }
+
+func TestSetupQuickPaths(t *testing.T) {
+	e, b := setupBrowser(t)
+	// a new hat with its activities in one step, in a colour nobody uses
+	_, out := b.do("GET", "/setup", nil)
+	if !strings.Contains(out, `name="color" value="#4e79a7"`) && !strings.Contains(out, `name="color" value="#f28e2b"`) {
+		t.Fatalf("next colour missing")
+	}
+	b.do("POST", "/setup/hats", url.Values{"op": {"add"}, "name": {"Kunde"}, "activities": {"Angebot, Workshop; workshop\nSupport"}})
+	h, _ := config(t, e).Hat("kunde")
+	if strings.Join(h.Activities, ",") != "Angebot,Workshop,Support" {
+		t.Fatalf("activities from the new-hat form: %v", h.Activities)
+	}
+	// several new activities at once on the hat page, without duplicates
+	b.do("POST", "/setup/hat", url.Values{"key": {"kunde"}, "name": {"Kunde"}, "color": {"#4e79a7"},
+		"act.0": {"Angebot"}, "act.1": {"Workshop"}, "act.2": {"Support"}, "newact": {"Reise, angebot, Abrechnung"}, "op": {"add"}})
+	h, _ = config(t, e).Hat("kunde")
+	if strings.Join(h.Activities, ",") != "Angebot,Workshop,Support,Reise,Abrechnung" {
+		t.Fatalf("several activities: %v", h.Activities)
+	}
+	// the module sections say what applies while closed
+	e.do("PUT", "/api/config", "version: 1\nmodules:\n  wallpaper: {image: /pics/d.jpg}\nhats:\n  kunde:\n    name: Kunde\n    activities: []\n    modules:\n      wallpaper: {options: zoom}\n")
+	_, out = b.do("GET", "/setup/hat?key=kunde", nil)
+	if !strings.Contains(out, "Fit: zoom · rest from the defaults") || !strings.Contains(out, "not set up") {
+		t.Fatalf("module summaries missing:\n%s", out)
+	}
+}
+
+func TestNowPage(t *testing.T) {
+	_, b := setupBrowser(t)
+	b.do("POST", "/action", url.Values{"op": {"on"}, "hat": {"venom"}, "activity": {"review"}})
+	_, out := b.do("GET", "/", nil)
+	for _, want := range []string{"Take off", "Pause", `data-since="`, `href="/setup/hat?key=venom"`, ">Today · ", "worn"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("Now page lacks %q", want)
+		}
+	}
+	if strings.Contains(out, "laptop") {
+		t.Error("devices moved to Setup")
+	}
+	if _, out := b.do("GET", "/setup", nil); !strings.Contains(out, "laptop") {
+		t.Error("Setup lists the devices")
+	}
+}

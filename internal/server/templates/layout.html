@@ -28,13 +28,35 @@
   .sub { font-size: 1.3rem; margin: .2rem 0 0 1.5rem; }
   .meta { margin: .2rem 0 0 1.5rem; color: var(--dim); }
   .rack { display: grid; gap: .7rem; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); }
-  .hatcard { border-left: .4rem solid var(--c); }
-  .hatcard.cur { outline: 2px solid var(--c); }
+  .hatcard { padding: .6rem .8rem .8rem; }
+  .hatcard.cur { border-color: var(--c); box-shadow: 0 0 0 1px var(--c); }
   .hatcard form { display: inline; margin: 0; }
-  .hatcard .name { font-weight: 600; font-size: 1.1rem; }
-  .chips { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; }
-  .chips button { padding: .05rem .6rem; font-size: .9rem; border-radius: 1rem; }
-  .chips button.cur { background: var(--c); color: #fff; border-color: var(--c); }
+  .hathead { display: flex; align-items: center; gap: .3rem; }
+  .hathead form { display: block; }
+  .hatbtn { display: flex; align-items: center; gap: .1rem; width: 100%; text-align: left; border: 0; background: none; padding: .3rem .4rem; border-radius: .5rem; font-weight: 600; font-size: 1.1rem; }
+  button.hatbtn:hover { background: color-mix(in srgb, var(--c) 18%, transparent); }
+  .badge { margin-left: auto; font-size: .75rem; font-weight: 600; background: var(--c); color: var(--ink, #fff); border-radius: 1rem; padding: 0 .55rem; }
+  .edit { color: var(--dim); text-decoration: none; padding: .2rem .45rem; border-radius: .4rem; }
+  .edit:hover { background: var(--line); color: var(--fg); }
+  .chips { display: flex; flex-wrap: wrap; gap: .3rem; margin: .3rem 0 0 .4rem; }
+  .chips button, .chip { padding: .05rem .7rem; font-size: .9rem; border-radius: 1rem; border: 1px solid var(--line); }
+  .chips button:hover { background: color-mix(in srgb, var(--c) 25%, var(--card)); }
+  .chips button.cur, .chip.cur { background: var(--c); color: var(--ink, #fff); border-color: var(--c); font-weight: 600; }
+  .status { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; justify-content: space-between; background: color-mix(in srgb, var(--c) 22%, var(--card)); border: 1px solid color-mix(in srgb, var(--c) 45%, var(--line)); border-radius: .9rem; padding: 1rem 1.2rem; }
+  .status-main { display: flex; align-items: center; gap: .9rem; }
+  .bigdot { width: 1.1rem; height: 1.1rem; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fg) 25%, transparent); flex: none; }
+  .status-hat { font-size: 1.6rem; font-weight: 700; line-height: 1.2; }
+  .status-act { font-weight: 400; }
+  .status-tools { display: flex; gap: .4rem; }
+  .status-tools form { margin: 0; }
+  button.tool { padding: .45rem .9rem; font-weight: 600; }
+  .hint { color: var(--dim); font-size: .85rem; margin: .4rem .2rem 0; }
+  a.plain { color: inherit; text-decoration: none; }
+  a.plain:hover { text-decoration: underline; }
+  .today { display: grid; gap: .35rem; }
+  .trow { display: grid; grid-template-columns: minmax(6rem, 12rem) 1fr 5rem; gap: .8rem; align-items: center; }
+  .tbar { height: .55rem; background: var(--line); border-radius: .3rem; overflow: hidden; }
+  .tbar i { display: block; height: 100%; background: var(--c); border-radius: .3rem; }
   .bar { position: relative; height: 1.8rem; background: var(--line); border-radius: .4rem; overflow: hidden; }
   .bar i { position: absolute; top: 0; bottom: 0; background: var(--c); min-width: 2px; }
   table { border-collapse: collapse; width: 100%; }
@@ -71,15 +93,38 @@
   table.list a:hover { text-decoration: underline; }
   input:disabled { opacity: .6; }
   .defaultbtn { position: absolute; left: -9999px; }
+  @media (max-width: 640px) {
+    header { flex-wrap: nowrap; gap: .6rem; padding: .5rem .7rem; }
+    header strong span.brand { display: none; }
+    header nav { overflow-x: auto; flex: 1; }
+    header .sp { display: none; }
+    header .lang { display: none; }
+    header nav a { padding: .2rem .4rem; }
+    header form button { padding: .2rem .5rem; font-size: .9rem; }
+    main { margin-top: 1rem; }
+    .status-hat { font-size: 1.3rem; }
+    .nav2 { flex-wrap: wrap; }
+    .nav2 .t { order: -1; flex-basis: 100%; }
+    table.list tr { display: flex; flex-wrap: wrap; gap: .3rem; padding: .4rem 0; border-bottom: 1px solid var(--line); }
+    table.list td { border: 0; padding: .1rem .3rem; }
+    td.acts { text-align: left; width: 100%; }
+    .actrow input[type=text] { flex-basis: 100%; }
+    .trow { grid-template-columns: 7rem 1fr 4.5rem; gap: .5rem; }
+  }
+  .newhat { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-top: .6rem; }
+  details.yaml { margin-top: 2rem; }
+  details.yaml summary { cursor: pointer; }
+  details.yaml > div { margin-top: .8rem; }
+  .desc { margin-left: 1.1rem; }
   pre { background: var(--bg); padding: .5rem; border-radius: .4rem; overflow: auto; }
 </style>
 </head>
 <body{{if .Live}} data-live="1"{{end}}>
 <header>
-  <strong style="display:flex;align-items:center;gap:.5rem"><img src="/static/hatrack.svg" width="26" height="26" alt="">HatRack</strong>
+  <strong style="display:flex;align-items:center;gap:.5rem"><img src="/static/hatrack.svg" width="26" height="26" alt=""><span class="brand">HatRack</span></strong>
   <nav>{{range .Nav}}<a href="{{.Href}}"{{if .Active}} class="on"{{end}}>{{.Label}}</a>{{end}}</nav>
   <span class="sp"></span>
-  <span><a href="?lang=en">EN</a> <a href="?lang=de">DE</a></span>
+  <span class="lang"><a href="?lang=en">EN</a> <a href="?lang=de">DE</a></span>
   {{if .CanWrite}}<form method="post" action="/logout"><button>{{t .Lang "ui.logout"}}</button></form>{{end}}
 </header>
 <main>
