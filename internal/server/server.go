@@ -195,6 +195,11 @@ func (s *Server) postEvents(w http.ResponseWriter, r *http.Request, dev store.De
 			httpError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+		if evs[i].Type == core.EvCorrection {
+			// corrections rewrite history; they come from the web UI only
+			httpError(w, http.StatusForbidden, "devices may not send corrections")
+			return
+		}
 	}
 	n, err := s.st.AppendEvents(r.Context(), evs)
 	if err != nil {
@@ -321,7 +326,13 @@ type ImportResult struct {
 
 var putMu sync.Mutex
 
-func (s *Server) putConfig(w http.ResponseWriter, r *http.Request, _ store.Device) {
+func (s *Server) putConfig(w http.ResponseWriter, r *http.Request, dev store.Device) {
+	if !dev.CanConfig {
+		// the configuration says what every agent runs (scripts, programs);
+		// a device token alone must not be enough to change it
+		httpError(w, http.StatusForbidden, "device "+dev.Name+" may not change the configuration; allow it in the web UI under Setup → Devices")
+		return
+	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
 	if err != nil {
 		httpError(w, http.StatusRequestEntityTooLarge, "body too large")

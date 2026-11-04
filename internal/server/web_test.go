@@ -191,17 +191,17 @@ func TestPostsNeedSessionAndSameOrigin(t *testing.T) {
 	if st, _ := e.st.CurrentState(context.Background()); st.Mode != core.ModePaused {
 		t.Fatalf("a rejected post changed the state: %+v", st)
 	}
-	// a device token only gives the read-only view
+	// a device token in the address opens nothing: the link loses the
+	// token and leads to the login
 	ro := newBrowser(t, e)
-	if r, _ := ro.do("GET", "/?token="+e.token, nil); r.StatusCode != 303 {
-		t.Fatalf("token: %d", r.StatusCode)
+	if r, _ := ro.do("GET", "/?token="+e.token, nil); r.StatusCode != 303 || strings.Contains(r.Header.Get("Location"), "token") {
+		t.Fatalf("token link: %d %s", r.StatusCode, r.Header.Get("Location"))
 	}
-	r, out := ro.do("GET", "/", nil)
-	if r.StatusCode != 200 || strings.Contains(out, `action="/action"`) {
-		t.Fatalf("read-only view: %d (switch bar must not be offered)", r.StatusCode)
+	if r, _ := ro.do("GET", "/", nil); r.StatusCode != 303 || r.Header.Get("Location") != "/login" {
+		t.Fatalf("no view without login: %d", r.StatusCode)
 	}
 	if r, _ := ro.do("POST", "/action", url.Values{"op": {"resume"}}); r.StatusCode != 403 {
-		t.Fatalf("read-only post: %d", r.StatusCode)
+		t.Fatalf("post without login: %d", r.StatusCode)
 	}
 }
 

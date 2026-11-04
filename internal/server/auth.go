@@ -44,7 +44,7 @@ type access int
 
 const (
 	noAccess   access = iota
-	readAccess        // a device token cookie: look, do not touch
+	readAccess        // no longer granted (was: a device token cookie)
 	fullAccess        // a logged-in session
 )
 
@@ -52,11 +52,6 @@ func (s *Server) accessOf(r *http.Request) access {
 	if c, err := r.Cookie(sessionCookie); err == nil {
 		if ok, _ := s.st.SessionValid(r.Context(), tokenHash(c.Value), s.Now()); ok {
 			return fullAccess
-		}
-	}
-	if c, err := r.Cookie(tokenCookie); err == nil {
-		if _, err := s.st.DeviceByToken(r.Context(), c.Value); err == nil {
-			return readAccess
 		}
 	}
 	return noAccess
@@ -74,13 +69,19 @@ func sameOrigin(r *http.Request) bool {
 }
 
 // loginLimiter slows down password guessing.
+// Attempts are checked one at a time (wait holds the gate until result), so
+// parallel guesses wait in line instead of sharing one delay.
 type loginLimiter struct {
+	gate  sync.Mutex
 	mu    sync.Mutex
 	fails int
 	Delay func(fails int) time.Duration
 }
 
+// wait lets one attempt in, after a delay that grows with the failures.
+// Every wait must be followed by result.
 func (l *loginLimiter) wait() {
+	l.gate.Lock()
 	l.mu.Lock()
 	n := l.fails
 	l.mu.Unlock()
@@ -91,12 +92,13 @@ func (l *loginLimiter) wait() {
 
 func (l *loginLimiter) result(ok bool) {
 	l.mu.Lock()
-	defer l.mu.Unlock()
 	if ok {
 		l.fails = 0
 	} else {
 		l.fails++
 	}
+	l.mu.Unlock()
+	l.gate.Unlock()
 }
 
 func defaultDelay(fails int) time.Duration {

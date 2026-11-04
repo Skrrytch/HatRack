@@ -163,3 +163,31 @@ func TestRecentByHat(t *testing.T) {
 		t.Fatalf("window: %+v", r)
 	}
 }
+
+func TestSecretsInConfig(t *testing.T) {
+	t.Setenv("HATRACK_PW", "geheim")
+	t.Setenv("HOME_SECRET", "nicht-fuer-dich")
+	m := ModuleCfg{"password": "${env:HATRACK_PW}", "user": "${env:HOME_SECRET}",
+		"nested": map[string]any{"api_token": "klartext", "list": []any{"a"}}}
+	got := ExpandEnvPrefix(m, "HATRACK_").(ModuleCfg)
+	if got["password"] != "geheim" || got["user"] != "" {
+		t.Fatalf("only HATRACK_ variables: %v", got)
+	}
+	if ExpandEnv(m).(ModuleCfg)["user"] != "nicht-fuer-dich" {
+		t.Fatal("the agent still expands every variable")
+	}
+	cfg := Config{Version: 1, Modules: map[string]ModuleCfg{"mqtt": m},
+		Hats: []Hat{{Key: "a", Activities: []string{}, Modules: map[string]ModuleCfg{"x": {"secret": "s3", "image": "i"}}}}}
+	r := cfg.Redacted()
+	if r.Modules["mqtt"]["password"] != "${env:HATRACK_PW}" || r.Modules["mqtt"]["nested"].(map[string]any)["api_token"] != "****" ||
+		r.Hats[0].Modules["x"]["secret"] != "****" || r.Hats[0].Modules["x"]["image"] != "i" {
+		t.Fatalf("redacted: %+v %+v", r.Modules, r.Hats[0].Modules)
+	}
+	if cfg.Modules["mqtt"]["nested"].(map[string]any)["api_token"] != "klartext" {
+		t.Fatal("the original stays untouched")
+	}
+	w := strings.Join(cfg.Warnings(false), "\n")
+	if !strings.Contains(w, "api_token") || !strings.Contains(w, "hats.a.modules.x.secret") {
+		t.Fatalf("nested secrets warn: %s", w)
+	}
+}

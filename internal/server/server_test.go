@@ -37,10 +37,12 @@ func setup(t *testing.T) *env {
 	srv.Loc = time.UTC
 	srv.limiter.Delay = func(int) time.Duration { return 0 }
 	e.ts = httptest.NewServer(srv.Handler())
-	_, e.token, err = st.AddDevice(context.Background(), "laptop")
+	dev, token, err := st.AddDevice(context.Background(), "laptop")
 	if err != nil {
 		t.Fatal(err)
 	}
+	e.token = token
+	st.SetDeviceConfig(context.Background(), dev.ID, true) // the tests set up their hats through the API
 	t.Cleanup(func() { e.ts.Close(); st.Close() })
 	return e
 }
@@ -199,5 +201,41 @@ func TestStreamPushesState(t *testing.T) {
 	e.do("PUT", "/api/config", cfgYAML)
 	if ev, _ := next(); ev != "config" {
 		t.Fatalf("config push: %s", ev)
+	}
+}
+
+func TestDeviceRights(t *testing.T) {
+	e := setup(t)
+	// a second device without the right to change the configuration
+	_, token, _ := e.st.AddDevice(context.Background(), "phone")
+	other := &env{t: t, ts: e.ts, st: e.st, token: token, now: e.now}
+	if r, out := other.do("PUT", "/api/config", "version: 1\nhats:\n  x:\n    activities: []\n"); r.StatusCode != 403 || !strings.Contains(out, "Devices") {
+		t.Fatalf("config write without the right: %d %s", r.StatusCode, out)
+	}
+	// it may still record its switches, but never rewrite history
+	b, _ := json.Marshal([]core.Event{e.ev(-5, core.EvSwitch, "x", "")})
+	if r, _ := other.do("POST", "/api/events", string(b)); r.StatusCode != 200 {
+		t.Fatalf("events: %d", r.StatusCode)
+	}
+	c := core.NewEvent("phone", core.EvCorrection, e.now)
+	c.Supersedes = []string{"x"}
+	b, _ = json.Marshal([]core.Event{c})
+	if r, _ := other.do("POST", "/api/events", string(b)); r.StatusCode != 403 {
+		t.Fatalf("corrections from a device: %d", r.StatusCode)
+	}
+}
+
+func TestLoginOneAtATime(t *testing.T) {
+	l := &loginLimiter{Delay: func(int) time.Duration { return 30 * time.Millisecond }}
+	start := time.Now()
+	done := make(chan struct{})
+	for i := 0; i < 5; i++ {
+		go func() { l.wait(); l.result(false); done <- struct{}{} }()
+	}
+	for i := 0; i < 5; i++ {
+		<-done
+	}
+	if d := time.Since(start); d < 150*time.Millisecond {
+		t.Fatalf("parallel attempts wait in line: %v", d)
 	}
 }

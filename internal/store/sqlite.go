@@ -68,7 +68,8 @@ CREATE TABLE IF NOT EXISTS devices (
   token_hash TEXT NOT NULL UNIQUE,
   caps       TEXT NOT NULL DEFAULT '',
   last_seen  INTEGER NOT NULL DEFAULT 0,
-  created    INTEGER NOT NULL
+  created    INTEGER NOT NULL,
+  can_config INTEGER NOT NULL DEFAULT 0
 );
 `
 
@@ -113,6 +114,15 @@ func migrate(db *sql.DB) error {
 	}
 	if n == 0 {
 		if _, err := db.Exec(`ALTER TABLE events ADD COLUMN detail TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+	}
+	// MVP 5: devices may change the configuration only when allowed
+	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('devices') WHERE name = 'can_config'`).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		if _, err := db.Exec(`ALTER TABLE devices ADD COLUMN can_config INTEGER NOT NULL DEFAULT 0`); err != nil {
 			return err
 		}
 	}
@@ -402,12 +412,23 @@ func (s *SQLite) AddDevice(ctx context.Context, name string) (Device, string, er
 	return d, token, nil
 }
 
+func (s *SQLite) SetDeviceConfig(ctx context.Context, id string, allowed bool) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE devices SET can_config = ? WHERE id = ?`, allowed, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *SQLite) DeviceByToken(ctx context.Context, token string) (Device, error) {
 	var d Device
 	var caps string
 	var seen int64
-	err := s.db.QueryRowContext(ctx, `SELECT id, name, caps, last_seen FROM devices WHERE token_hash = ?`,
-		hashToken(token)).Scan(&d.ID, &d.Name, &caps, &seen)
+	err := s.db.QueryRowContext(ctx, `SELECT id, name, caps, last_seen, can_config FROM devices WHERE token_hash = ?`,
+		hashToken(token)).Scan(&d.ID, &d.Name, &caps, &seen, &d.CanConfig)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Device{}, ErrNotFound
 	}
@@ -424,7 +445,7 @@ func (s *SQLite) DeviceByToken(ctx context.Context, token string) (Device, error
 }
 
 func (s *SQLite) Devices(ctx context.Context) ([]Device, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, caps, last_seen FROM devices ORDER BY name`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name, caps, last_seen, can_config FROM devices ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -434,7 +455,7 @@ func (s *SQLite) Devices(ctx context.Context) ([]Device, error) {
 		var d Device
 		var caps string
 		var seen int64
-		if err := rows.Scan(&d.ID, &d.Name, &caps, &seen); err != nil {
+		if err := rows.Scan(&d.ID, &d.Name, &caps, &seen, &d.CanConfig); err != nil {
 			return nil, err
 		}
 		if caps != "" {

@@ -24,6 +24,12 @@
       <form method="post" action="/setup/devices"><input type="hidden" name="op" value="delete"><input type="hidden" name="id" value="{{.ID}}">
         <button class="danger" title="{{t $.Lang "web.dev.remove_hint" .Name}}" onclick="return confirm(this.title)">{{t $.Lang "web.dev.remove"}}</button></form>
     </div>
+    <form method="post" action="/setup/devices" class="devperm">
+      <input type="hidden" name="op" value="config"><input type="hidden" name="id" value="{{.ID}}">
+      <input type="hidden" name="allow" value="{{if .CanConfig}}0{{else}}1{{end}}">
+      <span class="small">{{if .CanConfig}}{{t $.Lang "web.dev.config_on"}}{{else}}<span class="dim">{{t $.Lang "web.dev.config_off"}}</span>{{end}}</span>
+      <button class="small">{{if .CanConfig}}{{t $.Lang "web.dev.config_revoke"}}{{else}}{{t $.Lang "web.dev.config_grant"}}{{end}}</button>
+    </form>
     {{if .Reported}}
     <table class="mods">
       {{range .Modules}}<tr><td>{{.Title}}</td><td>{{if .OK}}<span class="okmark">✓</span> {{.Backend}}{{else}}<span class="dim">{{t $.Lang "web.dev.unavailable"}}</span>{{end}}</td><td class="dim small">{{.Choices}}</td></tr>{{end}}
@@ -42,6 +48,7 @@
 <form method="post" action="/setup/devices" class="card newhat">
   <input type="hidden" name="op" value="add">
   <input type="text" name="name" placeholder="{{t $.Lang "web.dev.name"}}" required class="grow">
+  <label class="inline"><input type="checkbox" name="can_config" value="1"> {{t $.Lang "web.dev.config_new"}}</label>
   <button class="primary">{{t $.Lang "web.setup.add"}}</button>
 </form>
 <p class="dim small">{{t $.Lang "web.dev.add_note"}}</p>

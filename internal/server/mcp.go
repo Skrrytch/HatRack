@@ -471,7 +471,7 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 			if err != nil {
 				return nil, configOut{}, err
 			}
-			b, err := cfg.Export()
+			b, err := cfg.Redacted().Export() // an AI reads, it needs no passwords
 			if err != nil {
 				return nil, configOut{}, err
 			}

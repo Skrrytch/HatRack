@@ -62,7 +62,8 @@ func TestCoreModules(t *testing.T) {
 	srv.Loc = time.UTC
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
-	_, token, _ := st.AddDevice(context.Background(), "laptop")
+	dev, token, _ := st.AddDevice(context.Background(), "laptop")
+	st.SetDeviceConfig(context.Background(), dev.ID, true)
 	e := &env{t: t, ts: ts, st: st, token: token, now: time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC)}
 	srv.Start(context.Background())
 	if fake.lastState().Mode != "none" {

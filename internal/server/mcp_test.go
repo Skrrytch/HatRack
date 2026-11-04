@@ -173,10 +173,11 @@ func TestMCPTools(t *testing.T) {
 	if len(hats.Hats) != 2 || hats.Hats[0].Name != "VENOM" || len(hats.Hats[0].Activities) != 2 || hats.WorkHours.Start != "08:00" {
 		t.Fatalf("hats: %+v", hats)
 	}
+	e.do("PUT", "/api/config", "version: 1\nmodules:\n  mqtt:\n    broker: mqtt://b\n    password: klartext-pw\nhats:\n  venom:\n    name: VENOM\n    activities: [development, review]\n")
 	var cfg configOut
 	call(t, cs, "get_config", nil, &cfg)
-	if !strings.Contains(cfg.YAML, "venom:") {
-		t.Fatalf("config: %s", cfg.YAML)
+	if !strings.Contains(cfg.YAML, "venom:") || strings.Contains(cfg.YAML, "klartext-pw") || !strings.Contains(cfg.YAML, `password: "****"`) {
+		t.Fatalf("config, passwords masked: %s", cfg.YAML)
 	}
 }
 

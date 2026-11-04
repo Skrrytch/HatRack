@@ -15,6 +15,7 @@ import (
 
 	"hatrack/internal/agent"
 	"hatrack/internal/i18n"
+	"hatrack/internal/store"
 	"hatrack/internal/tray"
 )
 
@@ -303,7 +304,12 @@ func (a *App) setupLocal(ctx context.Context, d *dialog, o setupOpts, step func(
 		if i > 1 {
 			n = fmt.Sprintf("%s-%d", name, i)
 		}
-		if _, token, err = st.AddDevice(ctx, n); err == nil {
+		var dev store.Device
+		if dev, token, err = st.AddDevice(ctx, n); err == nil {
+			// this computer runs the server: it may change the configuration
+			if err := st.SetDeviceConfig(ctx, dev.ID, true); err != nil {
+				return agent.Config{}, err
+			}
 			name = n
 			break
 		}

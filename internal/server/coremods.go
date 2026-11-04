@@ -61,7 +61,7 @@ func (s *Server) configureCore(cfg core.Config) {
 	for id, p := range s.publishers() {
 		var raw json.RawMessage
 		if m, ok := cfg.Modules[id]; ok {
-			raw, _ = json.Marshal(core.ExpandEnv(m))
+			raw, _ = json.Marshal(core.ExpandEnvPrefix(m, "HATRACK_"))
 		}
 		if err := p.Configure(raw); err != nil {
 			log.Printf("module %s: %v", id, err)

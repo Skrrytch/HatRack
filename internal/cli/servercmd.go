@@ -91,6 +91,7 @@ func (a *App) serverCmd() *cobra.Command {
 	c.Flags().StringVar(&listen, "listen", defaultListen(), i18n.T("cli.server.listen"))
 
 	device := &cobra.Command{Use: "device", Short: i18n.T("cli.device.short")}
+	var canConfig bool
 	add := &cobra.Command{
 		Use: "add <name>", Short: i18n.T("cli.device.add"), Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -99,15 +100,21 @@ func (a *App) serverCmd() *cobra.Command {
 				return err
 			}
 			defer st.Close()
-			_, token, err := st.AddDevice(cmd.Context(), args[0])
+			dev, token, err := st.AddDevice(cmd.Context(), args[0])
 			if err != nil {
 				return err
+			}
+			if canConfig {
+				if err := st.SetDeviceConfig(cmd.Context(), dev.ID, true); err != nil {
+					return err
+				}
 			}
 			fmt.Fprintln(a.Err, i18n.T("cli.device.token", args[0]))
 			fmt.Fprintln(a.Out, token)
 			return nil
 		},
 	}
+	add.Flags().BoolVar(&canConfig, "config", false, i18n.T("cli.device.config"))
 	list := &cobra.Command{
 		Use: "list", Short: i18n.T("cli.device.list"), Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -125,7 +132,11 @@ func (a *App) serverCmd() *cobra.Command {
 				if !d.LastSeen.IsZero() {
 					seen = d.LastSeen.Local().Format("2006-01-02 15:04")
 				}
-				fmt.Fprintf(a.Out, "%-24s %s\n", d.Name, seen)
+				perm := ""
+				if d.CanConfig {
+					perm = "  " + i18n.T("cli.device.can_config")
+				}
+				fmt.Fprintf(a.Out, "%-24s %s%s\n", d.Name, seen, perm)
 			}
 			return nil
 		},

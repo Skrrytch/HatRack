@@ -169,6 +169,7 @@ table.list a:hover { text-decoration: underline; }
 td.acts { text-align: right; white-space: nowrap; }
 td.acts form { margin: 0; display: inline-flex; gap: .3rem; }
 .hatpage .bighat .hatglyph path + path { fill: var(--c) !important; } /* follows a picked colour at once */
+.devperm { display: flex; gap: .6rem; align-items: center; margin: .5rem 0; }
 .colorpick { display: flex; flex-direction: column; gap: .2rem; font-size: .85rem; }
 .colorpick .row { display: flex; gap: .6rem; align-items: center; }
 .swatches { display: inline-flex; gap: .35rem; align-items: center; flex-wrap: wrap; }

@@ -423,10 +423,11 @@ func (s *Server) page(needWrite bool, h func(http.ResponseWriter, *http.Request,
 			http.Redirect(w, r, r.URL.Path+queryString(q), http.StatusSeeOther)
 			return
 		}
-		if tok := q.Get("token"); tok != "" && r.Method == http.MethodGet {
-			// A device token gives a read-only view; the login gives more.
-			http.SetCookie(w, &http.Cookie{Name: tokenCookie, Value: tok, Path: "/", MaxAge: 365 * 86400,
-				HttpOnly: true, Secure: secure(r), SameSite: http.SameSiteStrictMode})
+		if q.Get("token") != "" && r.Method == http.MethodGet {
+			// The read-only view by device token is gone (a token in an
+			// address ends up in histories); old links lose the token and
+			// lead to the login.
+			http.SetCookie(w, &http.Cookie{Name: tokenCookie, Path: "/", MaxAge: -1})
 			q.Del("token")
 			http.Redirect(w, r, r.URL.Path+queryString(q), http.StatusSeeOther)
 			return

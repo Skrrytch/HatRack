@@ -106,10 +106,12 @@ func newRig(t *testing.T) *rig {
 		}
 		r.handle.ServeHTTP(w, req)
 	}))
-	_, r.token, err = st.AddDevice(context.Background(), "laptop")
+	dev, token, err := st.AddDevice(context.Background(), "laptop")
 	if err != nil {
 		t.Fatal(err)
 	}
+	r.token = token
+	st.SetDeviceConfig(context.Background(), dev.ID, true)
 	t.Cleanup(func() { r.srv.Close(); st.Close() })
 	return r
 }

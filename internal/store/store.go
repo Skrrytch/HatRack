@@ -29,6 +29,10 @@ type Device struct {
 	Name         string          `json:"name"`
 	LastSeen     time.Time       `json:"last_seen,omitzero"`
 	Capabilities json.RawMessage `json:"capabilities,omitempty"`
+	// CanConfig lets the device change the configuration (hat config
+	// import). Off by default: whoever writes the configuration decides
+	// what every agent runs (scripts, programs).
+	CanConfig bool `json:"can_config,omitempty"`
 }
 
 // Store is the storage interface of the core.
@@ -56,6 +60,8 @@ type Store interface {
 	// AddDevice registers a device and returns its token (shown only once).
 	AddDevice(ctx context.Context, name string) (Device, string, error)
 	DeviceByToken(ctx context.Context, token string) (Device, error)
+	// SetDeviceConfig allows or forbids a device to change the configuration.
+	SetDeviceConfig(ctx context.Context, id string, allowed bool) error
 	Devices(ctx context.Context) ([]Device, error)
 	// MCP tokens: created with their scopes, the token is returned once.
 	AddMCPToken(ctx context.Context, name string, scopes []string) (MCPToken, string, error)

@@ -448,28 +448,82 @@ func copyModules(m map[string]ModuleCfg) map[string]ModuleCfg {
 // ExpandEnv replaces ${env:NAME} in all strings of a module configuration.
 // Values stay references in stored and exported configuration; only the agent
 // expands them when it applies a switch.
-func ExpandEnv(v any) any {
+func ExpandEnv(v any) any { return ExpandEnvPrefix(v, "") }
+
+// ExpandEnvPrefix is ExpandEnv for variables whose name starts with prefix;
+// other references become empty. The server uses "HATRACK_", so whoever can
+// write the configuration cannot read any other variable of the server.
+func ExpandEnvPrefix(v any, prefix string) any {
+	return mapStrings(v, func(_, s string) string {
+		return envRe.ReplaceAllStringFunc(s, func(m string) string {
+			name := envRe.FindStringSubmatch(m)[1]
+			if !strings.HasPrefix(name, prefix) {
+				return ""
+			}
+			return os.Getenv(name)
+		})
+	}, "")
+}
+
+// mapStrings applies fn to every string in a module configuration; key is
+// the name of the setting the string belongs to (for lists, the list's).
+func mapStrings(v any, fn func(key, s string) string, key string) any {
 	switch x := v.(type) {
 	case string:
-		return envRe.ReplaceAllStringFunc(x, func(m string) string {
-			return os.Getenv(envRe.FindStringSubmatch(m)[1])
-		})
+		return fn(key, x)
 	case map[string]any:
 		out := make(map[string]any, len(x))
 		for k, e := range x {
-			out[k] = ExpandEnv(e)
+			out[k] = mapStrings(e, fn, k)
 		}
 		return out
 	case ModuleCfg:
-		return ModuleCfg(ExpandEnv(map[string]any(x)).(map[string]any))
+		return ModuleCfg(mapStrings(map[string]any(x), fn, key).(map[string]any))
 	case []any:
 		out := make([]any, len(x))
 		for i, e := range x {
-			out[i] = ExpandEnv(e)
+			out[i] = mapStrings(e, fn, key)
 		}
 		return out
 	}
 	return v
+}
+
+// Redacted returns a copy in which secrets typed in plain text (settings
+// named like password or token, see IsSecretKey) read "****". References
+// like ${env:NAME} stay, they give nothing away. For readers that only look,
+// such as an AI over MCP.
+func (c Config) Redacted() Config {
+	red := func(m ModuleCfg) ModuleCfg {
+		if m == nil {
+			return nil
+		}
+		return mapStrings(m, func(k, s string) string {
+			if IsSecretKey(k) && s != "" && !IsEnvRef(s) {
+				return "****"
+			}
+			return s
+		}, "").(ModuleCfg)
+	}
+	out := c
+	if c.Modules != nil {
+		out.Modules = map[string]ModuleCfg{}
+		for id, m := range c.Modules {
+			out.Modules[id] = red(m)
+		}
+	}
+	out.Hats = make([]Hat, len(c.Hats))
+	for i, h := range c.Hats {
+		h.Modules = nil
+		if c.Hats[i].Modules != nil {
+			h.Modules = map[string]ModuleCfg{}
+			for id, m := range c.Hats[i].Modules {
+				h.Modules[id] = red(m)
+			}
+		}
+		out.Hats[i] = h
+	}
+	return out
 }
 
 var envRe = regexp.MustCompile(`\$\{env:([A-Za-z_][A-Za-z0-9_]*)\}`)
@@ -488,14 +542,20 @@ var secretKeyRe = regexp.MustCompile(`(?i)(token|password|passwd|secret|api_?key
 func (c Config) Warnings(checkFiles bool) []string {
 	var w []string
 	walk := func(where string, m ModuleCfg) {
+		// secrets may also hide in nested settings and lists
+		seen := map[string]bool{}
+		mapStrings(m, func(k, s string) string {
+			if secretKeyRe.MatchString(k) && !envRe.MatchString(s) && s != "" && !seen[k] {
+				seen[k] = true
+				w = append(w, fmt.Sprintf("%s.%s looks like a secret in plain text; use ${env:NAME}", where, k))
+			}
+			return s
+		}, "")
 		for _, k := range sortedKeys(m) {
 			v := m[k]
 			s, ok := v.(string)
 			if !ok {
 				continue
-			}
-			if secretKeyRe.MatchString(k) && !envRe.MatchString(s) && s != "" {
-				w = append(w, fmt.Sprintf("%s.%s looks like a secret in plain text; use ${env:NAME}", where, k))
 			}
 			if checkFiles && (k == "image" || k == "file" || k == "path") && !envRe.MatchString(s) && !strings.HasPrefix(s, BuiltinPrefix) {
 				if _, err := os.Stat(ExpandPath(s)); err != nil {

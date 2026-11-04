@@ -181,7 +181,7 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatalf("status without agent: %d %q", code, errs)
 	}
 	// device and login
-	token := strings.TrimSpace(w.must("server", "device", "add", "testbox"))
+	token := strings.TrimSpace(w.must("server", "device", "add", "testbox", "--config"))
 	if !strings.HasPrefix(token, "hat_") {
 		t.Fatalf("token: %q", token)
 	}
@@ -294,7 +294,7 @@ func TestEndToEnd(t *testing.T) {
 
 	// the Now page
 	resp := w.must("server", "device", "list")
-	if !strings.Contains(resp, "testbox") {
+	if !strings.Contains(resp, "testbox") || !strings.Contains(resp, "Konfiguration") && !strings.Contains(resp, "configuration") {
 		t.Fatalf("device list: %s", resp)
 	}
 	pageOut, err := exec.Command("curl", "-s", "-H", "Authorization: Bearer "+token, w.url+"/healthz").Output()
