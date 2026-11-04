@@ -33,6 +33,7 @@ type setupHat struct {
 	Activities       int
 	Archived         bool
 	First, Last      bool
+	Deletable        bool // archived and never used: it may go for good
 }
 
 type setupView struct {
@@ -414,6 +415,19 @@ func splitList(s string) []string {
 	return out
 }
 
+// changeText translates a change reported by core.Merge ("hat added: x").
+func changeText(lang, c string) string {
+	kind, arg, ok := strings.Cut(c, ": ")
+	if !ok {
+		return c
+	}
+	key := "web.change." + strings.NewReplacer(" ", "_", ".", "_").Replace(kind)
+	if t := i18n.In(lang, key, arg); !strings.HasPrefix(t, "web.change.") {
+		return t
+	}
+	return c
+}
+
 // freeColor returns the first palette colour no hat uses yet.
 func freeColor(cfg core.Config) string {
 	used := map[string]bool{}
@@ -522,7 +536,9 @@ func (s *Server) fillSetup(v *view, cfg core.Config) {
 	}
 	for _, h := range cfg.Hats {
 		if h.Archived {
-			v.Setup.Archived = append(v.Setup.Archived, setupHat{Key: h.Key, Name: h.DisplayName(), Color: pal.color(h.Key), Archived: true})
+			used, err := s.st.HatUsed(context.Background(), h.Key)
+			v.Setup.Archived = append(v.Setup.Archived, setupHat{Key: h.Key, Name: h.DisplayName(), Color: pal.color(h.Key), Archived: true,
+				Deletable: err == nil && !used})
 		}
 	}
 }
@@ -559,6 +575,16 @@ func (s *Server) hatsAction(w http.ResponseWriter, r *http.Request, acc access) 
 			c.Hats[i].Archived = true
 		case "restore":
 			c.Hats[i].Archived = false
+		case "delete":
+			// only an archived hat that no entry refers to; the log stays whole
+			used, err := s.st.HatUsed(r.Context(), key)
+			if err != nil {
+				return err
+			}
+			if !c.Hats[i].Archived || used {
+				return badConfig{errors.New(i18n.In(lang, "web.setup.notdeletable"))}
+			}
+			c.Hats = append(c.Hats[:i], c.Hats[i+1:]...)
 		case "up", "down":
 			// move among the active hats; archived ones keep their place
 			step := -1
@@ -810,7 +836,10 @@ func (s *Server) importAction(w http.ResponseWriter, r *http.Request, acc access
 		return
 	}
 	v.Setup.Import.Preview = true
-	v.Setup.Import.Changes, v.Setup.Import.Warnings = res.Changes, res.Warnings
+	for _, c := range res.Changes {
+		v.Setup.Import.Changes = append(v.Setup.Import.Changes, changeText(lang, c))
+	}
+	v.Setup.Import.Warnings = res.Warnings
 	s.fillSetup(&v, cfg)
 	s.render(w, v, http.StatusOK)
 }

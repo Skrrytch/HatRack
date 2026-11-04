@@ -48,6 +48,10 @@ type Store interface {
 	AddDevice(ctx context.Context, name string) (Device, string, error)
 	DeviceByToken(ctx context.Context, token string) (Device, error)
 	Devices(ctx context.Context) ([]Device, error)
+	// DeleteDevice removes a device; its token stops working at once.
+	DeleteDevice(ctx context.Context, id string) error
+	// HatUsed reports whether any event (or correction) refers to the hat.
+	HatUsed(ctx context.Context, key string) (bool, error)
 	TouchDevice(ctx context.Context, id string, caps json.RawMessage) error
 
 	// SetPasswordHash stores the web UI password hash and ends all sessions.

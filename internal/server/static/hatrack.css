@@ -134,7 +134,11 @@ button.hatbtn:hover { background: color-mix(in srgb, var(--c) 12%, transparent);
 .undo { margin: 0 0 1rem; }
 .bar { position: relative; height: 1.8rem; background: var(--soft); border-radius: .4rem; overflow: hidden; }
 .bar i { position: absolute; top: 0; bottom: 0; background: var(--c); min-width: 2px; }
-.daybar { display: grid; grid-template-columns: 6.5rem 1fr 5rem; gap: .6rem; align-items: center; margin: .3rem 0; }
+.daybar { display: grid; grid-template-columns: 7.5rem 1fr 5.5rem; gap: .6rem; align-items: center; margin: .15rem 0; padding: .2rem .4rem; border-radius: .5rem; text-decoration: none; }
+.daybar:hover { background: var(--card); box-shadow: var(--shadow); }
+.daybar:hover .dlabel { text-decoration: underline; }
+.daybar .ico { opacity: .4; vertical-align: -.2em; }
+.daybar:hover .ico { opacity: 1; }
 
 /* ---- day: entries ---- */
 .ivlist { padding: .3rem .6rem; }

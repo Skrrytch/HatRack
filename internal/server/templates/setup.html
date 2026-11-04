@@ -35,7 +35,7 @@
   {{range .Archived}}
     <tr>
       <td class="dim"><span class="dot" style="--c:{{.Color}}"></span>{{.Name}} <small>{{.Key}}</small></td>
-      <td class="acts"><form method="post" action="/setup/hats"><input type="hidden" name="key" value="{{.Key}}"><button name="op" value="restore">{{t $.Lang "web.setup.restore"}}</button></form></td>
+      <td class="acts"><form method="post" action="/setup/hats"><input type="hidden" name="key" value="{{.Key}}"><button name="op" value="restore">{{t $.Lang "web.setup.restore"}}</button>{{if .Deletable}}<button name="op" value="delete" class="danger" title="{{t $.Lang "web.setup.delete_hint"}}" onclick="return confirm(this.title)">{{t $.Lang "web.day.delete"}}</button>{{end}}</form></td>
     </tr>
   {{end}}
   </table>

@@ -421,6 +421,18 @@ func (s *SQLite) TouchDevice(ctx context.Context, id string, caps json.RawMessag
 	return err
 }
 
+func (s *SQLite) DeleteDevice(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM devices WHERE id = ?`, id)
+	return err
+}
+
+func (s *SQLite) HatUsed(ctx context.Context, key string) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM events WHERE hat = ?
+	  OR (type = 'correction' AND data LIKE ?))`, key, `%"hat":"`+key+`"%`).Scan(&n)
+	return n == 1, err
+}
+
 func (s *SQLite) Backup(ctx context.Context, path string) error {
 	if _, err := os.Stat(path); err == nil {
 		return fmt.Errorf("%s already exists", path)

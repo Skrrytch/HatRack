@@ -221,7 +221,7 @@ func TestDayWeekAndCSV(t *testing.T) {
 	}
 	// the week page: bars per day, totals, comparison with the previous week
 	_, week := b.do("GET", "/week?date="+date, nil)
-	for _, want := range []string{"2026-11-02 – 2026-11-08", "VENOM", "2h 00m", "2h 30m", "CSV", "/week.csv?date=2026-11-02"} {
+	for _, want := range []string{"Mon 2026-11-02 – Sun 2026-11-08", "VENOM", "2h 00m", "2h 30m", "CSV", "/week.csv?date=2026-11-02"} {
 		if !strings.Contains(week, want) {
 			t.Errorf("week page lacks %q", want)
 		}

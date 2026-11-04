@@ -623,6 +623,21 @@ func (s *Server) intervalsIn(ctx context.Context, from, to time.Time) ([]core.In
 
 func dateStr(t time.Time) string { return t.Format("2006-01-02") }
 
+// dayLabel shows a date the way the language writes it: "Mi 04.11.2026" in
+// German, "Wed 2026-11-04" in English. Without year: "Mi 04.11." / "Wed 11-04".
+func dayLabel(lang string, t time.Time, year bool) string {
+	wd := i18n.In(lang, "web.wd."+core.Weekdays[t.Weekday()])
+	switch {
+	case lang == "de" && year:
+		return wd + " " + t.Format("02.01.2006")
+	case lang == "de":
+		return wd + " " + t.Format("02.01.")
+	case year:
+		return wd + " " + t.Format("2006-01-02")
+	}
+	return wd + " " + t.Format("01-02")
+}
+
 func (s *Server) totalViews(tot []core.HatTotal, prev map[string]time.Duration, pal palette, nm map[string]string, lang string) []totalView {
 	var max time.Duration
 	for _, t := range tot {
@@ -685,7 +700,7 @@ func (s *Server) dayPage(w http.ResponseWriter, r *http.Request, acc access) {
 	v := s.base(r, "day", acc)
 	v.Live = dateStr(day) == dateStr(s.Now().In(loc))
 	d := &v.Day
-	d.Title = day.Format("Mon 2006-01-02")
+	d.Title = dayLabel(lang, day, true)
 	d.Prev, d.Next = "/day?date="+dateStr(day.AddDate(0, 0, -1)), "/day?date="+dateStr(next)
 	d.TL = s.timeline(day, cfg, iv, lang)
 	d.Date = dateStr(day)
@@ -748,7 +763,7 @@ func (s *Server) weekPage(w http.ResponseWriter, r *http.Request, acc access) {
 	v := s.base(r, "week", acc)
 	v.Live = !s.Now().Before(start) && s.Now().Before(end)
 	wv := &v.Week
-	wv.Title = fmt.Sprintf("%s – %s", start.Format("2006-01-02"), end.AddDate(0, 0, -1).Format("2006-01-02"))
+	wv.Title = fmt.Sprintf("%s – %s", dayLabel(lang, start, true), dayLabel(lang, end.AddDate(0, 0, -1), true))
 	wv.Prev, wv.Next = "/week?date="+dateStr(start.AddDate(0, 0, -7)), "/week?date="+dateStr(end)
 	wv.CSV = "/week.csv?date=" + dateStr(start)
 
@@ -772,7 +787,7 @@ func (s *Server) weekPage(w http.ResponseWriter, r *http.Request, acc access) {
 	}
 	for d := 0; d < 7; d++ {
 		ds := start.AddDate(0, 0, d)
-		bar := dayBar{Label: ds.Format("Mon 02.01."), Date: dateStr(ds), Duration: core.FormatDuration(daySum[d])}
+		bar := dayBar{Label: dayLabel(lang, ds, false), Date: dateStr(ds), Duration: core.FormatDuration(daySum[d])}
 		var x float64
 		for _, i := range perDay[d] {
 			wd := float64(i.Duration()) / float64(max(busiest, time.Minute)) * 100

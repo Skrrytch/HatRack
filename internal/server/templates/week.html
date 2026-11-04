@@ -9,11 +9,11 @@
 </div>
 
 {{range .Days}}
-<div class="daybar">
-  <a href="/day?date={{.Date}}" style="color:inherit;text-decoration:none">{{.Label}}</a>
+<a class="daybar" href="/day?date={{.Date}}" title="{{t $.Lang "web.week.open_day" .Label}}">
+  <span class="dlabel">{{.Label}}</span>
   <div class="bar">{{range .Segments}}<i title="{{.Title}}" style="left:{{printf "%.3f" .Left}}%;width:{{printf "%.3f" .Width}}%;--c:{{.Color}}"></i>{{end}}</div>
-  <span class="dim" style="text-align:right">{{.Duration}}</span>
-</div>
+  <span class="dim num" style="text-align:right">{{.Duration}} {{template "icon" "right"}}</span>
+</a>
 {{end}}
 
 <h1>{{t $.Lang "cli.log.totals"}}</h1>

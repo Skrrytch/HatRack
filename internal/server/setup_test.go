@@ -176,7 +176,7 @@ func TestSetupImportExport(t *testing.T) {
 	}
 	y := "version: 1\nhats:\n  new:\n    name: New\n    activities: [a]\n"
 	r, out = b.do("POST", "/setup/import", url.Values{"data": {y}, "op": {"preview"}})
-	if r.StatusCode != 200 || !strings.Contains(out, "hat added: new") || !strings.Contains(out, `value="apply"`) {
+	if r.StatusCode != 200 || !strings.Contains(out, "new hat: new") || !strings.Contains(out, `value="apply"`) {
 		t.Fatalf("preview: %d", r.StatusCode)
 	}
 	if _, ok := config(t, e).Hat("new"); ok {
@@ -275,5 +275,26 @@ func TestSetupChoicesFromDevices(t *testing.T) {
 	}
 	if h, _ := config(t, e).Hat("venom"); h.Modules["wallpaper"]["image"] != "/pics/a.jpg" {
 		t.Fatalf("image: %+v", h.Modules)
+	}
+}
+
+func TestSetupDeleteUnusedHat(t *testing.T) {
+	e, b := setupBrowser(t)
+	b.do("POST", "/setup/hats", url.Values{"op": {"add"}, "name": {"Tippfehler"}})
+	b.do("POST", "/setup/hats", url.Values{"op": {"archive"}, "key": {"tippfehler"}})
+	b.do("POST", "/setup/hats", url.Values{"op": {"archive"}, "key": {"tag"}})
+	_, out := b.do("GET", "/setup", nil)
+	if strings.Count(out, `name="op" value="delete"`) != 1 {
+		t.Fatal("only the unused archived hat offers delete")
+	}
+	if r, _ := b.do("POST", "/setup/hats", url.Values{"op": {"delete"}, "key": {"tag"}}); !strings.Contains(r.Header.Get("Location"), "e=") {
+		t.Fatal("a used hat cannot be deleted")
+	}
+	b.do("POST", "/setup/hats", url.Values{"op": {"delete"}, "key": {"tippfehler"}})
+	if _, ok := config(t, e).Hat("tippfehler"); ok {
+		t.Fatal("unused hat still there")
+	}
+	if _, ok := config(t, e).Hat("tag"); !ok {
+		t.Fatal("used hat gone")
 	}
 }
