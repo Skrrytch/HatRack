@@ -79,13 +79,14 @@ func (a *App) onCmd() *cobra.Command {
 			case 0:
 			case 1:
 				req.Hat = args[0]
-			case 3:
+			case 2:
+				return errors.New(i18n.T("err.on_usage"))
+			default:
 				if !strings.EqualFold(args[1], "do") {
 					return errors.New(i18n.T("err.on_usage"))
 				}
-				req.Hat, req.Activity, req.HasActivity = args[0], args[2], true
-			default:
-				return errors.New(i18n.T("err.on_usage"))
+				req.Hat, req.HasActivity = args[0], true
+				req.Activity, req.Detail = activityAndDetail(args[2:])
 			}
 			var err error
 			if req.At, err = parseAt(at, time.Now()); err != nil {
@@ -127,13 +128,51 @@ func (a *App) askResume(last string) string {
 func (a *App) doCmd() *cobra.Command {
 	var at string
 	cmd := &cobra.Command{
-		Use: "do <activity>", Short: i18n.T("cli.do.short"), Long: i18n.T("cli.do.long"), Args: cobra.ExactArgs(1),
+		Use: "do <activity> [detail]", Short: i18n.T("cli.do.short"), Long: i18n.T("cli.do.long"), Args: cobra.MinimumNArgs(1),
+		Example: "  hat do review\n  hat do review \"PR 482\"\n  hat do review: TAG-1366",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			t, err := parseAt(at, time.Now())
 			if err != nil {
 				return err
 			}
-			resp, err := a.call(agent.Request{Cmd: "do", Activity: args[0], At: t})
+			act, detail := activityAndDetail(args)
+			resp, err := a.call(agent.Request{Cmd: "do", Activity: act, Detail: detail, At: t})
+			if err != nil {
+				return err
+			}
+			a.printStatus(resp, true)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&at, "at", "", i18n.T("cli.at"))
+	return cmd
+}
+
+// activityAndDetail splits "review", "PR 482" (or "review:", "PR", "482",
+// or "review: PR 482") into the activity and its detail.
+func activityAndDetail(args []string) (string, string) {
+	act := args[0]
+	rest := args[1:]
+	if a, d, ok := strings.Cut(act, ":"); ok {
+		act = a
+		if d = strings.TrimSpace(d); d != "" {
+			rest = append([]string{d}, rest...)
+		}
+	}
+	return strings.TrimSpace(act), strings.TrimSpace(strings.Join(rest, " "))
+}
+
+func (a *App) detailCmd() *cobra.Command {
+	var at string
+	cmd := &cobra.Command{
+		Use: "detail <text|->", Short: i18n.T("cli.detail.short"), Long: i18n.T("cli.detail.long"), Args: cobra.MinimumNArgs(1),
+		Example: "  hat detail \"PR 482\"\n  hat detail https://jira.example.org/browse/TAG-1366\n  hat detail -",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			t, err := parseAt(at, time.Now())
+			if err != nil {
+				return err
+			}
+			resp, err := a.call(agent.Request{Cmd: "detail", Detail: strings.Join(args, " "), At: t})
 			if err != nil {
 				return err
 			}

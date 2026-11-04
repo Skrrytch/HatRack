@@ -20,6 +20,9 @@ func StatusLine(d StatusData, now time.Time) string {
 		if s.Activity != "" {
 			parts = append(parts, s.Activity)
 		}
+		if s.Detail != "" {
+			parts = append(parts, core.ShortDetail(s.Detail))
+		}
 		parts = append(parts, fmt.Sprintf("%s (%s)", i18n.T("cli.since", clock(s.Since)), core.FormatDuration(now.Sub(s.Since))))
 		return strings.Join(parts, " · ")
 	case core.ModePaused:

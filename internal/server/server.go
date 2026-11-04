@@ -121,9 +121,12 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 type StateResponse struct {
 	State          core.State        `json:"state"`
 	LastActivities map[string]string `json:"last_activities"`
-	ConfigRev      int64             `json:"config_rev"`
-	EventRev       int64             `json:"event_rev"` // grows with every stored event
-	ServerTime     time.Time         `json:"server_time"`
+	// RecentDetails: hat -> activity -> the last details (short form), for
+	// suggestions in the panel
+	RecentDetails map[string]map[string][]string `json:"recent_details,omitempty"`
+	ConfigRev     int64                          `json:"config_rev"`
+	EventRev      int64                          `json:"event_rev"` // grows with every stored event
+	ServerTime    time.Time                      `json:"server_time"`
 }
 
 func (s *Server) stateResponse(ctx context.Context) (StateResponse, error) {
@@ -143,7 +146,11 @@ func (s *Server) stateResponse(ctx context.Context) (StateResponse, error) {
 	if err != nil {
 		return StateResponse{}, err
 	}
-	return StateResponse{State: st, LastActivities: last, ConfigRev: rev, EventRev: erev, ServerTime: s.Now().UTC()}, nil
+	resp := StateResponse{State: st, LastActivities: last, ConfigRev: rev, EventRev: erev, ServerTime: s.Now().UTC()}
+	if ev, err := s.st.Effective(ctx, time.Time{}); err == nil {
+		resp.RecentDetails = core.RecentDetails(ev, s.Now().AddDate(0, 0, -14), 5)
+	}
+	return resp, nil
 }
 
 func (s *Server) broadcastState(ctx context.Context) {

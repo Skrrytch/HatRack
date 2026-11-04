@@ -122,3 +122,20 @@ func TestUnitAndAutostartText(t *testing.T) {
 		t.Errorf("desktop file:\n%s", d)
 	}
 }
+
+func TestActivityAndDetail(t *testing.T) {
+	for _, c := range []struct {
+		in       []string
+		act, det string
+	}{
+		{[]string{"review"}, "review", ""},
+		{[]string{"review", "PR 482"}, "review", "PR 482"},
+		{[]string{"review:", "PR", "482"}, "review", "PR 482"},
+		{[]string{"review: TAG-1366"}, "review", "TAG-1366"},
+		{[]string{"code review"}, "code review", ""},
+	} {
+		if a, d := activityAndDetail(c.in); a != c.act || d != c.det {
+			t.Errorf("%q: %q %q", c.in, a, d)
+		}
+	}
+}

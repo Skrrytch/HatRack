@@ -60,6 +60,8 @@ type HatInfo struct {
 	Activities []string `json:"activities"`
 	Resume     string   `json:"resume"`
 	Last       string   `json:"last,omitempty"` // last activity used, if still valid
+	// Recent details per activity, newest first, for suggestions
+	Recent map[string][]string `json:"recent,omitempty"`
 }
 
 // Snapshot is everything a menu client needs: the status, the hats and the
@@ -154,7 +156,7 @@ func (a *Agent) Handle(ctx context.Context, req Request) Response {
 			return fail(errText(err))
 		}
 		return ok(InfoData{Hat: ri.Hat.Key, Name: ri.Hat.DisplayName(), Mode: ri.Mode, Last: ri.Last})
-	case "on", "do", "off":
+	case "on", "do", "off", "detail":
 		return a.change(ctx, req, in)
 	case "log":
 		return a.log(ctx, req)
@@ -177,7 +179,9 @@ func (a *Agent) change(ctx context.Context, req Request, in core.Input) Response
 	switch req.Cmd {
 	case "on":
 		ev, err = core.PlanOn(a.config, a.state, a.last,
-			core.OnArgs{Hat: req.Hat, Activity: req.Activity, HasActivity: req.HasActivity, Answer: req.Answer}, in)
+			core.OnArgs{Hat: req.Hat, Activity: req.Activity, HasActivity: req.HasActivity, Answer: req.Answer, Detail: req.Detail}, in)
+	case "detail":
+		ev, err = core.PlanDetail(a.state, req.Detail, in)
 	case "do":
 		ev, err = core.PlanDo(a.config, a.state, req.Activity, req.Detail, in)
 	case "off":
@@ -206,7 +210,7 @@ func (a *Agent) snapshot() Snapshot {
 			acts = []string{}
 		}
 		info := HatInfo{Key: h.Key, Name: h.DisplayName(), Color: h.Color,
-			Activities: acts, Resume: a.config.ResumeMode(h)}
+			Activities: acts, Resume: a.config.ResumeMode(h), Recent: a.recent[h.Key]}
 		if l := a.last[h.Key]; l != "" {
 			if act, err := core.ResolveActivity(h, l); err == nil {
 				info.Last = act

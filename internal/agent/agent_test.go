@@ -456,3 +456,34 @@ func TestStaleStateIgnored(t *testing.T) {
 		t.Fatalf("stale state was adopted: %+v last=%q", st, last)
 	}
 }
+
+func TestDetailOverSocket(t *testing.T) {
+	r := newRig(t)
+	r.importConfig()
+	a, _ := r.agent("laptop")
+	r.start(a)
+	eventually(t, "config", func() bool { a.mu.Lock(); defer a.mu.Unlock(); return len(a.config.Hats) == 3 })
+	call(t, a, Request{Cmd: "on", Hat: "venom", HasActivity: true, Activity: "review"})
+	d := statusOf(t, call(t, a, Request{Cmd: "detail", Detail: "https://jira.example.org/browse/TAG-1366"}))
+	if d.State.Detail == "" || !strings.HasPrefix(StatusLine(d, time.Now()), "VENOM · review · TAG-1366 · ") {
+		t.Fatalf("detail: %+v %q", d.State, StatusLine(d, time.Now()))
+	}
+	d = statusOf(t, call(t, a, Request{Cmd: "do", Activity: "development", Detail: "Sprint"}))
+	if d.State.Activity != "development" || d.State.Detail != "Sprint" {
+		t.Fatalf("do with detail: %+v", d.State)
+	}
+	if resp := call(t, a, Request{Cmd: "detail", Detail: "x"}); !resp.OK {
+		t.Fatalf("detail: %+v", resp)
+	}
+	// the server learns the ticket link and tells the agent the recent details
+	eventually(t, "recent details", func() bool {
+		var snap Snapshot
+		json.Unmarshal(call(t, a, Request{Cmd: "hats"}).Data, &snap)
+		for _, h := range snap.Hats {
+			if h.Key == "venom" && len(h.Recent["review"]) > 0 && h.Recent["review"][0] == "TAG-1366" {
+				return true
+			}
+		}
+		return false
+	})
+}
