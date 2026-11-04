@@ -166,6 +166,7 @@ func (s *Server) broadcastState(ctx context.Context) {
 	}
 	b, _ := json.Marshal(resp)
 	s.hub.broadcast(message{Event: "state", Data: string(b)})
+	s.publishCore(ctx)
 }
 
 func (s *Server) postEvents(w http.ResponseWriter, r *http.Request, dev store.Device) {
@@ -417,6 +418,8 @@ func (s *Server) editConfig(ctx context.Context, dry bool, fn func(*core.Config)
 	setRev(n)
 	b, _ := json.Marshal(map[string]int64{"rev": n})
 	s.hub.broadcast(message{Event: "config", Data: string(b)})
+	s.configureCore(cfg)
+	s.publishCore(ctx) // names and colours may have changed
 	return cfg, nil
 }
 

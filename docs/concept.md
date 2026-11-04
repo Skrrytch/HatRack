@@ -139,6 +139,8 @@ then the components, then how it works and the architecture.
    then everything else sorted by benefit.
 4. [MVP 4](mvp-4.md): a detail field in the panel with suggestions from eight
    weeks, six hat colours with built-in wallpapers.
+5. [MVP 5](mvp-5.md): the current hat over MQTT, with Home Assistant
+   discovery.
 
 ## Later ideas
 

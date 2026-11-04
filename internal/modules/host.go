@@ -40,6 +40,9 @@ func (h *Host) Capabilities(ctx context.Context) map[string]Capability {
 	defer h.mu.Unlock()
 	out := map[string]Capability{}
 	for _, m := range h.Reg.All() {
+		if m.RunsIn() == RunsInCore {
+			continue // runs on the server, not on this device
+		}
 		c := Capability{}
 		switch x := m.(type) {
 		case interface{ Active(context.Context) Backend }:
@@ -105,7 +108,7 @@ func (h *Host) Run(ctx context.Context, hook string, sw Switch, cfgs map[string]
 	var fails []Failure
 	for _, m := range h.Reg.All() {
 		cfg, ok := cfgs[m.ID()]
-		if !ok {
+		if !ok || m.RunsIn() == RunsInCore {
 			continue
 		}
 		var err error

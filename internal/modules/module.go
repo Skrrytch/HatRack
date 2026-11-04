@@ -116,6 +116,7 @@ func Builtin(run Runner) *Registry {
 	r.Register(NewExec())
 	r.Register(NewLaunch(nil))
 	r.Register(NewNotify())
+	r.Register(NewMQTT())
 	return r
 }
 

@@ -30,7 +30,7 @@ block is MVP 3; the rest is the outlook and gets re-sorted after MVP 2.
 - An `activity_change` hook for modules (MVP 1 hooks run on hat changes only).
 - More backends: XFCE, MATE, sway, Hyprland.
 - Global shortcuts through the XDG GlobalShortcuts portal.
-- Home Assistant scenes per hat via MQTT.
+- Home Assistant scenes per hat: done the other way round in [MVP 5](mvp-5.md); HatRack publishes the state, automations in Home Assistant choose the scene.
 
 **Low benefit or later**
 

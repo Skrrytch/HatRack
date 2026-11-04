@@ -12,7 +12,7 @@ MVP 2 is built in slices, each usable on its own:
 3. **Web UI, Setup (done):** hats, activities and module settings as forms, YAML import and export.
 3b. **Web UI, daily use (done):** Now in the panel's style (status in the hat colour, Pause and Take off as in the panel, live duration, today per hat, edit link on every hat), a new hat with its activities in one step, several activities at once, module sections that say what applies, devices and YAML moved down in Setup, a narrow layout for phones.
 4. **Corrections (done):** editable Day view: change, delete, fill gaps, add entries, undo.
-5. **MCP, `launch`, `mqtt`, GNOME and KDE backends, several devices.**
+5. **MCP, `launch`, `mqtt`, GNOME and KDE backends, several devices.** (`mqtt` was built in [MVP 5](mvp-5.md).)
 6. **Details (done):** an optional free text below the activity ("VENOM · review · PR 482"), with Jira keys as learned links.
 
 ## Capabilities

@@ -326,6 +326,9 @@ func (s *Server) deviceChoices(ctx context.Context) map[string]map[string][]modu
 func (s *Server) moduleForms(lang string, own, inherited map[string]core.ModuleCfg, hatPage bool, choices map[string]map[string][]modules.Choice) []moduleForm {
 	var out []moduleForm
 	for _, m := range s.reg.All() {
+		if hatPage && m.RunsIn() == modules.RunsInCore {
+			continue // set once in the defaults, it does not change per hat
+		}
 		id := m.ID()
 		sch := parseSchema(m.ConfigSchema())
 		req := map[string]bool{}
