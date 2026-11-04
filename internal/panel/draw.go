@@ -70,10 +70,6 @@ func drawBox(img *image.RGBA, b Box) {
 	} else {
 		fillRound(img, b.R, b.Radius, b.Color)
 	}
-	if b.Stripe != (color.RGBA{}) {
-		s := Rect{b.R.X, b.R.Y + b.Radius, 5, b.R.H - 2*b.Radius}
-		fillRect(img, s, b.Stripe)
-	}
 }
 
 func fillRect(img *image.RGBA, r Rect, c color.RGBA) {
@@ -165,12 +161,10 @@ func drawHit(img *image.RGBA, h Hit, hover, focus bool, scale float64) {
 			tc = cDim
 		}
 		px := m.txPx
-		label := fit(h.Label, true, px, h.R.W-m.stripe-2*m.chipPad)
-		drawText(img, Text{X: h.R.X + m.stripe + m.chipPad, Y: h.R.Y + (h.R.H-px)/2 - 1, S: label, Bold: true, Px: px, Color: tc})
-		if h.Current {
-			dot := m.s6()
-			fillRound(img, Rect{h.R.X + h.R.W - m.chipPad - dot, h.R.Y + (h.R.H-dot)/2, dot, dot}, dot/2, h.Color)
-		}
+		tx := h.R.X + m.chipPad + m.dot + m.chipPad/2
+		label := fit(h.Label, true, px, h.R.X+h.R.W-m.chipPad-tx)
+		fillRound(img, Rect{h.R.X + m.chipPad, h.R.Y + (h.R.H-m.dot)/2, m.dot, m.dot}, m.dot/2, h.Color)
+		drawText(img, Text{X: tx, Y: h.R.Y + (h.R.H-px)/2 - 1, S: label, Bold: true, Px: px, Color: tc})
 	case KindActivity:
 		bg := cChip
 		fg := cFG
@@ -197,23 +191,13 @@ func drawHit(img *image.RGBA, h Hit, hover, focus bool, scale float64) {
 		if focus {
 			ring(img, h.R, m.s6(), cDim)
 		}
-		x := h.R.X + m.chipPad
+		sz := m.toolBtnH * 5 / 9
+		ir := Rect{h.R.X + (h.R.W-sz)/2, h.R.Y + (h.R.H-sz)/2, sz, sz}
 		if h.Icon != "" {
-			s := m.s6()
-			iy := h.R.Y + (h.R.H-s*2)/2
-			switch h.Icon {
-			case "pause":
-				fillRect(img, Rect{x, iy, s / 2 * 1, s * 2}, cFG)
-				fillRect(img, Rect{x + s, iy, s / 2 * 1, s * 2}, cFG)
-			case "play":
-				for r := 0; r < s*2; r++ {
-					w := s - abs(r-s)*s/(s+1)
-					fillRect(img, Rect{x, iy + r, max(w, 1), 1}, cFG)
-				}
-			}
-			x += s*2 - 0 + 2
+			drawIcon(img, h.Icon, ir, cFG)
+		} else {
+			drawText(img, Text{X: h.R.X + m.chipPad, Y: h.R.Y + (h.R.H-m.chipPx)/2 - 1, S: h.Label, Px: m.chipPx, Color: cFG})
 		}
-		drawText(img, Text{X: x, Y: h.R.Y + (h.R.H-m.chipPx)/2 - 1, S: h.Label, Px: m.chipPx, Color: cFG})
 	}
 }
 

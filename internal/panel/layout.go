@@ -57,7 +57,6 @@ type Box struct {
 	Radius int
 	Color  color.RGBA
 	Border color.RGBA
-	Stripe color.RGBA // left edge of a card, if set
 }
 
 // Text is a line of text; X, Y is its top-left corner.
@@ -105,7 +104,8 @@ func parse(hex string) color.RGBA {
 
 type metrics struct {
 	s                                   float64
-	pad, gap, cardW, stripe, titleH     int
+	pad, gap, cardW, titleH, dot        int
+	toolW, toolBtnH                     int
 	chipH, chipPad, chipGap, headerH    int
 	toolH, hintH, titlePx, chipPx, txPx int
 }
@@ -113,9 +113,9 @@ type metrics struct {
 func newMetrics(s float64) metrics {
 	u := func(n float64) int { return int(n*s + .5) }
 	return metrics{
-		s: s, pad: u(14), gap: u(10), cardW: u(176), stripe: u(5), titleH: u(30),
+		s: s, pad: u(14), gap: u(10), cardW: u(176), titleH: u(30), dot: u(10), toolW: u(48), toolBtnH: u(36),
 		chipH: u(26), chipPad: u(10), chipGap: u(6), headerH: u(44),
-		toolH: u(40), hintH: u(30), titlePx: u(16), chipPx: u(13), txPx: u(14),
+		toolH: u(52), hintH: u(30), titlePx: u(16), chipPx: u(13), txPx: u(14),
 	}
 }
 
@@ -160,7 +160,7 @@ func Build(snap agent.Snapshot, query string, scale float64, now time.Time) Layo
 		}
 	}
 	cols := min(max(len(hats), 1), 3)
-	W := m.pad*2 + cols*m.cardW + (cols-1)*m.gap
+	W := max(m.pad*2+cols*m.cardW+(cols-1)*m.gap, int(340*scale+.5))
 	l := Layout{W: W, Scale: scale, Filter: query, Default: i18n.T("panel.hint.default")}
 
 	// header: colour dot, status line
@@ -199,7 +199,7 @@ func Build(snap agent.Snapshot, query string, scale float64, now time.Time) Layo
 		chipRows := make([][][]string, len(rowHats))
 		rowH := 0
 		for i, h := range rowHats {
-			chipRows[i] = flow(h.Activities, m, m.cardW-m.stripe-2*m.chipPad)
+			chipRows[i] = flow(h.Activities, m, m.cardW-2*m.chipPad)
 			heights[i] = m.titleH + len(chipRows[i])*(m.chipH+m.chipGap) + m.chipPad
 			rowH = max(rowH, heights[i])
 		}
@@ -215,7 +215,7 @@ func Build(snap agent.Snapshot, query string, scale float64, now time.Time) Layo
 			if current {
 				border = col
 			}
-			l.Boxes = append(l.Boxes, Box{R: card, Radius: m.s6(), Color: cCard, Border: border, Stripe: col})
+			l.Boxes = append(l.Boxes, Box{R: card, Radius: m.s6(), Color: cCard, Border: border})
 			// title
 			titleHit := Hit{R: Rect{x, y, m.cardW, m.titleH}, Kind: KindHat, Label: h.Name, Color: col, Current: current,
 				Match: prefix(h.Name, query), Hint: hatHint(h, st),
@@ -227,11 +227,11 @@ func Build(snap agent.Snapshot, query string, scale float64, now time.Time) Layo
 			// chips
 			cy := y + m.titleH
 			for _, rowActs := range chipRows[i] {
-				cx := x + m.stripe + m.chipPad
+				cx := x + m.chipPad
 				for _, a := range rowActs {
 					cur := current && st.Mode == core.ModeWearing && st.Activity == a
 					w := textWidth(a, cur, m.chipPx) + 2*m.chipPad // the worn chip is bold
-					w = min(w, m.cardW-m.stripe-2*m.chipPad)
+					w = min(w, m.cardW-2*m.chipPad)
 					hint := i18n.T("panel.hint.act", h.Name, a)
 					if current && st.Mode == core.ModeWearing {
 						hint = i18n.T("panel.hint.act_here", a)
@@ -250,48 +250,26 @@ func Build(snap agent.Snapshot, query string, scale float64, now time.Time) Layo
 
 	// toolbar
 	l.Boxes = append(l.Boxes, Box{R: Rect{0, y, W, 1}, Color: cBorder})
-	ty := y + (m.toolH-m.chipH)/2
+	ty := y + (m.toolH-m.toolBtnH)/2
 	tx := m.pad
-	tool := func(label, icon, hint string, a Action, disabled bool) {
-		w := textWidth(label, false, m.chipPx) + 2*m.chipPad
-		if icon != "" {
-			w += m.s6() * 2
-		}
-		l.Hits = append(l.Hits, Hit{R: Rect{tx, ty, w, m.chipH}, Kind: KindTool, Label: label, Icon: icon, Hint: hint, Action: a, Disabled: disabled, Color: cFG})
-		tx += w + m.chipGap
+	tool := func(label, icon, hint string, a Action) {
+		l.Hits = append(l.Hits, Hit{R: Rect{tx, ty, m.toolW, m.toolBtnH}, Kind: KindTool, Label: label, Icon: icon, Hint: hint, Action: a, Color: cFG})
+		tx += m.toolW + m.chipGap
 	}
 	switch st.Mode {
 	case core.ModeWearing:
-		tool(i18n.T("ui.pause"), "pause", i18n.T("panel.hint.pause"), Action{Request: &agent.Request{Cmd: "off"}}, false)
-		tool(i18n.T("panel.neutral"), "", i18n.T("panel.hint.neutral"), Action{Request: &agent.Request{Cmd: "off", Neutral: true}}, false)
+		tool(i18n.T("ui.pause"), "pause", i18n.T("panel.hint.pause"), Action{Request: &agent.Request{Cmd: "off"}})
+		tool(i18n.T("panel.takeoff"), "off", i18n.T("panel.hint.takeoff"), Action{Request: &agent.Request{Cmd: "off", Neutral: true}})
 	case core.ModePaused:
-		tool(i18n.T("ui.resume"), "play", i18n.T("panel.hint.resume_tool"), Action{Request: &agent.Request{Cmd: "on"}}, false)
+		tool(i18n.T("ui.resume"), "play", i18n.T("panel.hint.resume_tool"), Action{Request: &agent.Request{Cmd: "on"}})
 		if !st.Neutral {
-			tool(i18n.T("panel.neutral"), "", i18n.T("panel.hint.neutral"), Action{Request: &agent.Request{Cmd: "off", Neutral: true}}, false)
+			tool(i18n.T("panel.takeoff"), "off", i18n.T("panel.hint.takeoff"), Action{Request: &agent.Request{Cmd: "off", Neutral: true}})
 		}
 	}
-	// right-aligned tools
-	var right []struct {
-		label, hint string
-		a           Action
-	}
+	// the web UI sits at the right edge; About lives in the tray's right-click menu
 	if snap.Server != "" {
-		right = append(right, struct {
-			label, hint string
-			a           Action
-		}{i18n.T("tray.open"), i18n.T("panel.hint.open"), Action{Open: true}})
-	}
-	right = append(right, struct {
-		label, hint string
-		a           Action
-	}{i18n.T("panel.about"), i18n.T("panel.hint.about"), Action{About: true}})
-	rx := W - m.pad
-	for i := len(right) - 1; i >= 0; i-- {
-		r := right[i]
-		w := textWidth(r.label, false, m.chipPx) + 2*m.chipPad
-		rx -= w
-		l.Hits = append(l.Hits, Hit{R: Rect{rx, ty, w, m.chipH}, Kind: KindTool, Label: r.label, Hint: r.hint, Action: r.a, Color: cFG})
-		rx -= m.chipGap
+		l.Hits = append(l.Hits, Hit{R: Rect{W - m.pad - m.toolW, ty, m.toolW, m.toolBtnH}, Kind: KindTool, Label: i18n.T("tray.open"), Icon: "open",
+			Hint: i18n.T("panel.hint.open"), Action: Action{Open: true}, Color: cFG})
 	}
 	y += m.toolH
 

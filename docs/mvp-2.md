@@ -175,8 +175,9 @@ The tray is a thin client on the agent socket, like the CLI.
 ### Panel
 
 The quick switcher: one small window with every hat as a card and its
-activities as chips, a toolbar (pause/resume, neutral look, open HatRack,
-about) and a hint line that says what a click on the hovered item does.
+activities as chips, an icon toolbar (pause/resume, take the hat off and
+restore the normal desktop look, open HatRack; About is in the tray's
+right-click menu) and a hint line that says what a click on the hovered item does.
 
 - Opened by a left click on the tray icon (next to the pointer) or by
   `hat panel` (middle of the monitor with the pointer; `--pointer` puts it at

@@ -59,8 +59,11 @@ func TestBuildHatsAndActivities(t *testing.T) {
 	if hit(l, KindTool, "Pause") == nil || hit(l, KindTool, "Resume") != nil {
 		t.Fatal("wearing shows Pause")
 	}
-	if hit(l, KindTool, "Open HatRack") == nil || hit(l, KindTool, "About") == nil {
-		t.Fatal("open and about tools")
+	if hit(l, KindTool, "Open HatRack") == nil || hit(l, KindTool, "Take off") == nil {
+		t.Fatal("open and take-off tools")
+	}
+	if hit(l, KindTool, "About") != nil {
+		t.Fatal("About lives in the tray menu")
 	}
 	for i, a := range l.Hits {
 		for j, b := range l.Hits {
@@ -93,7 +96,7 @@ func TestBuildPausedAndFilter(t *testing.T) {
 	if i := f.FirstFocus(); !f.Hits[i].Match {
 		t.Fatalf("first focus is the match: %+v", f.Hits[i])
 	}
-	if e := Build(testSnap(core.ModeNone, "", ""), "zzz", 1, time.Now()); len(e.Hits) == 0 || hit(e, KindTool, "About") == nil {
+	if e := Build(testSnap(core.ModeNone, "", ""), "zzz", 1, time.Now()); len(e.Hits) == 0 || hit(e, KindTool, "Open HatRack") == nil {
 		t.Fatal("a filter without matches still has the toolbar")
 	}
 }
@@ -143,13 +146,6 @@ func TestScreenKeys(t *testing.T) {
 	}
 	if _, done := s.key("escape", 0); !done {
 		t.Fatal("escape closes")
-	}
-	for i, h := range s.l.Hits {
-		if h.Action.About {
-			if _, done := s.activate(i); done || !s.about {
-				t.Fatal("About switches the screen")
-			}
-		}
 	}
 }
 
