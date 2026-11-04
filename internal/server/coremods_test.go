@@ -114,7 +114,12 @@ hats:
 	}
 	_, out := br.do("GET", "/setup/defaults", nil)
 	if !strings.Contains(out, "${env:HATRACK_TEST_MQTT_PW}") {
-		t.Fatal("an env reference may show")
+		t.Fatal("an env reference may show in the field")
+	}
+	// the summary: short labels, the password as env or ****, discovery named only when on
+	if !strings.Contains(out, "Broker: mqtt://broker · Password: env · Home Assistant Discovery<") {
+		i := strings.Index(out, "Broker: ")
+		t.Fatalf("summary: %s", out[i:min(len(out), i+200)])
 	}
 	e.do("PUT", "/api/config", `version: 1
 modules:
@@ -127,7 +132,7 @@ hats:
     activities: [Testen]
 `)
 	_, out = br.do("GET", "/setup/defaults", nil)
-	if strings.Count(out, "klartext-pw") != 1 || !strings.Contains(out, `type="password" name="m/mqtt/password"`) {
+	if strings.Count(out, "klartext-pw") != 1 || !strings.Contains(out, "Password: ****") || strings.Contains(out, "Discovery<") || !strings.Contains(out, `type="password" name="m/mqtt/password"`) {
 		t.Fatal("a plain password shows neither in the summary nor readable in the field")
 	}
 	var at []int

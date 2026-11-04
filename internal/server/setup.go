@@ -75,6 +75,7 @@ type field struct {
 	AddLabel    string // list fields: "add …" pick list
 	Secret      bool   // a password or token: never shown in the summary
 	Masked      bool   // a secret typed in plain: the input hides it
+	Placeholder string // an example or the default, shown in an empty input
 }
 
 type moduleForm struct {
@@ -374,6 +375,7 @@ func (s *Server) moduleForms(lang string, own, inherited map[string]core.ModuleC
 			fl := field{Name: "m/" + id + "/" + k, Label: tr(lang, "web.prop."+k, k), Kind: kind,
 				Value: valueString(own[id][k]), Required: req[k] && !hatPage, ID: "f-" + id + "-" + k, Secret: core.IsSecretKey(k)}
 			fl.Masked = fl.Secret && fl.Value != "" && !core.IsEnvRef(fl.Value)
+			fl.Placeholder = tr(lang, "web.ph."+k, "")
 			if kind == "text" || kind == "list" {
 				fl.Choices = picks(choices[id][k])
 				fl.AddLabel = i18n.In(lang, "web.setup.addchoice", fl.Label)
@@ -421,11 +423,21 @@ func summary(lang string, fields []field, hatPage bool) string {
 	var own []string
 	inherited := false
 	for _, f := range fields {
-		if f.Value != "" {
-			v := f.Value
-			if f.Secret && !core.IsEnvRef(v) {
-				v = "••••••" // a ${env:NAME} reference may show, the secret itself not
+		switch {
+		case f.Value == "":
+		case f.Kind == "bool" && !strings.HasSuffix(f.Name, "/enabled"):
+			// a switched-on option is named, a switched-off one left out
+			if f.Value == "true" {
+				own = append(own, f.Label)
 			}
+		case f.Secret:
+			v := "****" // the secret itself never shows
+			if core.IsEnvRef(f.Value) {
+				v = "env"
+			}
+			own = append(own, f.Label+": "+v)
+		default:
+			v := f.Value
 			for _, o := range f.Options {
 				if o.Value == f.Value {
 					v = o.Label
