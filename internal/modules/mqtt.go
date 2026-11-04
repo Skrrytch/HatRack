@@ -120,6 +120,11 @@ func (m *MQTTModule) RunsIn() RunsIn       { return RunsInCore }
 func (m *MQTTModule) ConfigSchema() []byte { return []byte(mqttSchema) }
 func (m *MQTTModule) Backends() []Backend  { return nil }
 
+// PropertyOrder is the order of the fields in Setup: where, who, what.
+func (m *MQTTModule) PropertyOrder() []string {
+	return []string{"broker", "username", "password", "topic", "discovery", "discovery_prefix"}
+}
+
 // Enter and Leave do nothing: the module follows the state, not the hooks.
 func (m *MQTTModule) Enter(context.Context, Switch, json.RawMessage) error { return nil }
 func (m *MQTTModule) Leave(context.Context, Switch, json.RawMessage) error { return nil }

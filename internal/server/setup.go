@@ -222,7 +222,14 @@ func parseSchema(b []byte) objSchema {
 }
 
 // propOrder: "enabled" first, then required ones, then the rest by name.
-func propOrder(s objSchema) []string {
+// propOrder sorts the fields of a module form: "enabled" first, then the
+// order the module asks for (if it has one), then required fields, then the
+// rest by name.
+func propOrder(s objSchema, preferred ...string) []string {
+	pos := map[string]int{}
+	for i, k := range preferred {
+		pos[k] = i
+	}
 	req := map[string]bool{}
 	for _, r := range s.Required {
 		req[r] = true
@@ -235,6 +242,8 @@ func propOrder(s objSchema) []string {
 		switch {
 		case k == "enabled":
 			return 0
+		case len(pos) > 0:
+			return 1 // the module's own order decides
 		case req[k]:
 			return 1
 		}
@@ -243,6 +252,14 @@ func propOrder(s objSchema) []string {
 	sort.Slice(keys, func(i, j int) bool {
 		if rank(keys[i]) != rank(keys[j]) {
 			return rank(keys[i]) < rank(keys[j])
+		}
+		pi, oki := pos[keys[i]]
+		pj, okj := pos[keys[j]]
+		switch {
+		case oki && okj:
+			return pi < pj
+		case oki != okj:
+			return oki
 		}
 		return keys[i] < keys[j]
 	})
@@ -342,7 +359,11 @@ func (s *Server) moduleForms(lang string, own, inherited map[string]core.ModuleC
 				extra[k] = v
 			}
 		}
-		for _, k := range propOrder(sch) {
+		var order []string
+		if o, ok := m.(interface{ PropertyOrder() []string }); ok {
+			order = o.PropertyOrder()
+		}
+		for _, k := range propOrder(sch, order...) {
 			p := sch.Properties[k]
 			kind := p.kind()
 			if kind == "" {

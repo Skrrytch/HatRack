@@ -112,8 +112,15 @@ hats:
 	if _, out := br.do("GET", "/setup/hat?key=tickets", nil); strings.Contains(out, `name="m/mqtt/broker"`) || !strings.Contains(out, "Testen") {
 		t.Fatal("no mqtt form on the hat page")
 	}
-	if _, out := br.do("GET", "/setup/defaults", nil); !strings.Contains(out, `name="m/mqtt/broker"`) {
-		t.Fatal("mqtt form in the defaults")
+	_, out := br.do("GET", "/setup/defaults", nil)
+	var at []int
+	for _, k := range []string{"enabled", "broker", "username", "password", "topic", "discovery", "discovery_prefix"} {
+		at = append(at, strings.Index(out, `name="m/mqtt/`+k+`"`))
+	}
+	for i := 1; i < len(at); i++ {
+		if at[i-1] < 0 || at[i] <= at[i-1] {
+			t.Fatalf("mqtt fields in their order: %v", at)
+		}
 	}
 	srv.Close()
 	if !fake.closed {
