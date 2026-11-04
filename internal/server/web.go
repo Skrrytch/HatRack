@@ -510,8 +510,9 @@ func (s *Server) nowPage(w http.ResponseWriter, r *http.Request, acc access) {
 	if st.Mode != core.ModeNone {
 		links, _ := s.st.TicketLinks(ctx)
 		n.Detail, n.DetailIn = core.SplitDetail(st.Detail, links), core.ShortDetail(st.Detail)
+		since := s.Now().Add(-core.RecentWindow)
 		if ev, err := s.st.Effective(ctx, time.Time{}); err == nil {
-			for _, d := range core.RecentDetails(ev, s.Now().AddDate(0, 0, -14), 6)[st.Hat][st.Activity] {
+			for _, d := range core.RecentDetails(ev, since, 6)[st.Hat][st.Activity] {
 				if d != n.DetailIn && len(n.Recent) < 5 {
 					n.Recent = append(n.Recent, d)
 				}

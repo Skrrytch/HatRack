@@ -265,21 +265,138 @@ func TestTypedDetail(t *testing.T) {
 	}
 }
 
+func recent(pairs ...string) []core.RecentDetail {
+	var out []core.RecentDetail
+	for i := 0; i+1 < len(pairs); i += 2 {
+		out = append(out, core.RecentDetail{Activity: pairs[i], Detail: pairs[i+1]})
+	}
+	return out
+}
+
 func TestDetailChips(t *testing.T) {
 	i18n.Set("en")
 	snap := testSnap(core.ModeWearing, "venom", "review")
 	snap.Status.State.Detail = "https://jira.example.org/browse/TAG-1366"
-	snap.Hats[0].Recent = map[string][]string{"review": {"TAG-1366", "PR 479", "PR 470"}}
+	snap.Hats[0].Recent = recent("review", "TAG-1366", "development", "MESH-1", "review", "PR 479", "review", "PR 470", "review", "PR 460")
 	l := Build(snap, "", 1, time.Now())
-	cur := hit(l, KindDetail, "TAG-1366")
-	if cur == nil || !cur.Current || !cur.Disabled {
-		t.Fatalf("current detail shown, not clickable: %+v", cur)
+	if hit(l, KindDetail, "TAG-1366") != nil || hit(l, KindDetail, "MESH-1") != nil || hit(l, KindDetail, "PR 460") != nil {
+		t.Fatal("chips: only the two latest other details of the worn activity")
 	}
 	if h := hit(l, KindDetail, "PR 479"); h == nil || h.Action.Request.Cmd != "detail" || h.Action.Request.Detail != "PR 479" {
 		t.Fatalf("recent detail chip: %+v", h)
 	}
-	if hit(l, KindDetail, "garden") != nil {
-		t.Fatal("details only on the worn hat")
+	if hit(l, KindDetail, "PR 470") == nil {
+		t.Fatal("second chip")
+	}
+	// every card has a field; the worn one shows the current detail
+	f := l.Hits[l.Field("venom")]
+	if f.Kind != KindInput || f.Label != "TAG-1366" || f.Action.Edit != "venom" {
+		t.Fatalf("worn field: %+v", f)
+	}
+	if g := l.Hits[l.Field("private")]; g.Label != "" || g.Sub == "" {
+		t.Fatalf("other field: %+v", g)
 	}
 	Render(l, View{Hover: -1, Focus: l.FirstFocus()})
+}
+
+func TestSuggestions(t *testing.T) {
+	snap := testSnap(core.ModeWearing, "venom", "review")
+	snap.Status.State.Detail = "PR 479"
+	h := snap.Hats[0]
+	h.Recent = recent("development", "MESH-2129", "review", "PR 479", "development", "MESH-2075", "review", "TAG-1611", "review", "x MESH")
+	var got []string
+	for _, d := range Suggestions(h, snap.Status.State, "") {
+		got = append(got, d.Detail)
+	}
+	if strings.Join(got, ",") != "TAG-1611,x MESH,MESH-2129,MESH-2075" {
+		t.Fatalf("worn activity first, current left out: %v", got)
+	}
+	got = nil
+	for _, d := range Suggestions(h, snap.Status.State, "mesh") {
+		got = append(got, d.Detail)
+	}
+	if strings.Join(got, ",") != "MESH-2129,MESH-2075,x MESH" {
+		t.Fatalf("prefix first, then anywhere: %v", got)
+	}
+	many := make([]core.RecentDetail, 20)
+	for i := range many {
+		many[i] = core.RecentDetail{Detail: "D" + strconv.Itoa(i)}
+	}
+	h.Recent = many
+	if n := len(Suggestions(h, core.State{}, "")); n != maxSuggest {
+		t.Fatalf("at most %d: %d", maxSuggest, n)
+	}
+}
+
+func TestDetailField(t *testing.T) {
+	i18n.Set("en")
+	snap := testSnap(core.ModeWearing, "venom", "review")
+	snap.Hats[0].Recent = recent("review", "TAG-1611", "development", "MESH-2129")
+	snap.Hats[1].Recent = recent("garden", "roses")
+	s := &screen{snap: snap, scale: 1}
+	s.rebuild()
+	h0 := s.l.H
+
+	// Tab goes from the focused (worn) hat into its field
+	s.key("next", 0)
+	if s.edit.Hat != "venom" || !s.l.Hits[s.focus].Editing || s.l.SuggestCount() != 2 {
+		t.Fatalf("tab into the field: %+v %d", s.edit, s.l.SuggestCount())
+	}
+	Render(s.l, s.view())
+	// typing filters, arrows pick, Enter takes the pick
+	s.key("", 'm')
+	if s.l.SuggestCount() != 1 || s.l.Hits[s.l.Suggest(0)].Label != "MESH-2129" {
+		t.Fatalf("filter: %d", s.l.SuggestCount())
+	}
+	s.key("down", 0)
+	if !s.l.Hits[s.l.Suggest(0)].Selected {
+		t.Fatal("down picks")
+	}
+	act, done := s.key("enter", 0)
+	if !done || act.Request.Cmd != "detail" || act.Request.Detail != "MESH-2129" {
+		t.Fatalf("enter takes the pick: %+v", act)
+	}
+
+	// free text on another hat puts it on with the detail
+	s = &screen{snap: snap, scale: 1}
+	s.rebuild()
+	if _, done := s.activate(s.l.Field("private")); done || s.edit.Hat != "private" {
+		t.Fatal("click into the field")
+	}
+	for _, r := range "pond" {
+		s.key("", r)
+	}
+	act, done = s.key("enter", 0)
+	if !done || act.Request.Cmd != "on" || act.Request.Hat != "private" || act.Request.Detail != "pond" {
+		t.Fatalf("enter on another hat: %+v", act)
+	}
+
+	// a click on a suggestion takes it; Escape leaves the field, a second closes
+	s = &screen{snap: snap, scale: 1}
+	s.rebuild()
+	s.activate(s.l.Field("private"))
+	sg := s.l.Hits[s.l.Suggest(0)]
+	if i := s.l.At(sg.R.X+2, sg.R.Y+2); i != s.l.Suggest(0) {
+		t.Fatalf("suggestion is on top: %d", i)
+	}
+	if act, done := s.activate(s.l.Suggest(0)); !done || act.Request.Detail != "roses" || act.Request.Hat != "private" {
+		t.Fatalf("click on a suggestion: %+v", act)
+	}
+	s.key("escape", 0)
+	if s.edit.Hat != "" || s.l.Hits[s.focus].Kind != KindInput {
+		t.Fatal("escape leaves the field and keeps the focus on it")
+	}
+	if _, done := s.key("escape", 0); !done {
+		t.Fatal("second escape closes")
+	}
+	if s.l.H < h0 {
+		t.Fatal("height")
+	}
+
+	// a paused hat resumes its activity with the new detail
+	p := testSnap(core.ModePaused, "venom", "review")
+	a := detailAction(p.Hats[0], p.Status.State, "X")
+	if a.Request.Cmd != "on" || a.Request.Activity != "review" || !a.Request.HasActivity || a.Request.Detail != "X" {
+		t.Fatalf("paused: %+v", a.Request)
+	}
 }

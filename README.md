@@ -22,7 +22,7 @@ hat log today           # today's overview
 > **Status:** MVP 1 is implemented and waits for a test in daily use. MVP 2 and 3
 > are plans. See [docs/concept.md](docs/concept.md),
 > the stages [MVP 1](docs/mvp-1.md), [MVP 2](docs/mvp-2.md),
-> [MVP 3 and outlook](docs/mvp-3.md), and the open questions in
+> [MVP 3 and outlook](docs/mvp-3.md), [MVP 4](docs/mvp-4.md), and the open questions in
 > [docs/decisions.md](docs/decisions.md).
 
 ## Try it

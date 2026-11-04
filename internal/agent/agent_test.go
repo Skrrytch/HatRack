@@ -480,7 +480,7 @@ func TestDetailOverSocket(t *testing.T) {
 		var snap Snapshot
 		json.Unmarshal(call(t, a, Request{Cmd: "hats"}).Data, &snap)
 		for _, h := range snap.Hats {
-			if h.Key == "venom" && len(h.Recent["review"]) > 0 && h.Recent["review"][0] == "TAG-1366" {
+			if h.Key == "venom" && len(h.Recent) > 2 && h.Recent[2].Detail == "TAG-1366" && h.Recent[2].Activity == "review" {
 				return true
 			}
 		}

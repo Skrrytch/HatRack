@@ -8,7 +8,7 @@ HatRack switches between work contexts ("hats") on a Linux desktop: look,
 apps, and a time log. Command `hat`, tray HatTray, optional HatRack Server with
 web UI and MCP. Status: MVP 1 implemented (Go), MVP 2 and 3 planned. Read `docs/concept.md`,
 `docs/decisions.md` (open questions) and the stage plans `docs/mvp-1.md`,
-`docs/mvp-2.md`, `docs/mvp-3.md` first.
+`docs/mvp-2.md`, `docs/mvp-3.md`, `docs/mvp-4.md` first.
 
 ## Commits
 

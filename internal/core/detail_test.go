@@ -142,3 +142,24 @@ func TestRecentDetails(t *testing.T) {
 		t.Fatalf("recent: %v", r)
 	}
 }
+
+func TestRecentByHat(t *testing.T) {
+	var evs []Event
+	for i, x := range [][2]string{{"review", "A"}, {"dev", "B"}, {"dev", "a"}, {"review", "C"}, {"dev", "D"}} {
+		e := ev(i*10, EvSwitch, "venom", x[0])
+		e.Detail = x[1]
+		evs = append(evs, e)
+	}
+	r := RecentByHat(evs, at(0), 3)["venom"]
+	var got []string
+	for _, d := range r {
+		got = append(got, d.Activity+":"+d.Detail)
+	}
+	if strings.Join(got, ",") != "dev:D,review:C,dev:a" {
+		t.Fatalf("by hat: %v", got)
+	}
+	// intervals that ended before the window are left out
+	if r := RecentByHat(evs, at(35), 9)["venom"]; len(r) != 2 || r[1].Detail != "C" {
+		t.Fatalf("window: %+v", r)
+	}
+}

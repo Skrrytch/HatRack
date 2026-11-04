@@ -137,6 +137,8 @@ then the components, then how it works and the architecture.
    HatTray, MCP, `launch`, `mqtt`, GNOME and KDE backends, several devices.
 3. [MVP 3 and outlook](mvp-3.md): idle detection, export, standalone mode,
    then everything else sorted by benefit.
+4. [MVP 4](mvp-4.md): a detail field in the panel with suggestions from eight
+   weeks, six hat colours with built-in wallpapers.
 
 ## Later ideas
 

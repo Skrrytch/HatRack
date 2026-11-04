@@ -124,34 +124,72 @@ func DetailURL(text string, links TicketLinks) string {
 	return ""
 }
 
+// RecentWindow is how far back detail suggestions reach.
+const RecentWindow = 56 * 24 * time.Hour
+
+// RecentDetail is a detail used recently in a hat, with the activity it was
+// used with last.
+type RecentDetail struct {
+	Detail   string    `json:"detail"`
+	Activity string    `json:"activity,omitempty"`
+	Last     time.Time `json:"last"`
+}
+
+// detailUses lists the details of the intervals that end at or after since,
+// in their short form, newest first.
+func detailUses(events []Event, since time.Time) []Interval {
+	var uses []Interval
+	for _, iv := range Intervals(events, time.Now()) {
+		if iv.Detail != "" && !iv.End.Before(since) {
+			iv.Detail = ShortDetail(iv.Detail)
+			uses = append(uses, iv)
+		}
+	}
+	sort.SliceStable(uses, func(a, b int) bool { return uses[a].Start.After(uses[b].Start) })
+	return uses
+}
+
 // RecentDetails lists, per hat and activity, the last details used since a
 // time, newest first, at most n each, in their short form. The map is
 // hat -> activity -> details.
 func RecentDetails(events []Event, since time.Time, n int) map[string]map[string][]string {
-	type use struct {
-		hat, act, detail string
-		at               time.Time
-	}
-	var uses []use
-	for _, iv := range Intervals(events, time.Now()) {
-		if iv.Detail != "" && !iv.End.Before(since) {
-			uses = append(uses, use{iv.Hat, iv.Activity, ShortDetail(iv.Detail), iv.Start})
-		}
-	}
-	sort.SliceStable(uses, func(a, b int) bool { return uses[a].at.After(uses[b].at) })
 	out := map[string]map[string][]string{}
-	for _, u := range uses {
-		if out[u.hat] == nil {
-			out[u.hat] = map[string][]string{}
+	for _, u := range detailUses(events, since) {
+		if out[u.Hat] == nil {
+			out[u.Hat] = map[string][]string{}
 		}
-		list := out[u.hat][u.act]
-		dup := false
-		for _, d := range list {
-			dup = dup || strings.EqualFold(d, u.detail)
-		}
-		if !dup && len(list) < n {
-			out[u.hat][u.act] = append(list, u.detail)
+		list := out[u.Hat][u.Activity]
+		if !containsFold(list, u.Detail) && len(list) < n {
+			out[u.Hat][u.Activity] = append(list, u.Detail)
 		}
 	}
 	return out
+}
+
+// RecentByHat lists, per hat, the details used since a time, newest first,
+// each once per hat (ignoring case), at most n each, in their short form.
+func RecentByHat(events []Event, since time.Time, n int) map[string][]RecentDetail {
+	out := map[string][]RecentDetail{}
+	seen := map[string][]string{}
+	for _, u := range detailUses(events, since) {
+		if containsFold(seen[u.Hat], u.Detail) || len(out[u.Hat]) >= n {
+			continue
+		}
+		seen[u.Hat] = append(seen[u.Hat], u.Detail)
+		last := u.End
+		if last.IsZero() {
+			last = u.Start
+		}
+		out[u.Hat] = append(out[u.Hat], RecentDetail{Detail: u.Detail, Activity: u.Activity, Last: last})
+	}
+	return out
+}
+
+func containsFold(list []string, s string) bool {
+	for _, d := range list {
+		if strings.EqualFold(d, s) {
+			return true
+		}
+	}
+	return false
 }

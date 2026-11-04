@@ -114,12 +114,12 @@ func runX11(ctx context.Context, o Options) (Action, error) {
 				if e.Detail != 1 {
 					continue
 				}
-				wasAbout := s.about
+				wasW, wasH := s.l.W, s.l.H
 				act, done := s.activate(s.l.At(int(e.EventX), int(e.EventY)))
 				if done {
 					return act, nil
 				}
-				relayout = s.about != wasAbout
+				relayout = s.l.W != wasW || s.l.H != wasH
 			case xproto.KeyPressEvent:
 				name, r := xw.decode(e.Detail, e.State)
 				wasW, wasH := s.l.W, s.l.H

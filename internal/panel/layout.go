@@ -6,6 +6,7 @@ package panel
 import (
 	"fmt"
 	"image/color"
+	"sort"
 	"strings"
 	"time"
 
@@ -22,6 +23,14 @@ type Action struct {
 	Link    string         // open this address
 	Quit    bool           // end the tray (used by the tray menu)
 	Close   bool           // just close the panel
+	Edit    string         // put the focus into this hat's detail field
+}
+
+// Edit is the detail field being typed into.
+type Edit struct {
+	Hat  string // key of the hat whose field has the focus; "" for none
+	Text string
+	Sel  int // picked suggestion, -1 for none
 }
 
 type Rect struct{ X, Y, W, H int }
@@ -35,7 +44,9 @@ const (
 	KindHat Kind = iota
 	KindActivity
 	KindTool
-	KindDetail // a recent detail of the worn activity
+	KindDetail  // a recent detail of the worn activity
+	KindInput   // the detail field at the bottom of a hat card
+	KindSuggest // a suggestion below the field being edited
 )
 
 // Hit is a clickable area.
@@ -51,6 +62,11 @@ type Hit struct {
 	Disabled bool
 	Icon     string // "pause", "play", "stop", "open" or ""
 	Card     Rect   // hats: the whole card, for the frame
+	Hat      string // key of the hat whose card the hit is on
+	Sub      string // fields: the placeholder; suggestions: the activity
+	Editing  bool   // fields: being typed into
+	Selected bool   // suggestions: picked with the arrow keys
+	Over     bool   // drawn on top of everything (the suggestion list)
 }
 
 // Box is a filled rounded rectangle behind other things.
@@ -78,11 +94,13 @@ type Layout struct {
 	Boxes    []Box
 	Texts    []Text
 	Hits     []Hit
+	Over     []Box  // the suggestion list's background, drawn on top
 	IconRect *Rect  // the app icon (about screen)
 	IconHex  string // its colour
 	Filter   string
 	Detail   string // typed after the filter, for the hint line
 	Default  string // hint when nothing is hovered
+	Commit   Action // Enter in the detail field with the typed text
 }
 
 // Palette of the panel: a dark middle with lighter cards, a neutral footer
@@ -96,6 +114,7 @@ var (
 	cFG     = color.RGBA{0xf0, 0xe6, 0xdc, 255}
 	cDim    = color.RGBA{0x9a, 0x9f, 0xa8, 255}
 	cInk    = color.RGBA{0x18, 0x1a, 0x1e, 255} // text on light hat colours
+	cPop    = color.RGBA{0x2c, 0x30, 0x36, 255} // the suggestion list
 )
 
 // onColor picks light or dark text for a background.
@@ -122,6 +141,7 @@ type metrics struct {
 	toolW, toolBtnH                     int
 	chipH, chipPad, chipGap, headerH    int
 	toolH, hintH, titlePx, chipPx, txPx int
+	inputH, sugH                        int
 }
 
 func newMetrics(s float64) metrics {
@@ -130,6 +150,7 @@ func newMetrics(s float64) metrics {
 		s: s, pad: u(14), gap: u(10), cardW: u(176), titleH: u(30), dot: u(10), toolW: u(48), toolBtnH: u(36),
 		chipH: u(26), chipPad: u(10), chipGap: u(6), headerH: u(44),
 		toolH: u(52), hintH: u(30), titlePx: u(16), chipPx: u(13), txPx: u(14),
+		inputH: u(28), sugH: u(26),
 	}
 }
 
@@ -193,6 +214,11 @@ func hatHint(h agent.HatInfo, st core.State) string {
 // Build lays out the main screen: status, hat cards, toolbar. query is the
 // text typed to filter hats.
 func Build(snap agent.Snapshot, typed string, scale float64, now time.Time) Layout {
+	return BuildEdit(snap, typed, Edit{Sel: -1}, scale, now)
+}
+
+// BuildEdit is Build with the focus in a hat's detail field.
+func BuildEdit(snap agent.Snapshot, typed string, ed Edit, scale float64, now time.Time) Layout {
 	m := newMetrics(scale)
 	st := snap.Status.State
 	query, detail := splitQuery(snap, typed)
@@ -235,6 +261,8 @@ func Build(snap agent.Snapshot, typed string, scale float64, now time.Time) Layo
 	l.Boxes = append(l.Boxes, Box{R: Rect{0, y - 1, W, 1}, Color: cBorder})
 
 	// hat cards in a grid
+	var editHat agent.HatInfo
+	var editField Rect
 	y += m.pad
 	if len(hats) == 0 {
 		msg := i18n.T("err.nohats")
@@ -256,7 +284,7 @@ func Build(snap agent.Snapshot, typed string, scale float64, now time.Time) Layo
 			if dets := cardDetails(h, st); len(dets) > 0 && detail == "" {
 				detRows[i] = flow(dets, m, m.cardW-2*m.chipPad)
 			}
-			heights[i] = m.titleH + (len(chipRows[i])+len(detRows[i]))*(m.chipH+m.chipGap) + m.chipPad
+			heights[i] = m.titleH + (len(chipRows[i])+len(detRows[i]))*(m.chipH+m.chipGap) + m.inputH + m.chipPad/2
 			rowH = max(rowH, heights[i])
 		}
 		for i, h := range rowHats {
@@ -269,7 +297,7 @@ func Build(snap agent.Snapshot, typed string, scale float64, now time.Time) Layo
 			card := Rect{x, y, m.cardW, rowH}
 			l.Boxes = append(l.Boxes, Box{R: card, Radius: m.s6(), Color: cCard})
 			// title
-			titleHit := Hit{R: Rect{x, y, m.cardW, m.titleH}, Kind: KindHat, Label: h.Name, Color: col, Card: card, Current: current,
+			titleHit := Hit{R: Rect{x, y, m.cardW, m.titleH}, Kind: KindHat, Label: h.Name, Color: col, Card: card, Current: current, Hat: h.Key,
 				Match: prefix(h.Name, query), Hint: withDetail(hatHint(h, st), detail),
 				Action: Action{Request: &agent.Request{Cmd: "on", Hat: h.Key, Detail: detail}}}
 			if st.Mode == core.ModePaused && st.Hat == h.Key {
@@ -288,34 +316,69 @@ func Build(snap agent.Snapshot, typed string, scale float64, now time.Time) Layo
 					if current && st.Mode == core.ModeWearing {
 						hint = i18n.T("panel.hint.act_here", a)
 					}
-					l.Hits = append(l.Hits, Hit{R: Rect{cx, cy, w, m.chipH}, Kind: KindActivity, Label: a, Color: col, Current: cur,
+					l.Hits = append(l.Hits, Hit{R: Rect{cx, cy, w, m.chipH}, Kind: KindActivity, Label: a, Color: col, Current: cur, Hat: h.Key,
 						Match: query != "" && prefix(a, query) && !prefix(h.Name, query), Hint: withDetail(hint, detail),
 						Action: Action{Request: &agent.Request{Cmd: "on", Hat: h.Key, Activity: a, HasActivity: true, Detail: detail}}})
 					cx += w + m.chipGap
 				}
 				cy += m.chipH + m.chipGap
 			}
-			// the worn activity's detail and its recent ones, one click each
-			curDet := core.ShortDetail(st.Detail)
+			// the two latest other details of the worn activity, one click each
 			for _, rowDets := range detRows[i] {
 				cx := x + m.chipPad
 				for _, d := range rowDets {
-					w := min(textWidth(d, true, m.chipPx)+2*m.chipPad, m.cardW-2*m.chipPad)
-					hit := Hit{R: Rect{cx, cy, w, m.chipH}, Kind: KindDetail, Label: d, Color: col,
+					w := min(textWidth(d, false, m.chipPx)+2*m.chipPad, m.cardW-2*m.chipPad)
+					l.Hits = append(l.Hits, Hit{R: Rect{cx, cy, w, m.chipH}, Kind: KindDetail, Label: d, Color: col, Hat: h.Key,
 						Hint:   i18n.T("panel.hint.detail", d),
-						Action: Action{Request: &agent.Request{Cmd: "detail", Detail: d}}}
-					if d == curDet {
-						hit.Current, hit.Disabled, hit.Hint = true, true, ""
-					}
-					l.Hits = append(l.Hits, hit)
+						Action: Action{Request: &agent.Request{Cmd: "detail", Detail: d}}})
 					cx += w + m.chipGap
 				}
 				cy += m.chipH + m.chipGap
 			}
+			// the detail field at the bottom of the card
+			field := Hit{R: Rect{x + m.chipPad, y + rowH - m.chipPad/2 - m.inputH, m.cardW - 2*m.chipPad, m.inputH},
+				Kind: KindInput, Color: col, Hat: h.Key, Sub: i18n.T("panel.detail.placeholder"),
+				Hint: i18n.T("panel.hint.field", h.Name), Action: Action{Edit: h.Key}}
+			if st.Mode == core.ModeWearing && st.Hat == h.Key {
+				field.Label = core.ShortDetail(st.Detail)
+				field.Hint = i18n.T("panel.hint.field_worn")
+			}
+			if ed.Hat == h.Key {
+				field.Label, field.Editing, field.Hint = ed.Text, true, i18n.T("panel.hint.editing")
+				editHat, editField = h, field.R
+				if v := strings.TrimSpace(ed.Text); v != "" {
+					l.Commit = detailAction(h, st, v)
+				}
+			}
+			l.Hits = append(l.Hits, field)
 		}
 		y += rowH + m.gap
 	}
 	y += m.pad - m.gap
+
+	// the suggestion list below (or above) the field being edited; it floats
+	// over the cards and the toolbar, the window grows if it fits nowhere
+	var sugg []core.RecentDetail
+	var over Rect
+	if editHat.Key != "" {
+		sugg = Suggestions(editHat, st, ed.Text)
+		if len(sugg) > 0 {
+			inset := m.s6() / 2
+			w := max(editField.W, min(int(240*scale+.5), W-2*m.pad))
+			h := len(sugg)*m.sugH + 2*inset
+			ox := max(min(editField.X, W-m.pad-w), m.pad)
+			oy := editField.Y + editField.H + inset
+			limit := y + m.toolH // the hint line stays visible
+			switch {
+			case oy+h <= limit:
+			case editField.Y-inset-h >= m.headerH:
+				oy = editField.Y - inset - h
+			default:
+				y += oy + h - limit
+			}
+			over = Rect{ox, oy, w, h}
+		}
+	}
 
 	// toolbar
 	footY := y
@@ -350,25 +413,102 @@ func Build(snap agent.Snapshot, typed string, scale float64, now time.Time) Layo
 	// the header is tinted with the hat colour, the footer a neutral band;
 	// the dark middle with lighter cards is where the choice happens
 	l.Boxes = append([]Box{{R: Rect{0, 0, W, m.headerH - 1}, Color: hdrBG}, {R: Rect{0, footY, W, y - footY}, Color: cBar}}, l.Boxes...)
+
+	if len(sugg) > 0 {
+		inset := m.s6() / 2
+		l.Over = append(l.Over, Box{R: over, Radius: m.s6(), Color: cPop, Border: cBorder})
+		col := rgba(editHat.Color)
+		if editHat.Color == "" {
+			col = rgba("#4e79a7")
+		}
+		worn := st.Mode == core.ModeWearing && st.Hat == editHat.Key
+		for k, d := range sugg {
+			hint := i18n.T("panel.hint.detail", d.Detail)
+			if !worn {
+				hint = withDetail(hatHint(editHat, st), d.Detail)
+			}
+			l.Hits = append(l.Hits, Hit{R: Rect{over.X + inset, over.Y + inset + k*m.sugH, over.W - 2*inset, m.sugH},
+				Kind: KindSuggest, Label: d.Detail, Sub: d.Activity, Color: col, Hat: editHat.Key, Over: true,
+				Selected: k == ed.Sel, Hint: hint, Action: detailAction(editHat, st, d.Detail)})
+		}
+	}
 	return l
+}
+
+// maxSuggest is the length of the suggestion list.
+const maxSuggest = 8
+
+// Suggestions lists the details offered in a hat's field for the typed
+// text: matches at the start first, then anywhere, ignoring case; on the worn
+// hat the worn activity's details first and the current detail left out.
+func Suggestions(h agent.HatInfo, st core.State, typed string) []core.RecentDetail {
+	worn := st.Mode == core.ModeWearing && st.Hat == h.Key
+	cur := ""
+	if worn {
+		cur = core.ShortDetail(st.Detail)
+	}
+	q := strings.ToLower(strings.TrimSpace(typed))
+	type cand struct {
+		d    core.RecentDetail
+		rank int
+	}
+	var cs []cand
+	for _, d := range h.Recent {
+		l := strings.ToLower(d.Detail)
+		if cur != "" && strings.EqualFold(d.Detail, cur) || !strings.Contains(l, q) {
+			continue
+		}
+		rank := 0
+		if !strings.HasPrefix(l, q) {
+			rank += 2
+		}
+		if worn && d.Activity != st.Activity {
+			rank++
+		}
+		cs = append(cs, cand{d, rank})
+	}
+	sort.SliceStable(cs, func(a, b int) bool { return cs[a].rank < cs[b].rank })
+	var out []core.RecentDetail
+	for _, c := range cs {
+		if len(out) == maxSuggest {
+			break
+		}
+		out = append(out, c.d)
+	}
+	return out
+}
+
+// detailAction is what a detail entered in a hat's field does: on the worn
+// hat it names the current entry; a paused hat resumes its activity with
+// it; any other hat is put on with it, its resume setting picks the activity.
+func detailAction(h agent.HatInfo, st core.State, detail string) Action {
+	switch {
+	case st.Mode == core.ModeWearing && st.Hat == h.Key:
+		return Action{Request: &agent.Request{Cmd: "detail", Detail: detail}}
+	case st.Mode == core.ModePaused && st.Hat == h.Key:
+		act := st.Activity
+		if act == "" {
+			act = "-"
+		}
+		return Action{Request: &agent.Request{Cmd: "on", Hat: h.Key, Activity: act, HasActivity: true, Detail: detail}}
+	}
+	return Action{Request: &agent.Request{Cmd: "on", Hat: h.Key, Detail: detail}}
 }
 
 func (m metrics) s6() int { return int(6*m.s + .5) }
 
-// cardDetails lists the details shown on the worn hat's card: the current
-// one first, then the recent ones of the worn activity (at most four).
+// cardDetails lists the detail chips of the worn hat's card: the two latest
+// details of the worn activity other than the current one. The rest is in
+// the detail field's suggestions.
 func cardDetails(h agent.HatInfo, st core.State) []string {
 	if st.Mode != core.ModeWearing || st.Hat != h.Key {
 		return nil
 	}
 	var out []string
 	cur := core.ShortDetail(st.Detail)
-	if cur != "" {
-		out = append(out, cur)
-	}
-	for _, d := range h.Recent[st.Activity] {
-		if d != cur && len(out) < 4 {
-			out = append(out, d)
+	for _, d := range h.Recent {
+		if d.Activity == st.Activity && !strings.EqualFold(d.Detail, cur) && len(out) < 2 {
+			out = append(out, d.Detail)
 		}
 	}
 	return out
@@ -399,8 +539,52 @@ func flow(acts []string, m metrics, width int) [][]string {
 // At returns the index of the hit under the point, or -1.
 func (l Layout) At(x, y int) int {
 	for i, h := range l.Hits {
-		if !h.Disabled && h.R.Contains(x, y) {
+		if h.Over && h.R.Contains(x, y) {
 			return i
+		}
+	}
+	for _, b := range l.Over {
+		if b.R.Contains(x, y) {
+			return -1 // the list's frame covers what is below
+		}
+	}
+	for i, h := range l.Hits {
+		if !h.Disabled && !h.Over && h.R.Contains(x, y) {
+			return i
+		}
+	}
+	return -1
+}
+
+// Field returns the index of a hat's detail field, or -1.
+func (l Layout) Field(hat string) int {
+	for i, h := range l.Hits {
+		if h.Kind == KindInput && h.Hat == hat {
+			return i
+		}
+	}
+	return -1
+}
+
+// SuggestCount is the number of suggestions shown.
+func (l Layout) SuggestCount() int {
+	n := 0
+	for _, h := range l.Hits {
+		if h.Kind == KindSuggest {
+			n++
+		}
+	}
+	return n
+}
+
+// Suggest returns the index of the k-th suggestion, or -1.
+func (l Layout) Suggest(k int) int {
+	for i, h := range l.Hits {
+		if h.Kind == KindSuggest {
+			if k == 0 {
+				return i
+			}
+			k--
 		}
 	}
 	return -1

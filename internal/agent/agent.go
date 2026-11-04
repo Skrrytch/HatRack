@@ -26,7 +26,7 @@ type Agent struct {
 	mu        sync.Mutex // guards everything below and serialises switches
 	state     core.State
 	last      map[string]string
-	recent    map[string]map[string][]string // hat -> activity -> recent details
+	recent    map[string][]core.RecentDetail // hat -> recent details, newest first
 	config    core.Config
 	applied   string // hat key whose look is applied, "" for neutral
 	connected bool
@@ -232,8 +232,8 @@ func (a *Agent) adoptState(ctx context.Context, resp server.StateResponse) {
 		return
 	}
 	a.state = resp.State
-	if resp.RecentDetails != nil {
-		a.recent = resp.RecentDetails
+	if resp.Recent != nil {
+		a.recent = resp.Recent
 	}
 	if resp.LastActivities != nil {
 		a.last = resp.LastActivities

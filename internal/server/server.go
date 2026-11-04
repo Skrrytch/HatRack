@@ -122,13 +122,16 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 type StateResponse struct {
 	State          core.State        `json:"state"`
 	LastActivities map[string]string `json:"last_activities"`
-	// RecentDetails: hat -> activity -> the last details (short form), for
-	// suggestions in the panel
-	RecentDetails map[string]map[string][]string `json:"recent_details,omitempty"`
-	ConfigRev     int64                          `json:"config_rev"`
-	EventRev      int64                          `json:"event_rev"` // grows with every stored event
-	ServerTime    time.Time                      `json:"server_time"`
+	// Recent: hat -> the details of the last weeks (short form, newest
+	// first), for suggestions in the panel
+	Recent     map[string][]core.RecentDetail `json:"recent,omitempty"`
+	ConfigRev  int64                          `json:"config_rev"`
+	EventRev   int64                          `json:"event_rev"` // grows with every stored event
+	ServerTime time.Time                      `json:"server_time"`
 }
+
+// recentPerHat caps the detail suggestions sent per hat.
+const recentPerHat = 50
 
 func (s *Server) stateResponse(ctx context.Context) (StateResponse, error) {
 	st, err := s.st.CurrentState(ctx)
@@ -148,8 +151,9 @@ func (s *Server) stateResponse(ctx context.Context) (StateResponse, error) {
 		return StateResponse{}, err
 	}
 	resp := StateResponse{State: st, LastActivities: last, ConfigRev: rev, EventRev: erev, ServerTime: s.Now().UTC()}
+	since := s.Now().Add(-core.RecentWindow)
 	if ev, err := s.st.Effective(ctx, time.Time{}); err == nil {
-		resp.RecentDetails = core.RecentDetails(ev, s.Now().AddDate(0, 0, -14), 5)
+		resp.Recent = core.RecentByHat(ev, since, recentPerHat)
 	}
 	return resp, nil
 }

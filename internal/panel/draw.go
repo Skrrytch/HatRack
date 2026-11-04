@@ -25,7 +25,9 @@ func Render(l Layout, v View) *image.RGBA {
 		drawBox(img, b)
 	}
 	for i, h := range l.Hits {
-		drawHit(img, h, i == v.Hover, i == v.Focus, l.Scale)
+		if !h.Over {
+			drawHit(img, h, i == v.Hover, i == v.Focus, l.Scale)
+		}
 	}
 	for _, t := range l.Texts {
 		drawText(img, t)
@@ -44,6 +46,16 @@ func Render(l Layout, v View) *image.RGBA {
 	if hint != "" {
 		hy := l.H - m.hintH + (m.hintH-m.chipPx)/2 - 1
 		drawText(img, Text{X: m.pad, Y: hy, S: fit(hint, false, m.chipPx, l.W-2*m.pad), Px: m.chipPx, Color: cDim})
+	}
+	// the suggestion list floats over everything
+	for _, b := range l.Over {
+		fillRound(img, Rect{b.R.X + 1, b.R.Y + 2, b.R.W, b.R.H}, b.Radius, mixc(cBG, color.RGBA{}, .5)) // shadow
+		frame(img, b.R, b.Radius, 1, b.Border, b.Color)
+	}
+	for i, h := range l.Hits {
+		if h.Over {
+			drawHit(img, h, i == v.Hover, i == v.Focus, l.Scale)
+		}
 	}
 	// window border
 	border(img, cBorder)
@@ -197,6 +209,22 @@ func drawHit(img *image.RGBA, h Hit, hover, focus bool, scale float64) {
 		frame(img, h.R, h.R.H/2, 1, edge, bg)
 		label := fit(h.Label, h.Current, m.chipPx, h.R.W-2*m.chipPad)
 		drawText(img, Text{X: h.R.X + m.chipPad, Y: h.R.Y + (h.R.H-m.chipPx)/2 - 1, S: label, Bold: h.Current, Px: m.chipPx, Color: fg})
+	case KindInput:
+		drawField(img, h, hover, focus, m)
+	case KindSuggest:
+		if h.Selected || hover {
+			fillRound(img, h.R, m.s6()/2, mixc(cPop, h.Color, .4))
+		}
+		ty := h.R.Y + (h.R.H-m.chipPx)/2 - 1
+		right := h.R.X + h.R.W - m.chipPad*2/3
+		aw := 0
+		if h.Sub != "" {
+			sub := fit(h.Sub, false, m.chipPx, h.R.W/3)
+			aw = textWidth(sub, false, m.chipPx) + m.chipPad
+			drawText(img, Text{X: right, Y: ty, S: sub, Px: m.chipPx, Color: cDim, Right: true})
+		}
+		label := fit(h.Label, false, m.chipPx, h.R.W-m.chipPad*4/3-aw)
+		drawText(img, Text{X: h.R.X + m.chipPad*2/3, Y: ty, S: label, Px: m.chipPx, Color: cFG})
 	case KindTool:
 		bg := cChip
 		if hover || focus {
@@ -214,6 +242,57 @@ func drawHit(img *image.RGBA, h Hit, hover, focus bool, scale float64) {
 			drawText(img, Text{X: h.R.X + (h.R.W-textWidth(h.Label, false, m.chipPx))/2, Y: h.R.Y + (h.R.H-m.chipPx)/2 - 1, S: h.Label, Px: m.chipPx, Color: cFG})
 		}
 	}
+}
+
+// drawField draws the detail field: quiet until it is used, a fine line in
+// the hat's colour, a "#", then the detail or a dimmed placeholder.
+func drawField(img *image.RGBA, h Hit, hover, focus bool, m metrics) {
+	line, lw := mixc(cCard, h.Color, .35), max(int(m.s+.5), 1)
+	switch {
+	case h.Editing:
+		fillRound(img, h.R, m.s6()/2, mixc(cCard, cChip, .6))
+		line, lw = h.Color, max(int(2*m.s+.5), 2)
+	case hover || focus:
+		fillRound(img, h.R, m.s6()/2, mixc(cCard, cChip, .35))
+		line = mixc(cCard, h.Color, .75)
+	}
+	fillRect(img, Rect{h.R.X, h.R.Y + h.R.H - lw, h.R.W, lw}, line)
+	ty := h.R.Y + (h.R.H-m.chipPx)/2 - 1
+	x := h.R.X + m.chipPad*2/3
+	drawText(img, Text{X: x, Y: ty, S: "#", Px: m.chipPx, Color: mixc(cDim, h.Color, .45)})
+	x += textWidth("#", false, m.chipPx) + m.chipPad/2
+	avail := h.R.X + h.R.W - m.chipPad*2/3 - x
+	shown := ""
+	if h.Label != "" {
+		if h.Editing {
+			shown = tailFit(h.Label, m.chipPx, avail-int(2*m.s+.5))
+		} else {
+			shown = fit(h.Label, false, m.chipPx, avail)
+		}
+		drawText(img, Text{X: x, Y: ty, S: shown, Px: m.chipPx, Color: cFG})
+	} else {
+		drawText(img, Text{X: x, Y: ty, S: fit(h.Sub, false, m.chipPx, avail), Px: m.chipPx, Color: mixc(cCard, cDim, .7)})
+	}
+	if h.Editing {
+		cx := x + textWidth(shown, false, m.chipPx) + 1
+		fillRect(img, Rect{cx, h.R.Y + (h.R.H-m.chipPx)/2 - int(m.s+.5), max(int(m.s+.5), 1), m.chipPx + int(3*m.s+.5)}, cFG)
+	}
+}
+
+// tailFit shortens text from the front so its end, where the typing
+// happens, stays visible.
+func tailFit(s string, px, w int) string {
+	if textWidth(s, false, px) <= w {
+		return s
+	}
+	r := []rune(s)
+	for len(r) > 1 {
+		r = r[1:]
+		if t := "…" + string(r); textWidth(t, false, px) <= w {
+			return t
+		}
+	}
+	return "…"
 }
 
 func abs(a int) int {

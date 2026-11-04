@@ -49,6 +49,7 @@ type screen struct {
 	l      Layout
 	hover  int
 	focus  int
+	edit   Edit // the detail field being typed into
 }
 
 func (s *screen) rebuild() {
@@ -59,8 +60,14 @@ func (s *screen) rebuild() {
 			s.focus = 0
 		}
 	} else {
-		s.l = Build(s.snap, s.filter, s.scale, time.Now())
+		if s.edit.Hat == "" {
+			s.edit.Sel = -1
+		}
+		s.l = BuildEdit(s.snap, s.filter, s.edit, s.scale, time.Now())
 		s.focus = s.l.FirstFocus()
+		if s.edit.Hat != "" {
+			s.focus = s.l.Field(s.edit.Hat)
+		}
 	}
 	s.hover = -1
 }
@@ -70,9 +77,18 @@ func (s *screen) view() View { return View{Hover: s.hover, Focus: s.focus, Filte
 // activate returns done=true when the panel should close with act.
 func (s *screen) activate(i int) (act Action, done bool) {
 	if i < 0 || i >= len(s.l.Hits) {
+		if s.edit.Hat != "" { // a click beside the field leaves it
+			s.stopEdit()
+		}
 		return Action{}, false
 	}
 	a := s.l.Hits[i].Action
+	if a.Edit != "" {
+		if s.edit.Hat != a.Edit {
+			s.startEdit(a.Edit, "")
+		}
+		return Action{}, false
+	}
 	if a.About {
 		s.about = true
 		s.rebuild()
@@ -81,9 +97,78 @@ func (s *screen) activate(i int) (act Action, done bool) {
 	return a, true
 }
 
+func (s *screen) startEdit(hat, text string) {
+	s.edit = Edit{Hat: hat, Text: text, Sel: -1}
+	s.rebuild()
+}
+
+func (s *screen) stopEdit() {
+	hat := s.edit.Hat
+	s.edit = Edit{Sel: -1}
+	s.rebuild()
+	if i := s.l.Field(hat); i >= 0 {
+		s.focus = i
+	}
+}
+
+// editKey handles a key while the detail field has the focus.
+func (s *screen) editKey(name string, r rune) (act Action, done bool) {
+	switch name {
+	case "escape", "next", "prev":
+		s.stopEdit()
+	case "enter":
+		if s.edit.Sel >= 0 {
+			if i := s.l.Suggest(s.edit.Sel); i >= 0 {
+				return s.l.Hits[i].Action, true
+			}
+		}
+		if s.l.Commit.Request != nil {
+			return s.l.Commit, true
+		}
+		s.stopEdit()
+	case "down":
+		if s.edit.Sel+1 < s.l.SuggestCount() {
+			s.edit.Sel++
+			s.rebuild()
+		}
+	case "up":
+		if s.edit.Sel >= 0 {
+			s.edit.Sel--
+			s.rebuild()
+		}
+	case "backspace":
+		if rs := []rune(s.edit.Text); len(rs) > 0 {
+			s.edit.Text, s.edit.Sel = string(rs[:len(rs)-1]), -1
+			s.rebuild()
+		}
+	case "":
+		if r >= ' ' {
+			s.edit.Text, s.edit.Sel = s.edit.Text+string(r), -1
+			s.rebuild()
+		}
+	}
+	return Action{}, false
+}
+
 // key handles a non-printing key or printable rune. It returns done and the
 // action when the panel should close, and relayout when the size may change.
 func (s *screen) key(name string, r rune) (act Action, done bool) {
+	if s.edit.Hat != "" && !s.about {
+		return s.editKey(name, r)
+	}
+	var focused *Hit
+	if s.focus >= 0 && s.focus < len(s.l.Hits) && !s.about {
+		focused = &s.l.Hits[s.focus]
+	}
+	switch {
+	case name == "next" && focused != nil && focused.Hat != "":
+		// Tab goes to the detail field of the focused card
+		s.startEdit(focused.Hat, "")
+		return Action{}, false
+	case name == "" && r > ' ' && focused != nil && focused.Kind == KindInput:
+		s.startEdit(focused.Hat, string(r))
+		return Action{}, false
+	}
 	switch name {
 	case "escape":
 		return Action{}, true

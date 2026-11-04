@@ -60,8 +60,8 @@ type HatInfo struct {
 	Activities []string `json:"activities"`
 	Resume     string   `json:"resume"`
 	Last       string   `json:"last,omitempty"` // last activity used, if still valid
-	// Recent details per activity, newest first, for suggestions
-	Recent map[string][]string `json:"recent,omitempty"`
+	// Recent details of the last weeks, newest first, for suggestions
+	Recent []core.RecentDetail `json:"recent,omitempty"`
 }
 
 // Snapshot is everything a menu client needs: the status, the hats and the
