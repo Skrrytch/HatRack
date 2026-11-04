@@ -1,0 +1,13 @@
+# Normally written by `hat agent install`. Manual installation:
+#   cp deploy/hatrack-agent.service ~/.config/systemd/user/
+#   (adjust ExecStart) systemctl --user enable --now hatrack-agent
+[Unit]
+Description=HatRack agent
+
+[Service]
+ExecStart=%h/.local/bin/hat agent run
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
