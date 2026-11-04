@@ -13,7 +13,7 @@
 | 2026-11-04 | Activities are optional. Per hat: `resume_activity: never \| last \| ask`. Unknown activities are rejected. |
 | 2026-11-04 | Hat and activity names ignore case and accept unique prefixes. |
 | 2026-11-04 | `hat off` is a pause: the look stays, only the clock stops. `hat off --neutral` restores the neutral look. |
-| 2026-11-04 | No `hat menu` for now. HatTray and `hat tray run\|show\|hide\|toggle` move to MVP 3. |
+| 2026-11-04 | No `hat menu` for now. HatTray and `hat tray run\|show\|hide\|toggle` first planned for MVP 3, moved to MVP 2 (see below). |
 | 2026-11-04 | One state per user: a switch on any device switches all devices, and the log never has overlapping intervals. Rejected: one state per device (overlaps, every report needs a rule which device counts; high effort, little benefit for one user). A per-device "don't follow" flag that only skips applying the look can come later without changing the model (see [MVP 3 and outlook](mvp-3.md)). |
 | 2026-11-04 | Licence MIT, as for OTP-Scout. Public repository on GitHub. |
 | 2026-11-04 | Go instead of Python: one static binary `hat` for CLI, agent, server and tray, no runtime to install, independent of the distribution. Web UI with `templ` + HTMX, tray with `fyne.io/systray` (StatusNotifierItem over D-Bus, no GTK/Qt), D-Bus with `godbus/dbus`, SQLite with `modernc.org/sqlite`, MCP with the official Go SDK. External modules are executables speaking JSON over stdin/stdout. Rejected: Rust (slower development for a glue-heavy tool), TypeScript (needs a runtime, weak D-Bus and tray support). |
@@ -26,6 +26,7 @@
 | 2026-11-04 | The "Now" page needs a device token, given once as `/?token=…` and kept in a cookie, so a server on the network does not show what you are working on. A real login follows with the web UI in MVP 2. |
 | 2026-11-04 | Events refer to hats by key and to activities by name, not by an internal id. Keys are stable by design, and the log stays readable on its own. |
 | 2026-11-04 | `hat on X` while X is already worn changes nothing (it would otherwise reset the activity); `hat on X do Y` changes the activity. |
+| 2026-11-04 | After MVP 1 was built: the command line is the base, but the web UI and the HatTray are the tools used every day. HatTray moves from MVP 3 to MVP 2. MVP 2 is built in slices (read-only web UI, HatTray, Setup forms, corrections, the rest), each usable on its own. |
 
 ## Open
 

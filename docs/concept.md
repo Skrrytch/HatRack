@@ -133,10 +133,10 @@ then the components, then how it works and the architecture.
 
 1. [MVP 1](mvp-1.md): core, server with API and SSE, agent, CLI, config as
    YAML, Cinnamon backends, `notify`, `exec`.
-2. [MVP 2](mvp-2.md): full web UI with corrections, MCP, `launch`, `mqtt`,
-   GNOME and KDE backends, several devices.
-3. [MVP 3 and outlook](mvp-3.md): HatTray, idle detection, export, standalone
-   mode, then everything else sorted by benefit.
+2. [MVP 2](mvp-2.md): web UI (Now, Day, Week, Setup) with corrections,
+   HatTray, MCP, `launch`, `mqtt`, GNOME and KDE backends, several devices.
+3. [MVP 3 and outlook](mvp-3.md): idle detection, export, standalone mode,
+   then everything else sorted by benefit.
 
 ## Later ideas
 

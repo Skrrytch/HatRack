@@ -1,10 +1,25 @@
-# MVP 2: Web UI, MCP and more desktops
+# MVP 2: Web UI, tray and more desktops
 
-MVP 2 builds on [MVP 1](mvp-1.md). It makes the log editable, adds the web UI
-and MCP, and brings HatRack to more devices and desktops.
+MVP 2 builds on [MVP 1](mvp-1.md). The command line stays the base; the web
+UI and the tray are the tools for every day. MVP 2 adds both, makes the log
+editable, adds MCP, and brings HatRack to more devices and desktops.
+
+MVP 2 is built in slices, each usable on its own:
+
+1. **Web UI, read-only:** login, Now with switch bar, Day, Week.
+2. **HatTray:** icon and menu for switching.
+3. **Web UI, Setup:** hats, activities and module settings as forms.
+4. **Corrections:** editable Day view.
+5. **MCP, `launch`, `mqtt`, GNOME and KDE backends, several devices.**
 
 ## Capabilities
 
+- **HatTray.** A tray icon in the colour of the current hat (grey when
+  paused or none). Its menu lists the hats; each hat has its activities as a
+  submenu. Further entries: pause/resume, "Open HatRack" (the web UI) and
+  the current state as the first line. `hat tray run` starts it, `hat tray
+  show` / `hide` / `toggle` control the icon from the command line or a
+  shortcut. It follows switches made anywhere (CLI, web UI, other device).
 - **Full web UI.** Now, Day (timeline, editable), Week (totals per hat and
   activity, CSV export), Setup (hats, activities, module settings) and
   Devices (capabilities, last seen, errors).
@@ -33,7 +48,8 @@ and MCP, and brings HatRack to more devices and desktops.
 |---|---|---|
 | Core | `internal/core` | correction events, reports (totals, CSV), forms from JSON Schemas, MCP tool implementations, config bundles |
 | Server | `internal/server` (`hat server`) | web UI (`templ` + HTMX), MCP endpoint `/mcp`, token scopes, runtime for `core` modules |
-| Agent / CLI | `internal/agent`, `internal/cli` | notification actions, device settings layer, `config export --bundle` |
+| Agent / CLI | `internal/agent`, `internal/cli` | `watch` and `hats` socket commands, notification actions, device settings layer, `config export --bundle` |
+| HatTray | `internal/tray` (`hat tray`) | StatusNotifierItem and menu (`fyne.io/systray`), talks only to the agent socket |
 | Module `launch` | built in | backend `xdg` (exec, `gtk-launch`/`.desktop`, `xdg-open`) |
 | Module `mqtt` | built in, `runs_in: core` | publishes state to a broker |
 | Backends | built in | `wallpaper` and `color_scheme` for `gnome` and `kde` |
@@ -129,6 +145,26 @@ with actions (D-Bus `ActionInvoked`). The switch happens immediately without
 an activity; choosing "Resume review" adds an `activity` event with the
 switch time, so no minute is lost.
 
+### HatTray
+
+The tray is a thin client on the agent socket, like the CLI.
+
+- The socket gets two commands: `hats` (hats with colour, activities and the
+  resume setting) and `watch`, which keeps the connection open and sends a
+  line for every state or configuration change.
+- A click on a hat sends `on <hat>`; a click on an activity sends
+  `on <hat> do <activity>`, or `do <activity>` for the current hat.
+  `resume_activity: ask` is handled by the same notification as in the
+  section below, because the tray has no terminal.
+- The icon is drawn in code (a hat silhouette in the hat's colour) and sent
+  as a PNG, so no theme or toolkit is needed.
+- `hat tray show|hide|toggle` talk to the running tray through its own small
+  socket (`tray.sock`); `hat tray run` starts hidden or shown according to
+  `tray.yaml` in the agent configuration.
+- Cinnamon shows StatusNotifier icons through `xapp-sn-watcher` (Linux Mint).
+  Where no watcher runs, `hat tray run` says so and exits. GNOME needs the
+  AppIndicator extension; this is a hint in the message, not a dependency.
+
 ### Settings layers
 
 Module settings resolve as default → hat → device. The device layer lives on
@@ -165,6 +201,9 @@ hat server
 
 ### Tests
 
+- Tray: menu model (hats, activities, checked state) is a pure function of
+  the `hats` and `status` answers and is unit-tested; the D-Bus part is
+  tested by hand on Cinnamon.
 - Core: correction semantics (supersede chains, proposed vs applied), report
   totals, schema-to-form rendering.
 - Server: web routes with HTMX requests, MCP tools against a test database.
