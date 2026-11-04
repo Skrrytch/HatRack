@@ -208,3 +208,23 @@ func TestWebDetails(t *testing.T) {
 		t.Fatal("clear")
 	}
 }
+
+func TestTicketLinksSetup(t *testing.T) {
+	e, b := setupBrowser(t)
+	b.do("POST", "/action", url.Values{"op": {"on"}, "hat": {"venom"}, "activity": {"review"}})
+	b.do("POST", "/action", url.Values{"op": {"detail"}, "detail": {"https://wrong.example/browse/TAG-1"}})
+	_, out := b.do("GET", "/setup", nil)
+	if !strings.Contains(out, "https://wrong.example/browse/") {
+		t.Fatal("learned link listed")
+	}
+	b.do("POST", "/setup/tickets", url.Values{"project": {"TAG"}})
+	if links, _ := e.st.TicketLinks(context.Background()); len(links) != 0 {
+		t.Fatal("reset")
+	}
+	// the next link teaches it again
+	e.now = e.now.Add(5 * time.Minute)
+	b.do("POST", "/action", url.Values{"op": {"detail"}, "detail": {"https://jira.example.org/browse/TAG-2"}})
+	if links, _ := e.st.TicketLinks(context.Background()); links["TAG"] != "https://jira.example.org/browse/" {
+		t.Fatalf("relearned: %v", links)
+	}
+}

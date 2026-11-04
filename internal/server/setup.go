@@ -40,9 +40,12 @@ type setupView struct {
 	Hats      []setupHat
 	Archived  []setupHat
 	NextColor string // a colour no hat uses yet, for the next new hat
+	Tickets   []ticketLink
 	Devices   []deviceRow
 	Import    importView
 }
+
+type ticketLink struct{ Project, Base string }
 
 type deviceRow struct {
 	Name   string
@@ -546,6 +549,12 @@ func (s *Server) fillSetup(v *view, cfg core.Config) {
 			Activities: len(h.Activities), First: i == 0, Last: i == len(active)-1})
 	}
 	v.Setup.NextColor = freeColor(cfg)
+	if links, err := s.st.TicketLinks(context.Background()); err == nil {
+		for p, b := range links {
+			v.Setup.Tickets = append(v.Setup.Tickets, ticketLink{p, b})
+		}
+		sort.Slice(v.Setup.Tickets, func(i, j int) bool { return v.Setup.Tickets[i].Project < v.Setup.Tickets[j].Project })
+	}
 	if devs, err := s.st.Devices(context.Background()); err == nil {
 		loc := s.Loc
 		for _, d := range devs {
@@ -807,6 +816,15 @@ func (s *Server) defaultsSave(w http.ResponseWriter, r *http.Request, acc access
 		return
 	}
 	http.Redirect(w, r, "/setup/defaults?saved=1", http.StatusSeeOther)
+}
+
+// ticketsAction forgets a learned project; the next issue link teaches it.
+func (s *Server) ticketsAction(w http.ResponseWriter, r *http.Request, _ access) {
+	if err := s.st.ResetTicketLink(r.Context(), r.PostFormValue("project")); err != nil {
+		serverError(w, err)
+		return
+	}
+	http.Redirect(w, r, "/setup#tickets", http.StatusSeeOther)
 }
 
 // importAction previews or applies a YAML configuration from the form

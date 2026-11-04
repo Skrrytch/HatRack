@@ -48,6 +48,20 @@
   <a class="btn" href="/setup/defaults">{{t $.Lang "web.setup.edit"}}</a>
 </div>
 
+<h1 id="tickets">{{t $.Lang "web.tickets.title"}}</h1>
+<div class="card">
+  <p class="dim small" style="margin-top:0">{{t $.Lang "web.tickets.intro"}}</p>
+  {{if .Tickets}}
+  <table class="list">
+  {{range .Tickets}}
+    <tr><td><strong class="num">{{.Project}}</strong></td><td class="dim small"><code>{{.Base}}</code></td>
+      <td class="acts"><form method="post" action="/setup/tickets"><input type="hidden" name="project" value="{{.Project}}">
+        <button title="{{t $.Lang "web.tickets.reset_hint" .Project}}" onclick="return confirm(this.title)">{{t $.Lang "web.tickets.reset"}}</button></form></td></tr>
+  {{end}}
+  </table>
+  {{else}}<p class="dim">{{t $.Lang "web.tickets.none"}}</p>{{end}}
+</div>
+
 <h1>{{t $.Lang "web.ai.title"}}</h1>
 <div class="card row">
   <span class="grow">{{t $.Lang "web.ai.short"}}</span>
