@@ -110,31 +110,68 @@ browser language and is stored in a cookie.
 
 ### MCP
 
-| Tool | Kind | Purpose |
-|---|---|---|
-| `get_current` | read | hat, activity, since |
-| `list_hats`, `list_activities` | read | master data |
-| `query_time(from, to, group_by)` | read | totals by hat, activity, day |
-| `list_events(from, to)` | read | raw events and intervals |
-| `switch(hat, activity?)` | write | same rules as the CLI |
-| `add_note(text, at?)` | write | note on the current or a past interval |
-| `propose_correction(...)` | write | creates a `proposed` correction |
+An AI assistant reads HatRack's configuration and, above all, the time log:
+"how long did I work for VENOM last week, split by activity?" The first step
+is read-only; Bert uses Claude Code, which talks to `/mcp` over HTTP, so no
+local bridge is needed.
 
-The MCP token has scopes: `read`, `switch`, `note`, `propose`. Without a write
-scope the tools are not listed.
+**Step 1 (planned):**
+
+1. **Access:** MCP tokens, managed in Setup → "AI access": name ("Claude Code
+   laptop"), shown once, only the hash stored (table `mcp_tokens`: id, name,
+   hash, scopes, created, last_used), revocable at once. The only scope for
+   now is `read`; the column exists so that later scopes need no migration.
+2. **`/mcp`:** Streamable HTTP with the official Go SDK
+   (`github.com/modelcontextprotocol/go-sdk`), `Authorization: Bearer <mcp
+   token>`. Device tokens and web sessions do not work there, and MCP tokens
+   work nowhere else. Last use is shown in Setup.
+3. **Read tools** (times first, they are the main purpose):
+
+| Tool | Purpose |
+|---|---|
+| `query_time(from, to, group_by, hat?)` | totals by `hat`, `activity`, `day` or `week`, optionally for one hat; with each day's working hours and the share outside them |
+| `list_entries(from, to, hat?)` | the entries (intervals) with hat, activity, start, end, duration; gaps marked |
+| `get_current` | hat, activity, since, duration, today per hat |
+| `list_hats(include_archived?)` | hats with key, name, colour, activities, resume setting |
+| `get_config` | the whole configuration as YAML, as `hat config export` gives it |
+
+- Periods: dates (`2026-11-04`) or RFC 3339 times, and the words of
+  `hat log` (`today`, `yesterday`, `week`) plus `last week`, `month` and
+  `last month`, in the server's time zone. Hats resolve like on the command line ("ven" finds
+  VENOM). Corrections count, proposals do not.
+- Answers are JSON (structured content) plus a short text summary, so the
+  assistant can both compute and quote.
+- Errors are plain sentences the assistant can pass on.
+
+**Connecting Claude Code:**
+
+```
+claude mcp add --transport http hatrack https://<server>/mcp --header "Authorization: Bearer <token>"
+```
+
+The Setup page shows this line, filled in, when a token is created.
+
+**Tests:** the SDK's client runs every tool against an `httptest` server:
+auth (no token, device token, revoked token), each tool, periods, prefix
+names, corrections counted, bad input. No real assistant is involved.
+
+**Later (not planned yet):** a stdio bridge `hat mcp` for clients that start
+a local command (Claude Desktop); write scopes `switch` (switch, pause, take
+off, resume), `propose` (corrections that wait for confirmation in the Day
+view, stored as the intended edit and planned on accept) and `note`.
 
 ### `launch`
 
-On `enter`, each entry is started unless it is already running (optional
-check by process name or window class). `leave` does nothing; closing windows
-is out of scope until window modules exist.
+Done. On putting a hat on (a look change, so pausing and resuming does not
+open things twice), `apps` are started by their `.desktop` id with
+`gtk-launch` and `open` entries (addresses, folders, files) with `xdg-open`,
+detached from the agent. Missing programs or paths are reported as module
+errors. Nothing is closed when the hat comes off.
 
 ```yaml
 launch:
-  - app: org.mozilla.firefox.desktop
-  - url: https://jira.example.com
-  - cmd: "code ~/projects/venom"
-    unless_running: code
+  apps: [firefox, org.gnome.Nautilus]
+  open: [https://jira.example.com, ~/Projekte/venom]
 ```
 
 ### `mqtt`
