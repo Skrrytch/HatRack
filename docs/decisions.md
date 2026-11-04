@@ -31,6 +31,7 @@
 | 2026-11-04 | The web UI stays on `html/template` with a few lines of plain JavaScript (time zone cookie, reload on change) instead of `templ` + HTMX: pages are whole documents, forms work without scripts, and there is no generator and no third-party script to vendor. Times are shown in the browser's time zone (cookie), else the server's (`--timezone`). |
 | 2026-11-04 | In the web UI, `resume_activity: ask` counts as `never`: the activity buttons are right next to the hat. |
 | 2026-11-04 | HatTray: `hat tray hide` ends the tray process and `show` starts it, because `fyne.io/systray` cannot hide the icon of a running process on Linux. Clicking a hat is `hat on <hat>`, so its `resume_activity` applies; "Hat only" in the submenu starts it without an activity. |
+| 2026-11-04 | Icon: a dark rounded square with a frame in the hat's colour and a cream top hat whose band has the hat's colour; grey (`#8a8f98`) while paused or without a hat. Designed by Bert, drawn in code by `internal/tray/icon.go` for the tray and used as `hatrack.svg` (blue) for the web UI favicon. |
 
 ## Open
 

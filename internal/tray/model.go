@@ -28,8 +28,8 @@ type Item struct {
 	Children  []Item
 }
 
-// Grey is the icon colour while no hat is worn.
-const Grey = "#9a9a9a"
+// Grey is the frame colour while paused or without a hat.
+const Grey = "#8a8f98"
 
 // IconColor returns the colour of the icon: the hat's colour while it is
 // worn, grey when paused or without a hat.

@@ -277,6 +277,9 @@ func TestStaticAndLiveStream(t *testing.T) {
 	if r, out := b.do("GET", "/static/app.js", nil); r.StatusCode != 200 || !strings.Contains(out, "EventSource") {
 		t.Fatalf("app.js: %d", r.StatusCode)
 	}
+	if r, out := b.do("GET", "/static/hatrack.svg", nil); r.StatusCode != 200 || r.Header.Get("Content-Type") != "image/svg+xml" || !strings.Contains(out, "<svg") {
+		t.Fatalf("hatrack.svg: %d %s", r.StatusCode, r.Header.Get("Content-Type"))
+	}
 	if r, _ := b.do("GET", "/static/nope.js", nil); r.StatusCode != 404 {
 		t.Fatalf("missing static file: %d", r.StatusCode)
 	}

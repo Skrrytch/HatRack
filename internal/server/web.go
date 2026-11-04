@@ -687,6 +687,8 @@ func (s *Server) static(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case strings.HasSuffix(r.URL.Path, ".js"):
 		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	case strings.HasSuffix(r.URL.Path, ".svg"):
+		w.Header().Set("Content-Type", "image/svg+xml")
 	case strings.HasSuffix(r.URL.Path, ".css"):
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 	}

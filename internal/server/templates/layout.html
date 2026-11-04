@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HatRack</title>
+<link rel="icon" type="image/svg+xml" href="/static/hatrack.svg">
 <style>
   :root { color-scheme: light dark; --fg: #1d1d1f; --bg: #fafafa; --card: #fff; --line: #0002; --dim: #0009; }
   @media (prefers-color-scheme: dark) { :root { --fg: #eee; --bg: #161618; --card: #202023; --line: #fff2; --dim: #fff9; } }
@@ -51,7 +52,7 @@
 </head>
 <body{{if .Live}} data-live="1"{{end}}>
 <header>
-  <strong>🎩 HatRack</strong>
+  <strong style="display:flex;align-items:center;gap:.5rem"><img src="/static/hatrack.svg" width="26" height="26" alt="">HatRack</strong>
   <nav>{{range .Nav}}<a href="{{.Href}}"{{if .Active}} class="on"{{end}}>{{.Label}}</a>{{end}}</nav>
   <span class="sp"></span>
   <span><a href="?lang=en">EN</a> <a href="?lang=de">DE</a></span>
