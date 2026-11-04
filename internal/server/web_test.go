@@ -251,7 +251,7 @@ func TestLanguageAndTimeZone(t *testing.T) {
 	b := newBrowser(t, e)
 	b.login("pw")
 
-	if _, out := b.do("GET", "/", nil, "Accept-Language", "de-DE"); !strings.Contains(out, "Hüte") {
+	if _, out := b.do("GET", "/", nil, "Accept-Language", "de-DE"); !strings.Contains(out, "pausiert seit") {
 		t.Fatalf("german by header: %s", out)
 	}
 	// ?lang= sets the cookie and redirects without the parameter
@@ -259,7 +259,7 @@ func TestLanguageAndTimeZone(t *testing.T) {
 	if r.StatusCode != 303 || r.Header.Get("Location") != "/week?date=2026-11-04" {
 		t.Fatalf("lang redirect: %d %s", r.StatusCode, r.Header.Get("Location"))
 	}
-	if _, out := b.do("GET", "/", nil, "Accept-Language", "de"); !strings.Contains(out, ">Hats<") {
+	if _, out := b.do("GET", "/", nil, "Accept-Language", "de"); !strings.Contains(out, "paused since") {
 		t.Fatalf("cookie should win over the header")
 	}
 	// the browser's time zone shifts the times shown

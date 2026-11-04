@@ -2,11 +2,10 @@
 {{with .Hat}}
 <div class="hatpage" style="--c:{{.Color}}">
 <nav class="crumbs"><a href="/setup">{{template "icon" "back"}} {{t $.Lang "web.nav.setup"}}</a> <span class="dim">/</span> <span>{{t $.Lang "web.setup.hats_crumb"}}</span></nav>
-<section class="status hathero">
-  <div class="status-main"><span class="bigdot"></span><div>
-    <div class="dim small">{{t $.Lang "web.setup.editing"}}</div>
-    <div class="status-hat">{{if .Name}}{{.Name}}{{else}}{{.Key}}{{end}} <small class="dim keytag" title="{{t $.Lang "web.setup.key"}}">{{.Key}}</small></div>
-  </div></div>
+<section class="head">
+  <div class="bighat">{{template "hat" .Color}}</div>
+  <div><div class="kicker">{{t $.Lang "web.setup.editing"}}</div>
+  <div class="title">{{if .Name}}{{.Name}}{{else}}{{.Key}}{{end}} <span class="keytag" title="{{t $.Lang "web.setup.key"}}">{{.Key}}</span></div></div>
 </section>
 {{if .Saved}}<div class="ok">{{t $.Lang "web.setup.saved"}}</div>{{end}}
 <form method="post" action="/setup/hat">

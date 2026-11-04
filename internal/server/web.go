@@ -92,6 +92,8 @@ type hatCard struct {
 	Ink              string // text colour on the hat colour
 	Current          bool
 	Activities       []activityChip
+	Total            string // today
+	BaseMS, SinceMS  int64  // the worn hat's total keeps counting in the browser
 }
 
 type nowView struct {
@@ -103,24 +105,76 @@ type nowView struct {
 	SinceMS  int64 // for the live duration
 	Duration string
 	Cards    []hatCard
-	Today    []todayRow
 	TodaySum string
-	SumBase  int64 // with Today[i].SinceMS, the sum keeps counting too
+	SumBase  int64 // with SumSince, the day's sum keeps counting too
 	SumSince int64
 	Running  bool // the time log is running (a hat is worn)
-}
-
-// todayRow is one hat in the "today" summary of the Now page.
-type todayRow struct {
-	Name, Color, Duration string
-	Pct                   float64
-	BaseMS, SinceMS       int64 // the worn hat keeps counting in the browser
+	TL       timelineView
 }
 
 type segment struct {
 	Left, Width float64
 	Color       string
 	Title       string
+	Label       string // shown inside the segment if there is room
+	Ink         string // text colour on Color
+}
+
+// timelineView is the day as a band: entries, the time outside the working
+// hours, hour marks and where "now" is.
+type timelineView struct {
+	Segments []segment
+	Off      []segment
+	Ticks    []tick
+	Work     string // "08:00–18:00", or "" on a day off
+	NowLeft  float64
+	ShowNow  bool
+}
+
+// timeline lays out the intervals of one day (see dayWindow).
+func (s *Server) timeline(day time.Time, cfg core.Config, iv []core.Interval, lang string) timelineView {
+	var tl timelineView
+	pal, nm := newPalette(cfg), names(cfg)
+	from, to, wFrom, wTo, workday := dayWindow(day, cfg.Work(), iv)
+	span := float64(to.Sub(from))
+	pct := func(t time.Time) float64 { return float64(t.Sub(from)) / span * 100 }
+	if workday {
+		tl.Work = wFrom.Format("15:04") + "–" + wTo.Format("15:04")
+		if wFrom.After(from) {
+			tl.Off = append(tl.Off, segment{Left: 0, Width: pct(wFrom)})
+		}
+		if wTo.Before(to) {
+			tl.Off = append(tl.Off, segment{Left: pct(wTo), Width: 100 - pct(wTo)})
+		}
+	} else {
+		tl.Off = []segment{{Left: 0, Width: 100}}
+	}
+	step := time.Hour
+	if to.Sub(from) > 12*time.Hour {
+		step = 2 * time.Hour
+	}
+	for t := from; !t.After(to); t = t.Add(step) {
+		tl.Ticks = append(tl.Ticks, tick{Left: pct(t), Label: t.Format("15")})
+	}
+	loc := day.Location()
+	for _, i := range iv {
+		label := nameOf(nm, i.Hat)
+		if i.Activity != "" {
+			label += " · " + i.Activity
+		}
+		end := i.End.In(loc).Format("15:04")
+		if i.Open {
+			end = i18n.In(lang, "cli.log.now")
+		}
+		col := pal.color(i.Hat)
+		tl.Segments = append(tl.Segments, segment{Left: pct(i.Start), Width: float64(i.Duration()) / span * 100,
+			Color: col, Ink: ink(col), Label: label,
+			Title: fmt.Sprintf("%s–%s %s", i.Start.In(loc).Format("15:04"), end, label)})
+	}
+	if now := s.Now(); !now.Before(from) && now.Before(to) {
+		tl.ShowNow, tl.NowLeft = true, pct(now)
+	}
+	return tl
 }
 
 type rowView struct {
@@ -150,16 +204,13 @@ type dayView struct {
 	Title      string
 	Date       string
 	Prev, Next string
-	Segments   []segment
+	TL         timelineView
 	Rows       []rowView
 	Totals     []totalView
 	Sum        string
 	Choices    []choiceGroup
 	Done       string // id of the correction just made, for undo
 	IsToday    bool
-	Off        []segment // parts of the bar outside the working hours
-	Ticks      []tick
-	Work       string // "08:00–18:00", or "" on a day off
 }
 
 type tick struct {
@@ -459,33 +510,31 @@ func (s *Server) nowPage(w http.ResponseWriter, r *http.Request, acc access) {
 	}
 	// today, per hat; the worn hat keeps counting in the browser
 	day := parseDate("", loc, s.Now())
-	if _, tot, err := s.intervalsIn(ctx, day, day.AddDate(0, 0, 1)); err == nil {
-		var most time.Duration
-		for _, t := range tot {
-			most = max(most, t.Duration)
+	if iv, tot, err := s.intervalsIn(ctx, day, day.AddDate(0, 0, 1)); err == nil {
+		since := st.Since
+		if since.Before(day) {
+			since = day
 		}
+		byHat := map[string]time.Duration{}
 		for _, t := range tot {
-			row := todayRow{Name: nameOf(names(cfg), t.Hat), Color: pal.color(t.Hat), Duration: core.FormatDuration(t.Duration)}
-			if most > 0 {
-				row.Pct = float64(t.Duration) / float64(most) * 100
+			byHat[t.Hat] = t.Duration
+		}
+		for i := range n.Cards {
+			c := &n.Cards[i]
+			if d, ok := byHat[c.Key]; ok {
+				c.Total = core.FormatDuration(d)
 			}
-			if n.Running && t.Hat == st.Hat {
-				since := st.Since
-				if since.Before(day) {
-					since = day
-				}
-				row.SinceMS = since.UnixMilli()
-				row.BaseMS = (t.Duration - s.Now().Sub(since)).Milliseconds()
+			if n.Running && c.Key == st.Hat {
+				c.SinceMS = since.UnixMilli()
+				c.BaseMS = (byHat[c.Key] - s.Now().Sub(since)).Milliseconds()
 			}
-			n.Today = append(n.Today, row)
 		}
 		n.TodaySum = core.FormatDuration(sumOf(tot))
-		for _, r := range n.Today {
-			if r.SinceMS != 0 {
-				n.SumSince = r.SinceMS
-				n.SumBase = sumOf(tot).Milliseconds() - (s.Now().UnixMilli() - r.SinceMS)
-			}
+		if n.Running {
+			n.SumSince = since.UnixMilli()
+			n.SumBase = (sumOf(tot) - s.Now().Sub(since)).Milliseconds()
 		}
+		n.TL = s.timeline(day, cfg, iv, s.langOf(r))
 	}
 	s.render(w, v, http.StatusOK)
 }
@@ -638,27 +687,7 @@ func (s *Server) dayPage(w http.ResponseWriter, r *http.Request, acc access) {
 	d := &v.Day
 	d.Title = day.Format("Mon 2006-01-02")
 	d.Prev, d.Next = "/day?date="+dateStr(day.AddDate(0, 0, -1)), "/day?date="+dateStr(next)
-	from, to, wFrom, wTo, workday := dayWindow(day, cfg.Work(), iv)
-	span := float64(to.Sub(from))
-	pct := func(t time.Time) float64 { return float64(t.Sub(from)) / span * 100 }
-	if workday {
-		d.Work = wFrom.Format("15:04") + "–" + wTo.Format("15:04")
-		if wFrom.After(from) {
-			d.Off = append(d.Off, segment{Left: 0, Width: pct(wFrom)})
-		}
-		if wTo.Before(to) {
-			d.Off = append(d.Off, segment{Left: pct(wTo), Width: 100 - pct(wTo)})
-		}
-	} else {
-		d.Off = []segment{{Left: 0, Width: 100}}
-	}
-	step := time.Hour
-	if to.Sub(from) > 12*time.Hour {
-		step = 2 * time.Hour
-	}
-	for t := from; !t.After(to); t = t.Add(step) {
-		d.Ticks = append(d.Ticks, tick{Left: pct(t), Label: t.Format("15")})
-	}
+	d.TL = s.timeline(day, cfg, iv, lang)
 	d.Date = dateStr(day)
 	d.IsToday = v.Live
 	d.Done = r.URL.Query().Get("done")
@@ -674,17 +703,10 @@ func (s *Server) dayPage(w http.ResponseWriter, r *http.Request, acc access) {
 				Duration: core.FormatDuration(i.Start.Sub(prevEnd))})
 		}
 		prevEnd = i.End
-		what := nameOf(nm, i.Hat)
-		if i.Activity != "" {
-			what += " · " + i.Activity
-		}
 		end := i.End.In(loc).Format("15:04")
 		if i.Open {
 			end = i18n.In(lang, "cli.log.now")
 		}
-		d.Segments = append(d.Segments, segment{
-			Left: pct(i.Start), Width: float64(i.Duration()) / span * 100,
-			Color: pal.color(i.Hat), Title: fmt.Sprintf("%s–%s %s", i.Start.In(loc).Format("15:04"), end, what)})
 		row := rowView{Start: i.Start.In(loc).Format("15:04"), End: end, Hat: nameOf(nm, i.Hat),
 			Color: pal.color(i.Hat), Activity: i.Activity, Duration: core.FormatDuration(i.Duration()), Open: i.Open,
 			ID: i.StartID, What: i.Hat + "|" + i.Activity, StartIn: i.Start.In(loc).Format("15:04")}
