@@ -83,7 +83,7 @@ func RenderLog(w io.Writer, d agent.LogData, from, to time.Time) {
 				fmt.Fprintf(w, "\n%s\n", day)
 			}
 		}
-		end := clock(iv.End)
+		end := iv.End.Local().Format("15:04")
 		if iv.Open {
 			end = i18n.T("cli.log.now")
 		}
@@ -91,7 +91,7 @@ func RenderLog(w io.Writer, d agent.LogData, from, to time.Time) {
 		if iv.Activity != "" {
 			what += " · " + iv.Activity
 		}
-		fmt.Fprintf(w, "  %s–%-5s  %-34s %8s\n", clock(iv.Start), end, what, hm(iv.Duration()))
+		fmt.Fprintf(w, "  %s–%-5s  %-34s %8s\n", iv.Start.Local().Format("15:04"), end, what, hm(iv.Duration()))
 	}
 	fmt.Fprintf(w, "\n%s\n", i18n.T("cli.log.totals"))
 	var sum time.Duration

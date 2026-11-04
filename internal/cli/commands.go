@@ -38,28 +38,9 @@ func decode[T any](r agent.Response) T {
 	return v
 }
 
-func clock(t time.Time) string { return t.Local().Format("15:04") }
-
-// StatusLine renders the one-line status.
-func StatusLine(d agent.StatusData, now time.Time) string {
-	s := d.State
-	switch s.Mode {
-	case core.ModeWearing:
-		parts := []string{d.HatName}
-		if s.Activity != "" {
-			parts = append(parts, s.Activity)
-		}
-		parts = append(parts, fmt.Sprintf("%s (%s)", i18n.T("cli.since", clock(s.Since)), core.FormatDuration(now.Sub(s.Since))))
-		return strings.Join(parts, " · ")
-	case core.ModePaused:
-		return i18n.T("cli.paused", d.HatName, clock(s.Since))
-	}
-	return i18n.T("cli.nohat")
-}
-
 func (a *App) printStatus(resp agent.Response, afterChange bool) {
 	d := decode[agent.StatusData](resp)
-	fmt.Fprintln(a.Out, StatusLine(d, time.Now()))
+	fmt.Fprintln(a.Out, agent.StatusLine(d, time.Now()))
 	if !d.Connected {
 		fmt.Fprintln(a.Err, i18n.T("cli.offline", d.Queued))
 	}

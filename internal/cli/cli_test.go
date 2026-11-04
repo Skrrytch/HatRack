@@ -55,14 +55,14 @@ func TestPeriod(t *testing.T) {
 func TestStatusLineAndLog(t *testing.T) {
 	i18n.Set("en")
 	since := time.Now().Add(-83 * time.Minute)
-	line := StatusLine(agent.StatusData{HatName: "VENOM", State: core.State{Mode: core.ModeWearing, Hat: "venom", Activity: "review", Since: since}}, time.Now())
+	line := agent.StatusLine(agent.StatusData{HatName: "VENOM", State: core.State{Mode: core.ModeWearing, Hat: "venom", Activity: "review", Since: since}}, time.Now())
 	if !strings.HasPrefix(line, "VENOM · review · since ") || !strings.HasSuffix(line, "(1h 23m)") {
 		t.Fatalf("line: %q", line)
 	}
-	if got := StatusLine(agent.StatusData{HatName: "VENOM", State: core.State{Mode: core.ModePaused, Since: since}}, time.Now()); !strings.HasPrefix(got, "paused (VENOM) since ") {
+	if got := agent.StatusLine(agent.StatusData{HatName: "VENOM", State: core.State{Mode: core.ModePaused, Since: since}}, time.Now()); !strings.HasPrefix(got, "paused (VENOM) since ") {
 		t.Fatalf("paused: %q", got)
 	}
-	if got := StatusLine(agent.StatusData{}, time.Now()); got != "No hat on" {
+	if got := agent.StatusLine(agent.StatusData{}, time.Now()); got != "No hat on" {
 		t.Fatalf("none: %q", got)
 	}
 

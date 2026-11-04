@@ -385,3 +385,50 @@ func TestConfigImportThroughAgent(t *testing.T) {
 		t.Fatal("log without a server should fail")
 	}
 }
+
+func TestHatsAndWatch(t *testing.T) {
+	r := newRig(t)
+	r.importConfig()
+	a, _ := r.agent("laptop")
+	r.start(a)
+	sock := filepath.Join(t.TempDir(), "w.sock")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go a.Serve(ctx, sock)
+	eventually(t, "config", func() bool { a.mu.Lock(); defer a.mu.Unlock(); return len(a.config.Hats) == 3 })
+	eventually(t, "socket", func() bool { _, err := Call(sock, Request{Cmd: "ping"}); return err == nil })
+
+	resp, err := Call(sock, Request{Cmd: "hats"})
+	if err != nil || !resp.OK {
+		t.Fatalf("hats: %v %+v", err, resp)
+	}
+	var snap Snapshot
+	json.Unmarshal(resp.Data, &snap)
+	if len(snap.Hats) != 3 || snap.Hats[0].Key != "venom" || snap.Hats[0].Resume != "last" ||
+		len(snap.Hats[0].Activities) != 2 || snap.Hats[2].Activities == nil || snap.Server != r.srv.URL {
+		t.Fatalf("snapshot: %+v", snap)
+	}
+
+	// watch: the first snapshot comes at once, the next after a change
+	snaps := make(chan Snapshot, 10)
+	go Watch(ctx, sock, func(s Snapshot) { snaps <- s })
+	next := func() Snapshot {
+		select {
+		case s := <-snaps:
+			return s
+		case <-time.After(5 * time.Second):
+			t.Fatal("no snapshot")
+			return Snapshot{}
+		}
+	}
+	if first := next(); first.Status.State.Mode != core.ModeNone {
+		t.Fatalf("first snapshot: %+v", first.Status.State)
+	}
+	call(t, a, Request{Cmd: "on", Hat: "tag"})
+	for i := 0; i < 5; i++ {
+		if s := next(); s.Status.State.Hat == "tag" && s.Status.HatName == "TAG" {
+			return
+		}
+	}
+	t.Fatal("no snapshot with the new hat")
+}

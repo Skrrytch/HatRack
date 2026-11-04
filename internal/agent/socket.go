@@ -51,6 +51,23 @@ type StatusData struct {
 	Changed   bool       `json:"changed"` // false if the command was a no-op
 }
 
+// HatInfo describes a hat for clients that show a menu.
+type HatInfo struct {
+	Key        string   `json:"key"`
+	Name       string   `json:"name"`
+	Color      string   `json:"color,omitempty"`
+	Activities []string `json:"activities"`
+	Resume     string   `json:"resume"`
+}
+
+// Snapshot is everything a menu client needs: the status, the hats and the
+// server address (for "open the web UI").
+type Snapshot struct {
+	Status StatusData `json:"status"`
+	Hats   []HatInfo  `json:"hats"`
+	Server string     `json:"server,omitempty"`
+}
+
 // InfoData is the data of an info answer (resume settings of a hat).
 type InfoData struct {
 	Hat  string `json:"hat"`
@@ -123,6 +140,10 @@ func (a *Agent) Handle(ctx context.Context, req Request) Response {
 		a.mu.Lock()
 		defer a.mu.Unlock()
 		return a.status(false)
+	case "hats":
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		return ok(a.snapshot())
 	case "info":
 		a.mu.Lock()
 		defer a.mu.Unlock()
@@ -170,6 +191,22 @@ func (a *Agent) change(ctx context.Context, req Request, in core.Input) Response
 		return fail(err.Error())
 	}
 	return a.status(true)
+}
+
+// snapshot builds the menu data. Caller holds a.mu.
+func (a *Agent) snapshot() Snapshot {
+	r := a.status(false)
+	snap := Snapshot{Server: a.cfg.Server, Hats: []HatInfo{}}
+	json.Unmarshal(r.Data, &snap.Status)
+	for _, h := range a.config.ActiveHats() {
+		acts := h.Activities
+		if acts == nil {
+			acts = []string{}
+		}
+		snap.Hats = append(snap.Hats, HatInfo{Key: h.Key, Name: h.DisplayName(), Color: h.Color,
+			Activities: acts, Resume: a.config.ResumeMode(h)})
+	}
+	return snap
 }
 
 // status builds the answer for status and for changes. Caller holds a.mu.
@@ -302,6 +339,11 @@ func (a *Agent) serveConn(ctx context.Context, c net.Conn) {
 			enc.Encode(fail("bad request: " + err.Error()))
 			continue
 		}
+		if req.Cmd == "watch" {
+			c.SetReadDeadline(time.Time{})
+			a.watch(ctx, c, enc)
+			return
+		}
 		c.SetWriteDeadline(time.Now().Add(60 * time.Second))
 		if err := enc.Encode(a.Handle(ctx, req)); err != nil {
 			return
@@ -330,3 +372,62 @@ func Call(path string, req Request) (Response, error) {
 
 // ErrNotRunning means the agent socket is not there.
 var ErrNotRunning = errors.New("agent not running")
+
+// watch keeps the connection open and sends a snapshot now and after every
+// change of state, configuration or connection.
+func (a *Agent) watch(ctx context.Context, c net.Conn, enc *json.Encoder) {
+	ch := a.subscribe()
+	defer a.unsubscribe(ch)
+	send := func() bool {
+		a.mu.Lock()
+		resp := ok(a.snapshot())
+		a.mu.Unlock()
+		c.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		return enc.Encode(resp) == nil
+	}
+	if !send() {
+		return
+	}
+	// A heartbeat finds clients that went away without a change in between.
+	tick := time.NewTicker(20 * time.Second)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ch:
+		case <-tick.C:
+		}
+		if !send() {
+			return
+		}
+	}
+}
+
+// Watch connects to the agent and calls fn for every snapshot until the
+// connection ends or ctx is cancelled.
+func Watch(ctx context.Context, path string, fn func(Snapshot)) error {
+	c, err := net.DialTimeout("unix", path, 2*time.Second)
+	if err != nil {
+		return ErrNotRunning
+	}
+	defer c.Close()
+	go func() { <-ctx.Done(); c.Close() }()
+	if err := json.NewEncoder(c).Encode(Request{Cmd: "watch"}); err != nil {
+		return err
+	}
+	dec := json.NewDecoder(bufio.NewReader(c))
+	for {
+		var resp Response
+		if err := dec.Decode(&resp); err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return err
+		}
+		var snap Snapshot
+		if err := json.Unmarshal(resp.Data, &snap); err == nil {
+			fn(snap)
+		}
+	}
+}

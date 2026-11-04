@@ -33,6 +33,38 @@ type Agent struct {
 	neutral   map[string]json.RawMessage // module id -> neutral snapshot
 
 	kick chan struct{}
+
+	subMu sync.Mutex
+	subs  map[chan struct{}]struct{}
+}
+
+func (a *Agent) subscribe() chan struct{} {
+	ch := make(chan struct{}, 1)
+	a.subMu.Lock()
+	if a.subs == nil {
+		a.subs = map[chan struct{}]struct{}{}
+	}
+	a.subs[ch] = struct{}{}
+	a.subMu.Unlock()
+	return ch
+}
+
+func (a *Agent) unsubscribe(ch chan struct{}) {
+	a.subMu.Lock()
+	delete(a.subs, ch)
+	a.subMu.Unlock()
+}
+
+// changed wakes everything that watches the agent.
+func (a *Agent) changed() {
+	a.subMu.Lock()
+	defer a.subMu.Unlock()
+	for ch := range a.subs {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}
 }
 
 // New creates an agent. The registry holds the modules available on this
@@ -76,6 +108,7 @@ func (a *Agent) save() {
 			log.Printf("cache %s: %v", key, err)
 		}
 	}
+	a.changed()
 }
 
 // Run starts the connection to the server and the flusher; it returns when
@@ -98,6 +131,7 @@ func (a *Agent) setConnected(v bool) {
 	a.mu.Lock()
 	a.connected = v
 	a.mu.Unlock()
+	a.changed()
 }
 
 func (a *Agent) streamLoop(ctx context.Context) {

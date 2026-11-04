@@ -7,7 +7,7 @@ editable, adds MCP, and brings HatRack to more devices and desktops.
 MVP 2 is built in slices, each usable on its own:
 
 1. **Web UI, read-only (done):** login, Now with switch bar, Day, Week, CSV.
-2. **HatTray:** icon and menu for switching.
+2. **HatTray (done):** icon and menu for switching.
 3. **Web UI, Setup:** hats, activities and module settings as forms.
 4. **Corrections:** editable Day view.
 5. **MCP, `launch`, `mqtt`, GNOME and KDE backends, several devices.**
@@ -158,11 +158,14 @@ The tray is a thin client on the agent socket, like the CLI.
   `on <hat> do <activity>`, or `do <activity>` for the current hat.
   `resume_activity: ask` is handled by the same notification as in the
   section below, because the tray has no terminal.
-- The icon is drawn in code (a hat silhouette in the hat's colour) and sent
-  as a PNG, so no theme or toolkit is needed.
-- `hat tray show|hide|toggle` talk to the running tray through its own small
-  socket (`tray.sock`); `hat tray run` starts hidden or shown according to
-  `tray.yaml` in the agent configuration.
+- The icon is drawn in code (a top hat in the hat's colour, grey while
+  paused or without a hat) and sent as a PNG, so no theme or toolkit is
+  needed. The tooltip shows the status line.
+- The library has no way to hide the icon of a running process on Linux, so
+  `hat tray hide` ends the tray process (over its own small socket,
+  `tray.sock`), `hat tray show` starts one in the background and `hat tray
+  toggle` does whichever applies. `hat tray run` runs in the foreground; for
+  start at login copy `deploy/hatrack-tray.desktop` to `~/.config/autostart/`.
 - Cinnamon shows StatusNotifier icons through `xapp-sn-watcher` (Linux Mint).
   Where no watcher runs, `hat tray run` says so and exits. GNOME needs the
   AppIndicator extension; this is a hint in the message, not a dependency.
@@ -205,9 +208,11 @@ hat server
 
 ### Tests
 
-- Tray: menu model (hats, activities, checked state) is a pure function of
-  the `hats` and `status` answers and is unit-tested; the D-Bus part is
-  tested by hand on Cinnamon.
+- Tray: the menu model (hats, activities, checked state) is a pure function
+  of the agent's snapshot and is unit-tested, as are the icon and the
+  `hats`/`watch` socket commands. The D-Bus part was checked on Cinnamon
+  with `xapp-sn-watcher`: the item registers, the menu layout is correct and
+  a click through `com.canonical.dbusmenu` switches the hat.
 - Core: correction semantics (supersede chains, proposed vs applied), report
   totals, schema-to-form rendering.
 - Server: web routes with HTMX requests, MCP tools against a test database.
