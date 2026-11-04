@@ -406,7 +406,16 @@ func mergeHat(old, in Hat, replace bool) Hat {
 	h.Name, h.Color, h.ResumeActivity = in.Name, in.Color, in.ResumeActivity
 	h.Archived, h.WorkTime = in.Archived, in.WorkTime
 	if replace || len(in.Modules) > 0 {
-		if replace {
+		// a copy: changing old's map in place would hide the change from
+		// the comparison in Merge, and the import would be dropped
+		mods := map[string]ModuleCfg{}
+		if !replace {
+			for id, m := range old.Modules {
+				mods[id] = m
+			}
+		}
+		h.Modules = mods
+		if len(h.Modules) == 0 {
 			h.Modules = nil
 		}
 		for id, m := range in.Modules {

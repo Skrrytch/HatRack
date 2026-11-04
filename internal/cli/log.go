@@ -18,15 +18,17 @@ import (
 func period(arg string, now time.Time) (from, to time.Time, err error) {
 	loc := now.Location()
 	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	back := (int(midnight.Weekday()) + 6) % 7 // Monday is the first day
+	monday := midnight.AddDate(0, 0, -back)
 	switch strings.ToLower(arg) {
-	case "", "today":
+	case "", "today", "heute":
 		return midnight, midnight.AddDate(0, 0, 1), nil
-	case "yesterday":
+	case "yesterday", "gestern":
 		return midnight.AddDate(0, 0, -1), midnight, nil
-	case "week":
-		back := (int(midnight.Weekday()) + 6) % 7 // Monday is the first day
-		start := midnight.AddDate(0, 0, -back)
-		return start, start.AddDate(0, 0, 7), nil
+	case "week", "woche":
+		return monday, monday.AddDate(0, 0, 7), nil
+	case "lastweek", "last-week", "vorwoche", "letzte-woche":
+		return monday.AddDate(0, 0, -7), monday, nil
 	}
 	d, perr := time.ParseInLocation("2006-01-02", arg, loc)
 	if perr != nil {
@@ -37,7 +39,8 @@ func period(arg string, now time.Time) (from, to time.Time, err error) {
 
 func (a *App) logCmd() *cobra.Command {
 	return &cobra.Command{
-		Use: "log [today|yesterday|week|YYYY-MM-DD]", Short: i18n.T("cli.log.short"), Args: cobra.MaximumNArgs(1),
+		Use: i18n.T("cli.log.use"), Short: i18n.T("cli.log.short"), Args: cobra.MaximumNArgs(1),
+		ValidArgs: []string{"heute", "gestern", "woche", "vorwoche", "today", "yesterday", "week", "lastweek"},
 		RunE: func(_ *cobra.Command, args []string) error {
 			arg := ""
 			if len(args) > 0 {

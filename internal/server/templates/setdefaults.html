@@ -16,7 +16,7 @@
     <div class="days">{{range .WorkDays}}<label><input type="checkbox" name="work_day" value="{{.Value}}"{{if .Selected}} checked{{end}}> {{.Label}}</label>{{end}}</div>
     <p class="dim small">{{t $.Lang "web.setup.workhours_note"}}</p>
   </div>
-  <h1>{{t $.Lang "web.setup.modules"}}</h1>
+  <h1>{{t $.Lang "web.setup.modules_def"}}</h1>
   <p class="dim">{{t $.Lang "web.setup.modules_def_note"}}</p>
   {{template "modforms" .Modules}}
   <p class="row"><span class="grow"></span><button class="primary">{{t $.Lang "web.setup.save"}}</button></p>

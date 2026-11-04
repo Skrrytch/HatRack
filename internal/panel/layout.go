@@ -364,7 +364,7 @@ func BuildEdit(snap agent.Snapshot, typed string, ed Edit, scale float64, now ti
 		sugg = Suggestions(editHat, st, ed.Text)
 		if len(sugg) > 0 {
 			inset := m.s6() / 2
-			w := max(editField.W, min(int(240*scale+.5), W-2*m.pad))
+			w := max(editField.W, min(int(320*scale+.5), W-2*m.pad)) // room for longer details
 			h := len(sugg)*m.sugH + 2*inset
 			ox := max(min(editField.X, W-m.pad-w), m.pad)
 			oy := editField.Y + editField.H + inset

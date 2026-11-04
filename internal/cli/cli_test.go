@@ -139,3 +139,18 @@ func TestActivityAndDetail(t *testing.T) {
 		}
 	}
 }
+
+func TestGermanPeriodsAndUnknownCommand(t *testing.T) {
+	now := time.Date(2026, 11, 4, 15, 0, 0, 0, time.UTC) // a Wednesday
+	for arg, want := range map[string]string{"heute": "2026-11-04", "gestern": "2026-11-03", "woche": "2026-11-02", "vorwoche": "2026-10-26"} {
+		from, _, err := period(arg, now)
+		if err != nil || from.Format("2006-01-02") != want {
+			t.Errorf("%s: %v %v", arg, from, err)
+		}
+	}
+	var out, errs bytes.Buffer
+	app := &App{Out: &out, Err: &errs, Socket: "/nonexistent"}
+	if code := app.Execute([]string{"bogus"}); code == 0 || !strings.Contains(errs.String(), "bogus") {
+		t.Fatalf("unknown command: %d %s", code, errs.String())
+	}
+}

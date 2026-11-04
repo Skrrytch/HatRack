@@ -72,10 +72,11 @@ func parseAt(s string, now time.Time) (string, error) {
 func (a *App) onCmd() *cobra.Command {
 	var at string
 	cmd := &cobra.Command{
-		Use:   "on [hat] [do activity]",
-		Short: i18n.T("cli.on.short"),
-		Long:  i18n.T("cli.on.long"),
-		Args:  cobra.ArbitraryArgs,
+		Use:               i18n.T("cli.on.use"),
+		Short:             i18n.T("cli.on.short"),
+		Long:              i18n.T("cli.on.long"),
+		Args:              cobra.ArbitraryArgs,
+		ValidArgsFunction: a.completeOn,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			req := agent.Request{Cmd: "on"}
 			switch len(args) {
@@ -83,8 +84,17 @@ func (a *App) onCmd() *cobra.Command {
 			case 1:
 				req.Hat = args[0]
 			case 2:
-				return errors.New(i18n.T("err.on_usage"))
+				if !strings.EqualFold(args[0], "do") {
+					return errors.New(i18n.T("err.on_usage"))
+				}
+				// "hat on do review": resume the paused hat with an activity
+				req.HasActivity, req.Activity = true, args[1]
 			default:
+				if strings.EqualFold(args[0], "do") {
+					req.HasActivity = true
+					req.Activity, req.Detail = activityAndDetail(args[1:])
+					break
+				}
 				if !strings.EqualFold(args[1], "do") {
 					return errors.New(i18n.T("err.on_usage"))
 				}
@@ -131,8 +141,9 @@ func (a *App) askResume(last string) string {
 func (a *App) doCmd() *cobra.Command {
 	var at string
 	cmd := &cobra.Command{
-		Use: "do <activity> [detail]", Short: i18n.T("cli.do.short"), Long: i18n.T("cli.do.long"), Args: cobra.MinimumNArgs(1),
-		Example: "  hat do review\n  hat do review \"PR 482\"\n  hat do review: TAG-1366",
+		Use: i18n.T("cli.do.use"), Short: i18n.T("cli.do.short"), Long: i18n.T("cli.do.long"), Args: cobra.MinimumNArgs(1),
+		ValidArgsFunction: a.completeDo,
+		Example:           "  hat do review\n  hat do review \"PR 482\"\n  hat do review: TAG-1366",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			t, err := parseAt(at, time.Now())
 			if err != nil {
@@ -168,7 +179,7 @@ func activityAndDetail(args []string) (string, string) {
 func (a *App) detailCmd() *cobra.Command {
 	var at string
 	cmd := &cobra.Command{
-		Use: "detail <text|->", Short: i18n.T("cli.detail.short"), Long: i18n.T("cli.detail.long"), Args: cobra.MinimumNArgs(1),
+		Use: i18n.T("cli.detail.use"), Short: i18n.T("cli.detail.short"), Long: i18n.T("cli.detail.long"), Args: cobra.MinimumNArgs(1),
 		Example: "  hat detail \"PR 482\"\n  hat detail https://jira.example.org/browse/TAG-1366\n  hat detail -",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			t, err := parseAt(at, time.Now())

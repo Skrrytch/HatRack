@@ -374,7 +374,9 @@ func (s *Server) moduleForms(lang string, own, inherited map[string]core.ModuleC
 				continue
 			}
 			fl := field{Name: "m/" + id + "/" + k, Label: tr(lang, "web.prop."+k, k), Kind: kind,
-				Value: valueString(own[id][k]), Required: req[k] && !hatPage, ID: "f-" + id + "-" + k, Secret: core.IsSecretKey(k)}
+				Value: valueString(own[id][k]), ID: "f-" + id + "-" + k, Secret: core.IsSecretKey(k)}
+			// required fields are not marked: defaults may leave them to
+			// the hats, and a missing value is reported on saving
 			fl.Masked = fl.Secret && fl.Value != "" && !core.IsEnvRef(fl.Value)
 			fl.Placeholder = tr(lang, "web.ph."+k, "")
 			if kind == "text" || kind == "list" {
@@ -392,7 +394,7 @@ func (s *Server) moduleForms(lang string, own, inherited map[string]core.ModuleC
 				blank = i18n.In(lang, "web.setup.enabled_auto")
 			}
 			if fl.Inherited != "" {
-				blank = i18n.In(lang, "web.setup.inherit", fl.Inherited)
+				blank = i18n.In(lang, "web.setup.inherit", friendly(lang, kind, fl.Inherited))
 			}
 			switch kind {
 			case "bool":
@@ -400,7 +402,7 @@ func (s *Server) moduleForms(lang string, own, inherited map[string]core.ModuleC
 			case "enum":
 				fl.Options = []option{{Value: "", Label: blank}}
 				for _, e := range p.Enum {
-					fl.Options = append(fl.Options, option{Value: valueString(e), Label: valueString(e)})
+					fl.Options = append(fl.Options, option{Value: valueString(e), Label: tr(lang, "web.opt."+valueString(e), valueString(e))})
 				}
 			}
 			for i := range fl.Options {
@@ -417,6 +419,26 @@ func (s *Server) moduleForms(lang string, own, inherited map[string]core.ModuleC
 		out = append(out, f)
 	}
 	return out
+}
+
+// friendly shows a stored value the way people read it: yes/no instead of
+// true/false, built-in wallpapers by colour and number, options translated.
+func friendly(lang, kind, v string) string {
+	switch {
+	case kind == "bool" && v == "true":
+		return i18n.In(lang, "web.setup.yes")
+	case kind == "bool" && v == "false":
+		return i18n.In(lang, "web.setup.no")
+	case kind == "enum":
+		return tr(lang, "web.opt."+v, v)
+	case strings.HasPrefix(v, core.BuiltinPrefix):
+		name := strings.TrimPrefix(v, core.BuiltinPrefix) // wp01-purple
+		if num, color, ok := strings.Cut(strings.TrimPrefix(name, "wp"), "-"); ok {
+			return tr(lang, "web.color."+color, color) + " " + strings.TrimLeft(num, "0")
+		}
+		return name
+	}
+	return v
 }
 
 // summary says in one line what a module section holds.
@@ -438,7 +460,7 @@ func summary(lang string, fields []field, hatPage bool) string {
 			}
 			own = append(own, f.Label+": "+v)
 		default:
-			v := f.Value
+			v := friendly(lang, f.Kind, f.Value)
 			for _, o := range f.Options {
 				if o.Value == f.Value {
 					v = o.Label

@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jezek/xgb/xproto"
+
 	"hatrack/internal/agent"
 	"hatrack/internal/core"
 	"hatrack/internal/i18n"
@@ -398,5 +400,65 @@ func TestDetailField(t *testing.T) {
 	a := detailAction(p.Hats[0], p.Status.State, "X")
 	if a.Request.Cmd != "on" || a.Request.Activity != "review" || !a.Request.HasActivity || a.Request.Detail != "X" {
 		t.Fatalf("paused: %+v", a.Request)
+	}
+}
+
+func TestPasteAndDeleteWord(t *testing.T) {
+	i18n.Set("en")
+	s := &screen{snap: testSnap(core.ModeWearing, "venom", "review"), scale: 1}
+	s.rebuild()
+	s.key("next", 0) // into the worn hat's field
+	s.insert("https://jira.example.org/browse/TAG-1366\n")
+	if s.edit.Text != "https://jira.example.org/browse/TAG-1366" {
+		t.Fatalf("paste into the field: %q", s.edit.Text)
+	}
+	s.edit.Text = "PR 482 fix"
+	s.key("delword", 0)
+	if s.edit.Text != "PR 482 " {
+		t.Fatalf("ctrl+backspace: %q", s.edit.Text)
+	}
+	act, done := s.key("enter", 0)
+	if !done || act.Request.Detail != "PR 482" {
+		t.Fatalf("enter: %+v", act)
+	}
+	// without a field, pasted text goes to the filter
+	s = &screen{snap: testSnap(core.ModeWearing, "venom", "review"), scale: 1}
+	s.rebuild()
+	s.insert("pri")
+	if s.filter != "pri" {
+		t.Fatalf("paste into the filter: %q", s.filter)
+	}
+}
+
+func TestDecodeKeys(t *testing.T) {
+	// a German-style keymap: q/Q/(group 2)/(group 2)/@ (AltGr) ; 1/!/../../¹
+	x := &xwin{minKey: 8, perKey: 6, keymap: []xproto.Keysym{
+		'q', 'Q', 0, 0, '@', 0x0bd3, // keycode 8
+		'1', '!', 0, 0, 0xb9, 0x0ad5, // keycode 9
+		0xffb7, 0, 0, 0, 0, 0, // keycode 10: KP_7
+	}}
+	cases := []struct {
+		code  xproto.Keycode
+		state uint16
+		name  string
+		r     rune
+	}{
+		{8, 0, "", 'q'},
+		{8, xproto.ModMaskShift, "", 'Q'},
+		{8, xproto.ModMask5, "", '@'},
+		{8, xproto.ModMaskLock, "", 'Q'},
+		{9, xproto.ModMaskLock, "", '1'}, // Caps Lock leaves digits alone
+		{8, xproto.ModMaskControl, "", 0},
+		{10, 0, "", '7'},
+	}
+	for _, c := range cases {
+		if n, r := x.decode(c.code, c.state); n != c.name || r != c.r {
+			t.Errorf("key %d state %x: %q %q, want %q %q", c.code, c.state, n, r, c.name, c.r)
+		}
+	}
+	// Ctrl+V pastes
+	x.keymap[0] = 'v'
+	if n, _ := x.decode(8, xproto.ModMaskControl); n != "paste" {
+		t.Fatalf("ctrl+v: %q", n)
 	}
 }

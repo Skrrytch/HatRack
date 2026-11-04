@@ -191,3 +191,15 @@ func TestSecretsInConfig(t *testing.T) {
 		t.Fatalf("nested secrets warn: %s", w)
 	}
 }
+
+func TestImportChangesOnlyModules(t *testing.T) {
+	cur, _ := ParseConfig([]byte("version: 1\nhats:\n  k:\n    activities: []\n    modules:\n      wallpaper: {options: zoom}\n"))
+	in, _ := ParseConfig([]byte("version: 1\nhats:\n  k:\n    activities: []\n    modules:\n      wallpaper: {image: x.jpg}\n"))
+	m, changes := Merge(cur, in, false)
+	if len(changes) == 0 || m.Hats[0].Modules["wallpaper"]["image"] != "x.jpg" {
+		t.Fatalf("a change of module settings is an import: %v %+v", changes, m.Hats[0].Modules)
+	}
+	if _, ok := cur.Hats[0].Modules["wallpaper"]["image"]; ok || cur.Hats[0].Modules["wallpaper"]["options"] != "zoom" {
+		t.Fatal("the current configuration stays untouched")
+	}
+}

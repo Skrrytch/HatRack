@@ -123,6 +123,7 @@ type nowView struct {
 	Detail   []core.DetailPart // of the running entry, Jira keys linked
 	DetailIn string            // its short form, for the field
 	Recent   []string          // recent details of this hat and activity
+	Suggest  []string          // all details of this hat in the last weeks, for the field
 }
 
 type segment struct {
@@ -544,6 +545,15 @@ func (s *Server) nowPage(w http.ResponseWriter, r *http.Request, acc access) {
 					n.Recent = append(n.Recent, d)
 				}
 			}
+			// the field suggests every detail of the hat, the worn activity's first
+			byHat := core.RecentByHat(ev, since, recentPerHat)[st.Hat]
+			for _, own := range []bool{true, false} {
+				for _, d := range byHat {
+					if (d.Activity == st.Activity) == own && d.Detail != n.DetailIn {
+						n.Suggest = append(n.Suggest, d.Detail)
+					}
+				}
+			}
 		}
 	}
 	if st.Mode != core.ModeNone {
@@ -784,13 +794,15 @@ func (s *Server) dayPage(w http.ResponseWriter, r *http.Request, acc access) {
 	}
 	d.Choices = choices(cfg, iv, lang)
 	var prevEnd time.Time
+	var prevWhat string
 	for _, i := range iv {
 		if !prevEnd.IsZero() && i.Start.Sub(prevEnd) >= time.Minute {
-			d.Rows = append(d.Rows, rowView{Gap: true, Start: prevEnd.In(loc).Format("15:04"), End: i.Start.In(loc).Format("15:04"),
+			// a gap is most often filled with what ran before it
+			d.Rows = append(d.Rows, rowView{Gap: true, What: prevWhat, Start: prevEnd.In(loc).Format("15:04"), End: i.Start.In(loc).Format("15:04"),
 				StartIn: prevEnd.In(loc).Format("15:04"), EndIn: i.Start.In(loc).Format("15:04"),
 				Duration: core.FormatDuration(i.Start.Sub(prevEnd))})
 		}
-		prevEnd = i.End
+		prevEnd, prevWhat = i.End, i.Hat+"|"+i.Activity
 		if fleeting(i) {
 			continue // a switch passed through within a minute; it still counts in the totals
 		}
@@ -884,6 +896,14 @@ func (s *Server) weekPage(w http.ResponseWriter, r *http.Request, acc access) {
 
 // weekCSV exports the intervals of a week: date, hat, activity, start, end,
 // minutes, note. Intervals that cross midnight are split per day.
+// cell keeps a spreadsheet from reading text as a formula.
+func cell(s string) string {
+	if s != "" && strings.ContainsRune("=+-@\t\r", rune(s[0])) {
+		return "'" + s
+	}
+	return s
+}
+
 func (s *Server) weekCSV(w http.ResponseWriter, r *http.Request, _ access) {
 	loc := s.locOf(r)
 	start := weekStart(parseDate(r.URL.Query().Get("date"), loc, s.Now()))
@@ -898,7 +918,14 @@ func (s *Server) weekCSV(w http.ResponseWriter, r *http.Request, _ access) {
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="hatrack-%s.csv"`, dateStr(start)))
 	cw := csv.NewWriter(w)
-	cw.Write([]string{"date", "hat", "activity", "start", "end", "minutes", "note"})
+	if s.langOf(r) == "de" {
+		// German spreadsheets expect ";" and recognise UTF-8 by its BOM
+		io.WriteString(w, "\ufeff")
+		cw.Comma = ';'
+		cw.Write([]string{"Datum", "Hut", "Aktivität", "Beginn", "Ende", "Minuten", "Detail"})
+	} else {
+		cw.Write([]string{"date", "hat", "activity", "start", "end", "minutes", "note"})
+	}
 	type csvRow struct {
 		cols []string
 		d    time.Duration
@@ -908,8 +935,8 @@ func (s *Server) weekCSV(w http.ResponseWriter, r *http.Request, _ access) {
 		for d := 0; d < 7; d++ {
 			ds := start.AddDate(0, 0, d)
 			for _, c := range core.Clip([]core.Interval{i}, ds, ds.AddDate(0, 0, 1)) {
-				list = append(list, csvRow{[]string{dateStr(ds), nameOf(nm, c.Hat), c.Activity,
-					c.Start.In(loc).Format("15:04"), c.End.In(loc).Format("15:04"), "", core.ShortDetail(c.Detail)}, c.Duration()})
+				list = append(list, csvRow{[]string{dateStr(ds), cell(nameOf(nm, c.Hat)), cell(c.Activity),
+					c.Start.In(loc).Format("15:04"), c.End.In(loc).Format("15:04"), "", cell(core.ShortDetail(c.Detail))}, c.Duration()})
 			}
 		}
 	}

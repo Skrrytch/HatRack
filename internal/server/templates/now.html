@@ -20,7 +20,8 @@
       <details class="detailedit">
         <summary title="{{t $.Lang "web.detail.hint"}}">{{if .Detail}}{{template "icon" "edit"}}{{else}}+ {{t $.Lang "web.detail"}}{{end}}</summary>
         <form method="post" action="/action" class="row">
-          <input type="text" name="detail" value="{{.DetailIn}}" placeholder="{{t $.Lang "web.detail.placeholder"}}" class="grow">
+          <input type="text" name="detail" value="{{.DetailIn}}" placeholder="{{t $.Lang "web.detail.placeholder"}}" class="grow"{{if .Suggest}} list="detail-suggest"{{end}} autocomplete="off">
+          {{if .Suggest}}<datalist id="detail-suggest">{{range .Suggest}}<option value="{{.}}">{{end}}</datalist>{{end}}
           <button name="op" value="detail" class="primary">OK</button>
           {{if .Detail}}<button name="op" value="detail-clear" title="{{t $.Lang "web.detail.clear_hint"}}">{{t $.Lang "web.detail.clear"}}</button>{{end}}
         </form>

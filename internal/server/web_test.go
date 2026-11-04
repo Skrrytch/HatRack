@@ -332,3 +332,44 @@ func TestNotWorkingTime(t *testing.T) {
 		t.Fatal("MQTT: not working while in a hat without working time")
 	}
 }
+
+func TestNowSuggestsDetails(t *testing.T) {
+	e, b := setupBrowser(t)
+	// venom/development with a detail earlier, now venom/review is worn
+	evs := []core.Event{e.ev(-50, core.EvSwitch, "venom", "development"), e.ev(-20, core.EvSwitch, "venom", "review")}
+	evs[0].Detail = "NMS-4711"
+	body, _ := json.Marshal(evs)
+	e.do("POST", "/api/events", string(body))
+	_, out := b.do("GET", "/", nil)
+	if !strings.Contains(out, `list="detail-suggest"`) || !strings.Contains(out, `<option value="NMS-4711">`) {
+		t.Fatal("the detail field suggests the hat's details of other activities too")
+	}
+}
+
+func TestGapPrefilledWithTheEntryBefore(t *testing.T) {
+	e, b := setupBrowser(t) // seed: venom 9-10, venom/review 10-11, tag 11-11:30, then off
+	body, _ := json.Marshal([]core.Event{e.ev(-15, core.EvSwitch, "venom", "development")})
+	e.do("POST", "/api/events", string(body))
+	_, out := b.do("GET", "/day?date=2026-11-04", nil)
+	i := strings.Index(out, "11:30–11:45")
+	if i < 0 {
+		t.Fatal("gap row missing")
+	}
+	form := out[i:min(len(out), i+3000)]
+	if !strings.Contains(form, `value="tag|" selected`) {
+		t.Fatal("the gap is prefilled with the entry before it")
+	}
+}
+
+func TestCSVForGermanSpreadsheets(t *testing.T) {
+	e, b := setupBrowser(t)
+	ev := e.ev(-10, core.EvSwitch, "venom", "review")
+	ev.Detail = "=HYPERLINK(1)"
+	body, _ := json.Marshal([]core.Event{ev})
+	e.do("POST", "/api/events", string(body))
+	b.do("GET", "/?lang=de", nil)
+	_, out := b.do("GET", "/week.csv?date=2026-11-04", nil)
+	if !strings.HasPrefix(out, "\uFEFFDatum;Hut;") || !strings.Contains(out, ";'=HYPERLINK(1)") {
+		t.Fatalf("German CSV: %q", out[:min(len(out), 300)])
+	}
+}

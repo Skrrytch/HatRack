@@ -52,15 +52,86 @@ func (a *App) Root() *cobra.Command {
 		Version:       Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		Args:          cobra.NoArgs,
-		RunE:          func(cmd *cobra.Command, _ []string) error { return a.status() },
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) > 0 { // "hat bogus": name the unknown command
+				msg := i18n.T("err.unknowncommand", args[0])
+				if s := cmd.SuggestionsFor(args[0]); len(s) > 0 {
+					msg += " " + i18n.T("err.didyoumean", strings.Join(s, ", "))
+				}
+				return silentUsage{errors.New(msg + "\n" + i18n.T("err.morehelp", "hat"))}
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, _ []string) error { return a.status() },
 	}
 	root.SetOut(a.Out)
 	root.SetErr(a.Err)
-	root.CompletionOptions.DisableDefaultCmd = true
 	root.AddCommand(a.statusCmd(), a.onCmd(), a.doCmd(), a.detailCmd(), a.offCmd(), a.logCmd(), a.configCmd(), a.agentCmd(), a.serverCmd(), a.trayCmd(), a.panelCmd(), a.setupCmd())
+	localize(root)
 	friendlyUsage(root)
 	return root
+}
+
+// useLine is cobra's UseLine with "[flags]" in the user's language.
+func useLine(c *cobra.Command) string {
+	return strings.Replace(c.UseLine(), "[flags]", i18n.T("cli.tpl.flagsword"), 1)
+}
+
+func init() { cobra.AddTemplateFunc("useLine", useLine) }
+
+// usageTemplate is cobra's usage template with headings in the user's
+// language.
+func usageTemplate() string {
+	return i18n.T("cli.tpl.usage") + `{{if .Runnable}}
+  {{useLine .}}{{end}}{{if .HasAvailableSubCommands}}
+  {{.CommandPath}} ` + i18n.T("cli.tpl.command") + `{{end}}{{if gt (len .Aliases) 0}}
+
+` + i18n.T("cli.tpl.aliases") + `
+  {{.NameAndAliases}}{{end}}{{if .HasExample}}
+
+` + i18n.T("cli.tpl.examples") + `
+{{.Example}}{{end}}{{if .HasAvailableSubCommands}}
+
+` + i18n.T("cli.tpl.commands") + `{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+` + i18n.T("cli.tpl.flags") + `
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
+
+` + i18n.T("cli.tpl.globalflags") + `
+{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableSubCommands}}
+
+` + i18n.T("cli.tpl.more", "{{.CommandPath}}") + `{{end}}
+`
+}
+
+// localize puts cobra's own texts (usage headings, the help flag and
+// command, completion) into the user's language.
+func localize(root *cobra.Command) {
+	root.SetUsageTemplate(usageTemplate())
+	root.InitDefaultHelpCmd()
+	root.InitDefaultCompletionCmd()
+	root.InitDefaultVersionFlag()
+	if f := root.Flags().Lookup("version"); f != nil {
+		f.Usage = i18n.T("cli.version_flag")
+	}
+	var walk func(c *cobra.Command)
+	walk = func(c *cobra.Command) {
+		c.InitDefaultHelpFlag()
+		if f := c.Flags().Lookup("help"); f != nil {
+			f.Usage = i18n.T("cli.help_flag", c.Name())
+		}
+		switch c.Name() {
+		case "help":
+			c.Short = i18n.T("cli.help_short")
+		case "completion":
+			c.Short = i18n.T("cli.completion_short")
+		}
+		for _, sub := range c.Commands() {
+			walk(sub)
+		}
+	}
+	walk(root)
 }
 
 // usageError explains a wrong call: what was wrong, how to call the command,
@@ -68,7 +139,7 @@ func (a *App) Root() *cobra.Command {
 func usageError(c *cobra.Command, problem string) error {
 	var b strings.Builder
 	b.WriteString(problem + "\n\n")
-	b.WriteString(i18n.T("err.usage", c.UseLine()) + "\n")
+	b.WriteString(i18n.T("err.usage", useLine(c)) + "\n")
 	if c.Short != "" {
 		b.WriteString("  " + c.Short + "\n")
 	}
@@ -87,6 +158,10 @@ func friendlyUsage(c *cobra.Command) {
 	if orig := c.Args; orig != nil {
 		c.Args = func(cmd *cobra.Command, args []string) error {
 			if err := orig(cmd, args); err != nil {
+				var s silentUsage
+				if errors.As(err, &s) {
+					return err // already explained
+				}
 				return usageError(cmd, i18n.T("err.args", len(args)))
 			}
 			return nil

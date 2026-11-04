@@ -3,6 +3,7 @@ package panel
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"hatrack/internal/agent"
@@ -97,6 +98,30 @@ func (s *screen) activate(i int) (act Action, done bool) {
 	return a, true
 }
 
+// insert adds pasted text where the typing goes: the detail field being
+// edited, else the filter. Line breaks become spaces.
+func (s *screen) insert(text string) {
+	text = strings.Join(strings.Fields(text), " ")
+	if text == "" || s.about {
+		return
+	}
+	if s.edit.Hat != "" {
+		s.edit.Text, s.edit.Sel = s.edit.Text+text, -1
+	} else {
+		s.filter += text
+	}
+	s.rebuild()
+}
+
+// dropWord removes the last word (Ctrl+Backspace).
+func dropWord(t string) string {
+	t = strings.TrimRight(t, " ")
+	if i := strings.LastIndex(t, " "); i >= 0 {
+		return t[:i+1]
+	}
+	return ""
+}
+
 func (s *screen) startEdit(hat, text string) {
 	s.edit = Edit{Hat: hat, Text: text, Sel: -1}
 	s.rebuild()
@@ -141,6 +166,9 @@ func (s *screen) editKey(name string, r rune) (act Action, done bool) {
 			s.edit.Text, s.edit.Sel = string(rs[:len(rs)-1]), -1
 			s.rebuild()
 		}
+	case "delword":
+		s.edit.Text, s.edit.Sel = dropWord(s.edit.Text), -1
+		s.rebuild()
 	case "":
 		if r >= ' ' {
 			s.edit.Text, s.edit.Sel = s.edit.Text+string(r), -1
@@ -182,6 +210,11 @@ func (s *screen) key(name string, r rune) (act Action, done bool) {
 		if !s.about && s.filter != "" {
 			rs := []rune(s.filter)
 			s.filter = string(rs[:len(rs)-1])
+			s.rebuild()
+		}
+	case "delword":
+		if !s.about && s.filter != "" {
+			s.filter = dropWord(s.filter)
 			s.rebuild()
 		}
 	default:

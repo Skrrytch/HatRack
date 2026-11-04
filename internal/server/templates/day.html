@@ -36,7 +36,7 @@
         <input type="hidden" name="date" value="{{$d.Date}}"><input type="hidden" name="op" value="insert">
         <label>{{t $.Lang "web.day.from"}}<input type="time" name="start" value="{{.StartIn}}" required></label>
         <label>{{t $.Lang "web.day.to"}}<input type="time" name="end" value="{{.EndIn}}" required></label>
-        <label class="grow">{{t $.Lang "web.day.what"}}{{template "whatselect" (dict "Choices" $d.Choices "Sel" "")}}</label>
+        <label class="grow">{{t $.Lang "web.day.what"}}{{template "whatselect" (dict "Choices" $d.Choices "Sel" .What)}}</label>
         <label class="grow">{{t $.Lang "web.detail"}}<input type="text" name="detail" placeholder="{{t $.Lang "web.detail.placeholder"}}"></label>
         <button class="primary">{{t $.Lang "web.day.fill"}}</button>
       </form>

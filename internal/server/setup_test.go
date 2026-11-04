@@ -238,8 +238,15 @@ func TestSetupQuickPaths(t *testing.T) {
 	// the module sections say what applies while closed
 	e.do("PUT", "/api/config", "version: 1\nmodules:\n  wallpaper: {image: /pics/d.jpg}\nhats:\n  kunde:\n    name: Kunde\n    activities: []\n    modules:\n      wallpaper: {options: zoom}\n")
 	_, out = b.do("GET", "/setup/hat?key=kunde", nil)
-	if !strings.Contains(out, "Fit: zoom · rest from the defaults") || !strings.Contains(out, "not set up") {
+	if !strings.Contains(out, "Fit: fill · rest from the defaults") || !strings.Contains(out, "not set up") {
 		t.Fatalf("module summaries missing:\n%s", out)
+	}
+	// built-in wallpapers and yes/no read like words, not like values
+	if r, o := e.do("PUT", "/api/config", "version: 1\nhats:\n  kunde:\n    name: Kunde\n    activities: []\n    modules:\n      wallpaper: {image: \"hatrack:wp02-purple\"}\n"); r.StatusCode != 200 {
+		t.Fatalf("put: %s", o)
+	}
+	if _, out = b.do("GET", "/setup/hat?key=kunde", nil); !strings.Contains(out, "Image file: Purple 2") || strings.Contains(out, "hatrack:wp02") && strings.Contains(out, "Image file: hatrack") {
+		t.Fatal("built-in wallpaper by colour and number in the summary")
 	}
 }
 

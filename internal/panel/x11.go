@@ -18,18 +18,19 @@ import (
 // that grabs keyboard and pointer, so a click outside or Escape closes it.
 
 type xwin struct {
-	c       *xgb.Conn
-	root    xproto.Window
-	win     xproto.Window
-	gc      xproto.Gcontext
-	depth   byte
-	maxReq  int
-	keymap  []xproto.Keysym
-	perKey  int
-	minKey  int
-	w, h    int
-	x, y    int
-	monitor [4]int // x, y, w, h of the monitor with the pointer
+	c         *xgb.Conn
+	root      xproto.Window
+	win       xproto.Window
+	gc        xproto.Gcontext
+	depth     byte
+	maxReq    int
+	keymap    []xproto.Keysym
+	perKey    int
+	minKey    int
+	w, h      int
+	x, y      int
+	monitor   [4]int // x, y, w, h of the monitor with the pointer
+	pasteProp xproto.Atom
 }
 
 func runX11(ctx context.Context, o Options) (Action, error) {
@@ -63,6 +64,8 @@ func runX11(ctx context.Context, o Options) (Action, error) {
 	defer xproto.UngrabPointer(c, xproto.TimeCurrentTime)
 
 	events := make(chan xgb.Event)
+	done := make(chan struct{})
+	defer close(done) // the reader stops even if an event comes after the loop
 	go func() {
 		defer close(events)
 		for {
@@ -74,6 +77,8 @@ func runX11(ctx context.Context, o Options) (Action, error) {
 				select {
 				case events <- ev:
 				case <-ctx.Done():
+					return
+				case <-done:
 					return
 				}
 			}
@@ -120,8 +125,16 @@ func runX11(ctx context.Context, o Options) (Action, error) {
 					return act, nil
 				}
 				relayout = s.l.W != wasW || s.l.H != wasH
+			case xproto.SelectionNotifyEvent:
+				wasW, wasH := s.l.W, s.l.H
+				s.insert(xw.paste(e))
+				relayout = s.l.W != wasW || s.l.H != wasH
 			case xproto.KeyPressEvent:
 				name, r := xw.decode(e.Detail, e.State)
+				if name == "paste" {
+					xw.requestPaste()
+					continue
+				}
 				wasW, wasH := s.l.W, s.l.H
 				act, done := s.key(name, r)
 				if done {
@@ -298,6 +311,35 @@ func (x *xwin) paint(img *image.RGBA) {
 	x.c.Sync()
 }
 
+func isLetter(sym xproto.Keysym) bool {
+	return sym >= 'a' && sym <= 'z' || sym >= 'A' && sym <= 'Z' || sym >= 0xc0 && sym <= 0xfe && sym != 0xd7 && sym != 0xf7
+}
+
+// requestPaste asks the owner of the clipboard for its text; it arrives as
+// a SelectionNotify event (see paste).
+func (x *xwin) requestPaste() {
+	clip, err1 := xproto.InternAtom(x.c, false, uint16(len("CLIPBOARD")), "CLIPBOARD").Reply()
+	utf8, err2 := xproto.InternAtom(x.c, false, uint16(len("UTF8_STRING")), "UTF8_STRING").Reply()
+	prop, err3 := xproto.InternAtom(x.c, false, uint16(len("HATRACK_PASTE")), "HATRACK_PASTE").Reply()
+	if err1 != nil || err2 != nil || err3 != nil {
+		return
+	}
+	x.pasteProp = prop.Atom
+	xproto.ConvertSelection(x.c, x.win, clip.Atom, utf8.Atom, prop.Atom, xproto.TimeCurrentTime)
+}
+
+// paste reads the text the clipboard owner put on our window.
+func (x *xwin) paste(e xproto.SelectionNotifyEvent) string {
+	if e.Property == xproto.AtomNone || e.Property != x.pasteProp {
+		return ""
+	}
+	r, err := xproto.GetProperty(x.c, true, x.win, e.Property, xproto.GetPropertyTypeAny, 0, 4096).Reply()
+	if err != nil || r.Format != 8 {
+		return ""
+	}
+	return string(r.Value)
+}
+
 // decode turns a key press into a name for special keys or a rune.
 func (x *xwin) decode(code xproto.Keycode, state uint16) (string, rune) {
 	idx := (int(code) - x.minKey) * x.perKey
@@ -306,9 +348,45 @@ func (x *xwin) decode(code xproto.Keycode, state uint16) (string, rune) {
 	}
 	shift := state&xproto.ModMaskShift != 0
 	caps := state&xproto.ModMaskLock != 0
+	ctrl := state&xproto.ModMaskControl != 0
+	alt := state&xproto.ModMask1 != 0
+	altgr := state&xproto.ModMask5 != 0 // ISO_Level3_Shift on most layouts
 	sym := x.keymap[idx]
-	if x.perKey > 1 && (shift != caps) && x.keymap[idx+1] != 0 {
-		sym = x.keymap[idx+1]
+	base := sym
+	level := 0
+	if altgr && x.perKey > 4 && x.keymap[idx+4] != 0 {
+		level = 4 // group 1, level 3 (and 4 with shift) in the core keymap
+	}
+	if shift && x.perKey > level+1 && x.keymap[idx+level+1] != 0 {
+		sym = x.keymap[idx+level+1]
+	} else {
+		sym = x.keymap[idx+level]
+	}
+	// Caps Lock only changes letters
+	if caps && !altgr && x.perKey > 1 && isLetter(base) {
+		if shift {
+			sym = base
+		} else if x.keymap[idx+1] != 0 {
+			sym = x.keymap[idx+1]
+		}
+	}
+	if ctrl || alt {
+		switch {
+		case ctrl && (base == 'v' || base == 'V'):
+			return "paste", 0
+		case ctrl && sym == 0xff08:
+			return "delword", 0
+		}
+		return "", 0 // shortcuts type nothing
+	}
+	if sym >= 0xffb0 && sym <= 0xffb9 { // keypad digits
+		return "", rune('0' + sym - 0xffb0)
+	}
+	switch sym {
+	case 0xffae:
+		return "", '.'
+	case 0xffac:
+		return "", ','
 	}
 	switch sym {
 	case 0xff1b:
