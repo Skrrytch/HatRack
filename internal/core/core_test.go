@@ -399,3 +399,29 @@ func TestWorkHours(t *testing.T) {
 		t.Fatalf("merge: %+v %v", merged.Defaults, ch)
 	}
 }
+
+func TestRoundTotals(t *testing.T) {
+	s := time.Second
+	// three hats of 40 s, one with two activities of 20 s: 2 minutes in all
+	tot := []HatTotal{
+		{Hat: "a", Duration: 40 * s, Activities: []ActivityTotal{{"x", 20 * s}, {"y", 20 * s}}},
+		{Hat: "b", Duration: 40 * s, Activities: []ActivityTotal{{"", 40 * s}}},
+		{Hat: "c", Duration: 40 * s, Activities: []ActivityTotal{{"", 40 * s}}},
+	}
+	hats, acts, sum := RoundTotals(tot)
+	if sum != 2 || hats[0]+hats[1]+hats[2] != 2 {
+		t.Fatalf("hats %v sum %d", hats, sum)
+	}
+	for i := range tot {
+		n := 0
+		for _, m := range acts[i] {
+			n += m
+		}
+		if n != hats[i] {
+			t.Fatalf("activities of %s: %v, hat %d", tot[i].Hat, acts[i], hats[i])
+		}
+	}
+	if got := ApportionTo([]time.Duration{10 * s, 50 * s}, 1); got[0] != 0 || got[1] != 1 {
+		t.Fatalf("largest remainder: %v", got)
+	}
+}

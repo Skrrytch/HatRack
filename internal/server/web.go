@@ -518,13 +518,15 @@ func (s *Server) nowPage(w http.ResponseWriter, r *http.Request, acc access) {
 			since = day
 		}
 		byHat := map[string]time.Duration{}
-		for _, t := range tot {
-			byHat[t.Hat] = t.Duration
+		minByHat := map[string]int{}
+		hatMin, _, _ := core.RoundTotals(tot) // the cards add up to the day
+		for i, t := range tot {
+			byHat[t.Hat], minByHat[t.Hat] = t.Duration, hatMin[i]
 		}
 		for i := range n.Cards {
 			c := &n.Cards[i]
-			if d, ok := byHat[c.Key]; ok {
-				c.Total = core.FormatDuration(d)
+			if m, ok := minByHat[c.Key]; ok {
+				c.Total = core.FormatMinutes(m)
 			}
 			if n.Running && c.Key == st.Hat {
 				c.SinceMS = since.UnixMilli()
@@ -648,8 +650,9 @@ func (s *Server) totalViews(tot []core.HatTotal, prev map[string]time.Duration, 
 		}
 	}
 	var out []totalView
-	for _, t := range tot {
-		tv := totalView{Hat: nameOf(nm, t.Hat), Color: pal.color(t.Hat), Duration: core.FormatDuration(t.Duration)}
+	hatMin, actMin, _ := core.RoundTotals(tot) // rows add up to the sum
+	for i, t := range tot {
+		tv := totalView{Hat: nameOf(nm, t.Hat), Color: pal.color(t.Hat), Duration: core.FormatMinutes(hatMin[i])}
 		if max > 0 {
 			tv.Pct = float64(t.Duration) / float64(max) * 100
 		}
@@ -657,12 +660,12 @@ func (s *Server) totalViews(tot []core.HatTotal, prev map[string]time.Duration, 
 			tv.Delta = delta(t.Duration - prev[t.Hat])
 		}
 		if !(len(t.Activities) == 1 && t.Activities[0].Activity == "") {
-			for _, a := range t.Activities {
+			for j, a := range t.Activities {
 				name := a.Activity
 				if name == "" {
 					name = i18n.In(lang, "cli.log.noactivity")
 				}
-				tv.Activities = append(tv.Activities, actTotal{name, core.FormatDuration(a.Duration)})
+				tv.Activities = append(tv.Activities, actTotal{name, core.FormatMinutes(actMin[i][j])})
 			}
 		}
 		out = append(out, tv)
@@ -787,9 +790,10 @@ func (s *Server) weekPage(w http.ResponseWriter, r *http.Request, acc access) {
 		}
 		busiest = max(busiest, daySum[d])
 	}
+	dayMin := core.Apportion(daySum) // the days add up to the week
 	for d := 0; d < 7; d++ {
 		ds := start.AddDate(0, 0, d)
-		bar := dayBar{Label: dayLabel(lang, ds, false), Date: dateStr(ds), Duration: core.FormatDuration(daySum[d])}
+		bar := dayBar{Label: dayLabel(lang, ds, false), Date: dateStr(ds), Duration: core.FormatMinutes(dayMin[d])}
 		var x float64
 		for _, i := range perDay[d] {
 			wd := float64(i.Duration()) / float64(max(busiest, time.Minute)) * 100
@@ -822,18 +826,31 @@ func (s *Server) weekCSV(w http.ResponseWriter, r *http.Request, _ access) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="hatrack-%s.csv"`, dateStr(start)))
 	cw := csv.NewWriter(w)
 	cw.Write([]string{"date", "hat", "activity", "start", "end", "minutes", "note"})
-	var rows [][]string
+	type csvRow struct {
+		cols []string
+		d    time.Duration
+	}
+	var list []csvRow
 	for _, i := range iv {
 		for d := 0; d < 7; d++ {
 			ds := start.AddDate(0, 0, d)
 			for _, c := range core.Clip([]core.Interval{i}, ds, ds.AddDate(0, 0, 1)) {
-				rows = append(rows, []string{dateStr(ds), nameOf(nm, c.Hat), c.Activity,
-					c.Start.In(loc).Format("15:04"), c.End.In(loc).Format("15:04"),
-					fmt.Sprint(int(c.Duration().Round(time.Minute) / time.Minute)), ""})
+				list = append(list, csvRow{[]string{dateStr(ds), nameOf(nm, c.Hat), c.Activity,
+					c.Start.In(loc).Format("15:04"), c.End.In(loc).Format("15:04"), "", ""}, c.Duration()})
 			}
 		}
 	}
-	sort.SliceStable(rows, func(a, b int) bool { return rows[a][0]+rows[a][3] < rows[b][0]+rows[b][3] })
+	sort.SliceStable(list, func(a, b int) bool { return list[a].cols[0]+list[a].cols[3] < list[b].cols[0]+list[b].cols[3] })
+	// the minutes of the rows add up to the week's total
+	ds := make([]time.Duration, len(list))
+	for i, r := range list {
+		ds[i] = r.d
+	}
+	var rows [][]string
+	for i, m := range core.Apportion(ds) {
+		list[i].cols[5] = fmt.Sprint(m)
+		rows = append(rows, list[i].cols)
+	}
 	cw.WriteAll(rows)
 	cw.Flush()
 }

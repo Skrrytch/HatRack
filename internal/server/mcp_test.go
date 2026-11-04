@@ -259,7 +259,7 @@ func TestApportion(t *testing.T) {
 		{[]time.Duration{m + 10*s, 2*m + 50*s}, []int{1, 3}},
 		{[]time.Duration{29 * s}, []int{0}},
 	} {
-		got := apportion(c.in)
+		got := core.Apportion(c.in)
 		if len(got) != len(c.want) {
 			t.Errorf("%v: %v", c.in, got)
 			continue

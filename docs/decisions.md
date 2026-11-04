@@ -44,6 +44,7 @@
 | 2026-11-04 | Module `launch` opens what a hat needs when it is put on (`apps`: `.desktop` ids via `gtk-launch`; `open`: addresses, folders, files via `xdg-open`), started detached. It never closes anything when a hat comes off, because closing windows on the user's behalf can lose work. It runs on a look change, so pausing and resuming the same hat does not open things twice. Lists of strings in module schemas appear in Setup as one entry per line, with a pick list where the device reports choices (installed programs). |
 | 2026-11-04 | The Devices page shows a new device's token once, in the answer to the form, never in an address; removing a device revokes its token, its entries stay. Archived hats that no event or correction refers to can be deleted for good. |
 | 2026-11-04 | MCP starts read-only: its main purpose is reading the time log (totals by hat, activity, day, week) and the configuration, for Claude Code over HTTP at `/mcp`. MCP tokens are separate from device tokens, managed in Setup, scope `read` only for now. Switching, proposals, notes and a stdio bridge come later, if at all. |
+| 2026-11-04 | Totals are rounded to minutes by largest remainder (`core.Apportion`, `core.RoundTotals`): activities add up to their hat, hats to the total, days to the week, CSV rows to the week. Rounding each part on its own let many short entries drift from the total. Web UI, CSV and MCP use the same functions, so their numbers agree. |
 
 ## Open
 
