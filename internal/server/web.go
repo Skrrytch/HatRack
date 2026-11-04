@@ -171,6 +171,9 @@ func (s *Server) timeline(day time.Time, cfg core.Config, iv []core.Interval, la
 	}
 	loc := day.Location()
 	for _, i := range iv {
+		if fleeting(i) {
+			continue
+		}
 		label := nameOf(nm, i.Hat)
 		if i.Activity != "" {
 			label += " · " + i.Activity
@@ -189,6 +192,10 @@ func (s *Server) timeline(day time.Time, cfg core.Config, iv []core.Interval, la
 	}
 	return tl
 }
+
+// fleeting reports an entry that ended within a minute of its start, e.g.
+// while clicking through hats. Day lists and bands leave it out.
+func fleeting(i core.Interval) bool { return !i.Open && i.Duration() < time.Minute }
 
 type rowView struct {
 	Start, End, Hat, Color, Activity, Duration string
@@ -779,6 +786,9 @@ func (s *Server) dayPage(w http.ResponseWriter, r *http.Request, acc access) {
 				Duration: core.FormatDuration(i.Start.Sub(prevEnd))})
 		}
 		prevEnd = i.End
+		if fleeting(i) {
+			continue // a switch passed through within a minute; it still counts in the totals
+		}
 		end := i.End.In(loc).Format("15:04")
 		if i.Open {
 			end = i18n.In(lang, "cli.log.now")

@@ -287,3 +287,23 @@ func TestStaticAndLiveStream(t *testing.T) {
 		t.Fatalf("stream without login: %d", r.StatusCode)
 	}
 }
+
+func TestFleetingEntriesHidden(t *testing.T) {
+	e, b := setupBrowser(t)
+	// clicking through hats: two entries of a few seconds, then real work
+	var evs []core.Event
+	for i, h := range []string{"tag", "venom", "tag"} {
+		ev := core.NewEvent("laptop", core.EvSwitch, e.now.Add(-10*time.Minute+time.Duration(i*20)*time.Second))
+		ev.Hat = h
+		evs = append(evs, ev)
+	}
+	body, _ := json.Marshal(evs)
+	e.do("POST", "/api/events", string(body))
+	_, out := b.do("GET", "/day?date=2026-11-04", nil)
+	if strings.Contains(out, "11:50–11:50") || !strings.Contains(out, "11:50–") {
+		t.Fatalf("entries under a minute are left out of the day list")
+	}
+	if n := strings.Count(out, `<i title="11:50–11:50`); n != 0 {
+		t.Fatalf("and out of the band: %d", n)
+	}
+}

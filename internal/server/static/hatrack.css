@@ -181,7 +181,7 @@ td.acts form { margin: 0; display: inline-flex; gap: .3rem; }
 details.mod { margin: .5rem 0; padding: .7rem 1.2rem; }
 details.mod .fields { margin-top: .8rem; }
 .desc { margin-left: 1.1rem; }
-details.yaml { margin-top: 2rem; }
+details.yaml { margin-top: 3rem; padding: 0 .2rem; } /* concerns the whole configuration: no card of its own */
 details.yaml > div { margin-top: .8rem; }
 details.card.archived { margin-top: 1.5rem; }
 .preview { margin-top: .8rem; border-top: 1px solid var(--line); padding-top: .6rem; }
