@@ -240,3 +240,46 @@ func TestX11(t *testing.T) {
 		t.Fatalf("type and enter: %+v", r)
 	}
 }
+
+func TestTypedDetail(t *testing.T) {
+	i18n.Set("en")
+	snap := testSnap(core.ModeWearing, "venom", "review")
+	snap.Hats[0].Activities = append(snap.Hats[0].Activities, "code review")
+	for _, c := range []struct{ in, filter, detail string }{
+		{"rev", "rev", ""},
+		{"rev PR 482", "rev", "PR 482"},
+		{"code rev TAG-1", "code rev", "TAG-1"},
+		{"zzz x", "zzz x", ""},
+	} {
+		if f, d := splitQuery(snap, c.in); f != c.filter || d != c.detail {
+			t.Errorf("%q: %q %q", c.in, f, d)
+		}
+	}
+	l := Build(snap, "rev PR 482", 1, time.Now())
+	h := hit(l, KindActivity, "review")
+	if h == nil || h.Action.Request.Detail != "PR 482" || !strings.Contains(h.Hint, `Detail "PR 482"`) {
+		t.Fatalf("activity with the typed detail: %+v", h)
+	}
+	if i := l.FirstFocus(); l.Hits[i].Label != "review" {
+		t.Fatalf("Enter picks review: %q", l.Hits[i].Label)
+	}
+}
+
+func TestDetailChips(t *testing.T) {
+	i18n.Set("en")
+	snap := testSnap(core.ModeWearing, "venom", "review")
+	snap.Status.State.Detail = "https://jira.example.org/browse/TAG-1366"
+	snap.Hats[0].Recent = map[string][]string{"review": {"TAG-1366", "PR 479", "PR 470"}}
+	l := Build(snap, "", 1, time.Now())
+	cur := hit(l, KindDetail, "TAG-1366")
+	if cur == nil || !cur.Current || !cur.Disabled {
+		t.Fatalf("current detail shown, not clickable: %+v", cur)
+	}
+	if h := hit(l, KindDetail, "PR 479"); h == nil || h.Action.Request.Cmd != "detail" || h.Action.Request.Detail != "PR 479" {
+		t.Fatalf("recent detail chip: %+v", h)
+	}
+	if hit(l, KindDetail, "garden") != nil {
+		t.Fatal("details only on the worn hat")
+	}
+	Render(l, View{Hover: -1, Focus: l.FirstFocus()})
+}

@@ -379,3 +379,5 @@ web.tickets.intro: "Learned by themselves: a detail with a Jira issue link (…/
 web.tickets.none: "None yet. Put a Jira issue link into a detail once."
 web.tickets.reset: "Reset"
 web.tickets.reset_hint: "Forget where %s lives? The next issue link teaches it again."
+panel.hint.with_detail: "Detail \"%[2]s\": %[1]s"
+panel.hint.detail: "Use the detail %s again"

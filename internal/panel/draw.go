@@ -39,7 +39,7 @@ func Render(l Layout, v View) *image.RGBA {
 	m := newMetrics(l.Scale)
 	hint := l.HintFor(v.Hover, v.Focus)
 	if v.Filter != "" {
-		hint = "⌕ " + v.Filter + "   " + hint
+		hint = "» " + v.Filter + "   " + hint
 	}
 	if hint != "" {
 		hy := l.H - m.hintH + (m.hintH-m.chipPx)/2 - 1
@@ -183,6 +183,18 @@ func drawHit(img *image.RGBA, h Hit, hover, focus bool, scale float64) {
 		if focus {
 			frame(img, h.R, h.R.H/2, 1, cFG, bg)
 		}
+		label := fit(h.Label, h.Current, m.chipPx, h.R.W-2*m.chipPad)
+		drawText(img, Text{X: h.R.X + m.chipPad, Y: h.R.Y + (h.R.H-m.chipPx)/2 - 1, S: label, Bold: h.Current, Px: m.chipPx, Color: fg})
+	case KindDetail:
+		// quieter than activities: outlined, the current one in the hat colour
+		bg, fg, edge := cCard, cDim, cChip
+		switch {
+		case h.Current:
+			fg, edge = cFG, h.Color
+		case hover || focus:
+			bg, fg = mixc(cCard, h.Color, .25), cFG
+		}
+		frame(img, h.R, h.R.H/2, 1, edge, bg)
 		label := fit(h.Label, h.Current, m.chipPx, h.R.W-2*m.chipPad)
 		drawText(img, Text{X: h.R.X + m.chipPad, Y: h.R.Y + (h.R.H-m.chipPx)/2 - 1, S: label, Bold: h.Current, Px: m.chipPx, Color: fg})
 	case KindTool:

@@ -35,6 +35,7 @@ const (
 	KindHat Kind = iota
 	KindActivity
 	KindTool
+	KindDetail // a recent detail of the worn activity
 )
 
 // Hit is a clickable area.
@@ -80,6 +81,7 @@ type Layout struct {
 	IconRect *Rect  // the app icon (about screen)
 	IconHex  string // its colour
 	Filter   string
+	Detail   string // typed after the filter, for the hint line
 	Default  string // hint when nothing is hovered
 }
 
@@ -147,6 +149,34 @@ func hatMatches(h agent.HatInfo, q string) bool {
 	return false
 }
 
+// splitQuery separates what was typed into the part that picks a hat or
+// activity and a detail: "rev PR 482" is the activity "rev…" with the detail
+// "PR 482". The longest leading words that match something win, so
+// activities with spaces ("code review") still work.
+func splitQuery(snap agent.Snapshot, q string) (string, string) {
+	words := strings.Fields(q)
+	if len(words) < 2 {
+		return strings.TrimSpace(q), ""
+	}
+	for k := len(words); k >= 1; k-- {
+		head := strings.Join(words[:k], " ")
+		for _, h := range snap.Hats {
+			if hatMatches(h, head) {
+				return head, strings.Join(words[k:], " ")
+			}
+		}
+	}
+	return strings.TrimSpace(q), ""
+}
+
+// withDetail adds the typed detail to a hint.
+func withDetail(hint, detail string) string {
+	if detail == "" {
+		return hint
+	}
+	return i18n.T("panel.hint.with_detail", hint, detail)
+}
+
 // hatHint explains what a click on the hat does.
 func hatHint(h agent.HatInfo, st core.State) string {
 	switch {
@@ -162,9 +192,10 @@ func hatHint(h agent.HatInfo, st core.State) string {
 
 // Build lays out the main screen: status, hat cards, toolbar. query is the
 // text typed to filter hats.
-func Build(snap agent.Snapshot, query string, scale float64, now time.Time) Layout {
+func Build(snap agent.Snapshot, typed string, scale float64, now time.Time) Layout {
 	m := newMetrics(scale)
 	st := snap.Status.State
+	query, detail := splitQuery(snap, typed)
 	var hats []agent.HatInfo
 	for _, h := range snap.Hats {
 		if hatMatches(h, query) {
@@ -172,8 +203,8 @@ func Build(snap agent.Snapshot, query string, scale float64, now time.Time) Layo
 		}
 	}
 	cols := min(max(len(hats), 1), 3)
-	W := max(m.pad*2+cols*m.cardW+(cols-1)*m.gap, int(340*scale+.5))
-	l := Layout{W: W, Scale: scale, Filter: query, Default: i18n.T("panel.hint.default")}
+	W := max(m.pad*2+cols*m.cardW+(cols-1)*m.gap, int(460*scale+.5))
+	l := Layout{W: W, Scale: scale, Filter: query, Detail: detail, Default: i18n.T("panel.hint.default")}
 
 	// header: colour dot, status line
 	hdrColor := rgba("#8a8f98")
@@ -218,10 +249,14 @@ func Build(snap agent.Snapshot, query string, scale float64, now time.Time) Layo
 		// first pass: heights
 		heights := make([]int, len(rowHats))
 		chipRows := make([][][]string, len(rowHats))
+		detRows := make([][][]string, len(rowHats))
 		rowH := 0
 		for i, h := range rowHats {
 			chipRows[i] = flow(h.Activities, m, m.cardW-2*m.chipPad)
-			heights[i] = m.titleH + len(chipRows[i])*(m.chipH+m.chipGap) + m.chipPad
+			if dets := cardDetails(h, st); len(dets) > 0 && detail == "" {
+				detRows[i] = flow(dets, m, m.cardW-2*m.chipPad)
+			}
+			heights[i] = m.titleH + (len(chipRows[i])+len(detRows[i]))*(m.chipH+m.chipGap) + m.chipPad
 			rowH = max(rowH, heights[i])
 		}
 		for i, h := range rowHats {
@@ -235,8 +270,8 @@ func Build(snap agent.Snapshot, query string, scale float64, now time.Time) Layo
 			l.Boxes = append(l.Boxes, Box{R: card, Radius: m.s6(), Color: cCard})
 			// title
 			titleHit := Hit{R: Rect{x, y, m.cardW, m.titleH}, Kind: KindHat, Label: h.Name, Color: col, Card: card, Current: current,
-				Match: prefix(h.Name, query), Hint: hatHint(h, st),
-				Action: Action{Request: &agent.Request{Cmd: "on", Hat: h.Key}}}
+				Match: prefix(h.Name, query), Hint: withDetail(hatHint(h, st), detail),
+				Action: Action{Request: &agent.Request{Cmd: "on", Hat: h.Key, Detail: detail}}}
 			if st.Mode == core.ModePaused && st.Hat == h.Key {
 				titleHit.Action = Action{Request: &agent.Request{Cmd: "on"}}
 			}
@@ -254,8 +289,25 @@ func Build(snap agent.Snapshot, query string, scale float64, now time.Time) Layo
 						hint = i18n.T("panel.hint.act_here", a)
 					}
 					l.Hits = append(l.Hits, Hit{R: Rect{cx, cy, w, m.chipH}, Kind: KindActivity, Label: a, Color: col, Current: cur,
-						Match: query != "" && prefix(a, query) && !prefix(h.Name, query), Hint: hint,
-						Action: Action{Request: &agent.Request{Cmd: "on", Hat: h.Key, Activity: a, HasActivity: true}}})
+						Match: query != "" && prefix(a, query) && !prefix(h.Name, query), Hint: withDetail(hint, detail),
+						Action: Action{Request: &agent.Request{Cmd: "on", Hat: h.Key, Activity: a, HasActivity: true, Detail: detail}}})
+					cx += w + m.chipGap
+				}
+				cy += m.chipH + m.chipGap
+			}
+			// the worn activity's detail and its recent ones, one click each
+			curDet := core.ShortDetail(st.Detail)
+			for _, rowDets := range detRows[i] {
+				cx := x + m.chipPad
+				for _, d := range rowDets {
+					w := min(textWidth(d, true, m.chipPx)+2*m.chipPad, m.cardW-2*m.chipPad)
+					hit := Hit{R: Rect{cx, cy, w, m.chipH}, Kind: KindDetail, Label: d, Color: col,
+						Hint:   i18n.T("panel.hint.detail", d),
+						Action: Action{Request: &agent.Request{Cmd: "detail", Detail: d}}}
+					if d == curDet {
+						hit.Current, hit.Disabled, hit.Hint = true, true, ""
+					}
+					l.Hits = append(l.Hits, hit)
 					cx += w + m.chipGap
 				}
 				cy += m.chipH + m.chipGap
@@ -302,6 +354,25 @@ func Build(snap agent.Snapshot, query string, scale float64, now time.Time) Layo
 }
 
 func (m metrics) s6() int { return int(6*m.s + .5) }
+
+// cardDetails lists the details shown on the worn hat's card: the current
+// one first, then the recent ones of the worn activity (at most four).
+func cardDetails(h agent.HatInfo, st core.State) []string {
+	if st.Mode != core.ModeWearing || st.Hat != h.Key {
+		return nil
+	}
+	var out []string
+	cur := core.ShortDetail(st.Detail)
+	if cur != "" {
+		out = append(out, cur)
+	}
+	for _, d := range h.Recent[st.Activity] {
+		if d != cur && len(out) < 4 {
+			out = append(out, d)
+		}
+	}
+	return out
+}
 
 // flow breaks activities into rows of chips that fit within width.
 func flow(acts []string, m metrics, width int) [][]string {
