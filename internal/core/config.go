@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/goccy/go-yaml"
 )
@@ -27,7 +28,78 @@ type ModuleCfg map[string]any
 
 // Defaults are the global settings that hats fall back to.
 type Defaults struct {
-	ResumeActivity string `yaml:"resume_activity,omitempty" json:"resume_activity,omitempty"`
+	ResumeActivity string     `yaml:"resume_activity,omitempty" json:"resume_activity,omitempty"`
+	WorkHours      *WorkHours `yaml:"work_hours,omitempty" json:"work_hours,omitempty"`
+}
+
+// WorkHours are the usual working hours. The Day view shows this stretch
+// and widens it only for entries outside it.
+type WorkHours struct {
+	Start string   `yaml:"start" json:"start"`                   // HH:MM
+	End   string   `yaml:"end" json:"end"`                       // HH:MM
+	Days  []string `yaml:"days,omitempty" json:"days,omitempty"` // mon … sun; empty: Monday to Friday
+}
+
+// Weekdays in the order of time.Weekday.
+var Weekdays = []string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"}
+
+// DefaultWorkHours apply when none are configured.
+var DefaultWorkHours = WorkHours{Start: "08:00", End: "18:00", Days: []string{"mon", "tue", "wed", "thu", "fri"}}
+
+// Work returns the configured working hours or the default ones.
+func (c Config) Work() WorkHours {
+	w := DefaultWorkHours
+	if c.Defaults.WorkHours != nil {
+		w = *c.Defaults.WorkHours
+		if len(w.Days) == 0 {
+			w.Days = DefaultWorkHours.Days
+		}
+	}
+	return w
+}
+
+// Minutes returns start and end as minutes after midnight.
+func (w WorkHours) Minutes() (int, int) {
+	return clockMinutes(w.Start), clockMinutes(w.End)
+}
+
+// IsWorkday reports whether the weekday is a working day.
+func (w WorkHours) IsWorkday(d time.Weekday) bool {
+	for _, x := range w.Days {
+		if x == Weekdays[d] {
+			return true
+		}
+	}
+	return false
+}
+
+// clockMinutes reads HH:MM; it returns -1 for anything else.
+func clockMinutes(s string) int {
+	t, err := time.Parse("15:04", s)
+	if err != nil {
+		return -1
+	}
+	return t.Hour()*60 + t.Minute()
+}
+
+func (w WorkHours) validate() error {
+	s, e := w.Minutes()
+	if s < 0 || e < 0 {
+		return fmt.Errorf("config: defaults.work_hours: start and end must be HH:MM")
+	}
+	if e <= s {
+		return fmt.Errorf("config: defaults.work_hours: the end must be after the start")
+	}
+	for _, d := range w.Days {
+		ok := false
+		for _, x := range Weekdays {
+			ok = ok || d == x
+		}
+		if !ok {
+			return fmt.Errorf("config: defaults.work_hours: unknown day %q (use mon, tue, wed, thu, fri, sat, sun)", d)
+		}
+	}
+	return nil
 }
 
 // Hat is one context. Its key is the stable identifier.
@@ -121,6 +193,11 @@ func (c Config) Validate() error {
 	}
 	if !validResume(c.Defaults.ResumeActivity) {
 		return fmt.Errorf("config: defaults.resume_activity %q: want never, last or ask", c.Defaults.ResumeActivity)
+	}
+	if c.Defaults.WorkHours != nil {
+		if err := c.Defaults.WorkHours.validate(); err != nil {
+			return err
+		}
 	}
 	seen := map[string]bool{}
 	for _, h := range c.Hats {
@@ -252,6 +329,11 @@ func Merge(cur, in Config, replace bool) (Config, []string) {
 	if in.Defaults.ResumeActivity != "" && in.Defaults.ResumeActivity != cur.Defaults.ResumeActivity {
 		out.Defaults.ResumeActivity = in.Defaults.ResumeActivity
 		changes = append(changes, "defaults.resume_activity: "+in.Defaults.ResumeActivity)
+	}
+	if in.Defaults.WorkHours != nil && !sameJSON(in.Defaults.WorkHours, cur.Defaults.WorkHours) {
+		w := *in.Defaults.WorkHours
+		out.Defaults.WorkHours = &w
+		changes = append(changes, "defaults.work_hours: "+w.Start+"-"+w.End)
 	}
 	if replace {
 		for id := range out.Modules {

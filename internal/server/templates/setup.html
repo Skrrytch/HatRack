@@ -29,8 +29,8 @@
 </div>
 
 {{if .Archived}}
-<h1>{{t $.Lang "web.setup.archived"}}</h1>
-<div class="card">
+<details class="card archived">
+  <summary><strong>{{t $.Lang "web.setup.archived"}}</strong> <span class="dim">({{len .Archived}}) – {{t $.Lang "web.setup.archived_note"}}</span></summary>
   <table class="list">
   {{range .Archived}}
     <tr>
@@ -39,8 +39,7 @@
     </tr>
   {{end}}
   </table>
-  <p class="dim">{{t $.Lang "web.setup.archived_note"}}</p>
-</div>
+</details>
 {{end}}
 
 <h1>{{t $.Lang "web.setup.defaults"}}</h1>

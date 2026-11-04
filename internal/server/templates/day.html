@@ -20,10 +20,9 @@
 </form>
 {{end}}{{end}}
 
-{{if .Rows}}
-  <div class="bar" style="margin-bottom:.1rem">{{range .Segments}}<i title="{{.Title}}" style="left:{{printf "%.3f" .Left}}%;width:{{printf "%.3f" .Width}}%;--c:{{.Color}}"></i>{{end}}</div>
-  <div class="hours"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
-{{end}}
+  <div class="bar daybar2">{{range .Segments}}<i title="{{.Title}}" style="left:{{printf "%.3f" .Left}}%;width:{{printf "%.3f" .Width}}%;--c:{{.Color}}"></i>{{end}}{{range .Off}}<b class="off" style="left:{{printf "%.3f" .Left}}%;width:{{printf "%.3f" .Width}}%"></b>{{end}}</div>
+  <div class="ticks">{{range .Ticks}}<span style="left:{{printf "%.3f" .Left}}%">{{.Label}}</span>{{end}}</div>
+  <p class="worknote dim small"><span class="offkey"></span>{{if .Work}}{{t $.Lang "web.day.outside" .Work}}{{else}}{{t $.Lang "web.day.dayoff"}}{{end}}{{if $.CanWrite}} · <a href="/setup/defaults">{{t $.Lang "web.day.workhours_link"}}</a>{{end}}</p>
 
 <h1>{{t $.Lang "ui.timeline"}}</h1>
 {{if not .Rows}}<p class="card dim">{{t $.Lang "cli.log.empty"}}</p>{{end}}

@@ -33,8 +33,9 @@
     <div class="row actrow"><input type="text" name="newact" placeholder="{{t $.Lang "web.setup.newacts"}}" class="grow"><button name="op" value="add">{{t $.Lang "web.setup.add"}}</button></div>
     <p class="dim">{{t $.Lang "web.setup.rename_note"}}</p>
     {{if .Archived}}
-      <p><span class="dim">{{t $.Lang "web.setup.archived"}}:</span>
-      {{range .Archived}}<button name="op" value="restore:{{.}}" title="{{t $.Lang "web.setup.restore"}}">{{template "icon" "restore"}} {{.}}</button> {{end}}</p>
+      <details class="archived"><summary class="dim">{{t $.Lang "web.setup.archived"}} ({{len .Archived}})</summary>
+      <p>{{range .Archived}}<button name="op" value="restore:{{.}}" title="{{t $.Lang "web.setup.restore"}}">{{template "icon" "restore"}} {{.}}</button> {{end}}</p>
+      </details>
     {{end}}
   </div>
 

@@ -38,6 +38,7 @@
 | 2026-11-04 | Renaming an activity in Setup renames it from then on; the time log keeps the old name for past entries, because events store activity names as text. Hats are renamed by their display name only; the key stays and the log follows. |
 | 2026-11-04 | The server reports an event revision (`event_rev`, growing with every stored event) with each state and in the answer to `POST /api/events`. An agent ignores states older than its last sent events, so a late state message cannot undo a switch. |
 | 2026-11-04 | Corrections in the Day view are planned on the timeline as it counts now and stored as exactly one `correction` event (superseded ids plus replacement events; identical events are kept, so a correction holds only what changed). Changing an entry's start or making it shorter moves the neighbour's boundary; making it longer covers what was there, and what ran at the new end goes on. Deleting leaves a gap. An entry without an end means "since then, and it goes on". Undo is again a correction. Corrections by an AI (MCP) will start as `proposed` and count only once confirmed. |
+| 2026-11-04 | Working hours are a setting of the defaults (`defaults.work_hours: {start, end, days}`, default Monday to Friday 08:00–18:00). The Day view shows them and widens to whole hours only for entries outside; time outside is hatched, a day off is hatched as a whole. Archived hats and activities stay listed, but folded away. |
 
 ## Open
 

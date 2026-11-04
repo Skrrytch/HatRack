@@ -157,6 +157,53 @@ type dayView struct {
 	Choices    []choiceGroup
 	Done       string // id of the correction just made, for undo
 	IsToday    bool
+	Off        []segment // parts of the bar outside the working hours
+	Ticks      []tick
+	Work       string // "08:00–18:00", or "" on a day off
+}
+
+type tick struct {
+	Left  float64
+	Label string
+}
+
+// dayWindow is the part of the day the timeline shows: the working hours,
+// widened to whole hours for entries outside them. On a day off it is the
+// stretch with entries (or the working hours, if there are none).
+func dayWindow(day time.Time, work core.WorkHours, iv []core.Interval) (from, to, wFrom, wTo time.Time, workday bool) {
+	ws, we := work.Minutes()
+	at := func(min int) time.Time {
+		return time.Date(day.Year(), day.Month(), day.Day(), min/60, min%60, 0, 0, day.Location())
+	}
+	wFrom, wTo = at(ws), at(we)
+	workday = work.IsWorkday(day.Weekday())
+	from, to = wFrom, wTo
+	if !workday && len(iv) > 0 {
+		from, to = iv[0].Start, iv[len(iv)-1].End
+	}
+	for _, i := range iv {
+		if i.Start.Before(from) {
+			from = i.Start
+		}
+		if i.End.After(to) {
+			to = i.End
+		}
+	}
+	from = time.Date(from.Year(), from.Month(), from.Day(), from.Hour(), 0, 0, 0, from.Location())
+	if t := time.Date(to.Year(), to.Month(), to.Day(), to.Hour(), 0, 0, 0, to.Location()); t.Before(to) {
+		to = t.Add(time.Hour)
+	}
+	next := day.AddDate(0, 0, 1)
+	if from.Before(day) {
+		from = day
+	}
+	if to.After(next) {
+		to = next
+	}
+	if to.Sub(from) < time.Hour {
+		to = from.Add(time.Hour)
+	}
+	return
 }
 
 type dayBar struct {
@@ -591,7 +638,27 @@ func (s *Server) dayPage(w http.ResponseWriter, r *http.Request, acc access) {
 	d := &v.Day
 	d.Title = day.Format("Mon 2006-01-02")
 	d.Prev, d.Next = "/day?date="+dateStr(day.AddDate(0, 0, -1)), "/day?date="+dateStr(next)
-	span := float64(next.Sub(day))
+	from, to, wFrom, wTo, workday := dayWindow(day, cfg.Work(), iv)
+	span := float64(to.Sub(from))
+	pct := func(t time.Time) float64 { return float64(t.Sub(from)) / span * 100 }
+	if workday {
+		d.Work = wFrom.Format("15:04") + "–" + wTo.Format("15:04")
+		if wFrom.After(from) {
+			d.Off = append(d.Off, segment{Left: 0, Width: pct(wFrom)})
+		}
+		if wTo.Before(to) {
+			d.Off = append(d.Off, segment{Left: pct(wTo), Width: 100 - pct(wTo)})
+		}
+	} else {
+		d.Off = []segment{{Left: 0, Width: 100}}
+	}
+	step := time.Hour
+	if to.Sub(from) > 12*time.Hour {
+		step = 2 * time.Hour
+	}
+	for t := from; !t.After(to); t = t.Add(step) {
+		d.Ticks = append(d.Ticks, tick{Left: pct(t), Label: t.Format("15")})
+	}
 	d.Date = dateStr(day)
 	d.IsToday = v.Live
 	d.Done = r.URL.Query().Get("done")
@@ -616,7 +683,7 @@ func (s *Server) dayPage(w http.ResponseWriter, r *http.Request, acc access) {
 			end = i18n.In(lang, "cli.log.now")
 		}
 		d.Segments = append(d.Segments, segment{
-			Left: float64(i.Start.Sub(day)) / span * 100, Width: float64(i.Duration()) / span * 100,
+			Left: pct(i.Start), Width: float64(i.Duration()) / span * 100,
 			Color: pal.color(i.Hat), Title: fmt.Sprintf("%s–%s %s", i.Start.In(loc).Format("15:04"), end, what)})
 		row := rowView{Start: i.Start.In(loc).Format("15:04"), End: end, Hat: nameOf(nm, i.Hat),
 			Color: pal.color(i.Hat), Activity: i.Activity, Duration: core.FormatDuration(i.Duration()), Open: i.Open,

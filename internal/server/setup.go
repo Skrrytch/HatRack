@@ -88,9 +88,12 @@ type actRow struct {
 }
 
 type defaultsEdit struct {
-	Resume  []option
-	Modules []moduleForm
-	Saved   bool
+	Resume    []option
+	WorkStart string
+	WorkEnd   string
+	WorkDays  []option // Monday first
+	Modules   []moduleForm
+	Saved     bool
 }
 
 // ---- helpers ----------------------------------------------------------------
@@ -649,14 +652,27 @@ func (s *Server) defaultsPage(w http.ResponseWriter, r *http.Request, acc access
 }
 
 func (s *Server) fillDefaults(v *view, cfg core.Config) {
+	w := cfg.Work()
 	v.Defaults = defaultsEdit{Resume: resumeOptions(v.Lang, cfg.Defaults.ResumeActivity, true, ""),
+		WorkStart: w.Start, WorkEnd: w.End,
 		Modules: s.moduleForms(v.Lang, cfg.Modules, nil, false)}
+	for i := 1; i <= 7; i++ {
+		d := core.Weekdays[i%7]
+		v.Defaults.WorkDays = append(v.Defaults.WorkDays, option{Value: d, Label: i18n.In(v.Lang, "web.wd."+d), Selected: w.IsWorkday(time.Weekday(i % 7))})
+	}
 }
 
 func (s *Server) defaultsSave(w http.ResponseWriter, r *http.Request, acc access) {
 	var tried core.Config
 	cfg, err := s.editConfig(r.Context(), false, func(c *core.Config) error {
 		c.Defaults.ResumeActivity = r.PostFormValue("resume")
+		if ws, we := r.PostFormValue("work_start"), r.PostFormValue("work_end"); ws != "" || we != "" {
+			wh := core.WorkHours{Start: ws, End: we, Days: r.Form["work_day"]}
+			if len(wh.Days) == 0 {
+				return badConfig{errors.New(i18n.In(s.langOf(r), "web.setup.nodays"))}
+			}
+			c.Defaults.WorkHours = &wh
+		}
 		mods, err := s.readModules(r, c.Modules)
 		if err != nil {
 			tried = *c

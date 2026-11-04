@@ -155,6 +155,18 @@
   fieldset.radios { border: 0; padding: 0; margin: 1rem 0 0; display: flex; flex-direction: column; gap: .3rem; }
   fieldset.radios legend { font-size: .9rem; color: var(--dim); margin-bottom: .3rem; padding: 0; }
   fieldset.radios label { display: flex; gap: .5rem; align-items: center; cursor: pointer; }
+  .daybar2 { height: 2.2rem; }
+  .bar b.off { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--bg) 55%, transparent) 0 5px, color-mix(in srgb, var(--bg) 25%, transparent) 5px 10px); pointer-events: none; }
+  .ticks { position: relative; height: 1.1rem; font-size: .75rem; color: var(--dim); }
+  .ticks span { position: absolute; transform: translateX(-50%); }
+  .ticks span:first-child { transform: none; }
+  .ticks span:last-child { transform: translateX(-100%); }
+  .worknote { display: flex; align-items: center; gap: .4rem; margin: .3rem 0 0; }
+  .offkey { display: inline-block; width: 1.4rem; height: .8rem; border-radius: .2rem; background: var(--line) repeating-linear-gradient(135deg, color-mix(in srgb, var(--bg) 55%, transparent) 0 3px, transparent 3px 6px); }
+  .days { display: flex; gap: .9rem; flex-wrap: wrap; margin-top: .8rem; }
+  .days label { display: inline-flex; gap: .3rem; align-items: center; }
+  details.archived summary { cursor: pointer; }
+  details.card.archived { margin-top: 1.5rem; }
   pre { background: var(--bg); padding: .5rem; border-radius: .4rem; overflow: auto; }
 </style>
 </head>

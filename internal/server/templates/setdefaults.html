@@ -7,6 +7,15 @@
   <div class="card">
     {{template "resumeradios" (dict "Lang" $.Lang "Opts" .Resume)}}
   </div>
+  <h1>{{t $.Lang "web.setup.workhours"}}</h1>
+  <div class="card">
+    <div class="namerow">
+      <label>{{t $.Lang "web.day.from"}}<input type="time" name="work_start" value="{{.WorkStart}}" required></label>
+      <label>{{t $.Lang "web.day.to"}}<input type="time" name="work_end" value="{{.WorkEnd}}" required></label>
+    </div>
+    <div class="days">{{range .WorkDays}}<label><input type="checkbox" name="work_day" value="{{.Value}}"{{if .Selected}} checked{{end}}> {{.Label}}</label>{{end}}</div>
+    <p class="dim small">{{t $.Lang "web.setup.workhours_note"}}</p>
+  </div>
   <h1>{{t $.Lang "web.setup.modules"}}</h1>
   <p class="dim">{{t $.Lang "web.setup.modules_def_note"}}</p>
   {{template "modforms" .Modules}}

@@ -376,3 +376,26 @@ func TestModuleConfigAndEnv(t *testing.T) {
 		t.Fatalf("warnings: %v", w)
 	}
 }
+
+func TestWorkHours(t *testing.T) {
+	c := NewConfig()
+	if w := c.Work(); w.Start != "08:00" || !w.IsWorkday(time.Monday) || w.IsWorkday(time.Sunday) {
+		t.Fatalf("default: %+v", w)
+	}
+	cfg, err := ParseConfig([]byte("version: 1\ndefaults:\n  work_hours: {start: \"07:30\", end: \"16:00\", days: [mon, tue, sat]}\nhats: {}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s, e := cfg.Work().Minutes(); s != 450 || e != 960 || !cfg.Work().IsWorkday(time.Saturday) || cfg.Work().IsWorkday(time.Friday) {
+		t.Fatalf("configured: %+v", cfg.Work())
+	}
+	for _, bad := range []string{`{start: "8", end: "16:00"}`, `{start: "16:00", end: "08:00"}`, `{start: "08:00", end: "16:00", days: [monday]}`} {
+		if _, err := ParseConfig([]byte("version: 1\ndefaults:\n  work_hours: " + bad + "\nhats: {}\n")); err == nil {
+			t.Errorf("%s: expected an error", bad)
+		}
+	}
+	merged, ch := Merge(NewConfig(), cfg, false)
+	if merged.Work().Start != "07:30" || len(ch) != 1 {
+		t.Fatalf("merge: %+v %v", merged.Defaults, ch)
+	}
+}
