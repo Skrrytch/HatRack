@@ -13,6 +13,7 @@ MVP 2 is built in slices, each usable on its own:
 3b. **Web UI, daily use (done):** Now in the panel's style (status in the hat colour, Pause and Take off as in the panel, live duration, today per hat, edit link on every hat), a new hat with its activities in one step, several activities at once, module sections that say what applies, devices and YAML moved down in Setup, a narrow layout for phones.
 4. **Corrections (done):** editable Day view: change, delete, fill gaps, add entries, undo.
 5. **MCP, `launch`, `mqtt`, GNOME and KDE backends, several devices.**
+6. **Details:** an optional free text below the activity ("VENOM · review · PR 482"), with Jira keys as learned links.
 
 ## Capabilities
 
@@ -107,6 +108,69 @@ The web UI is a session-based client with a login (one password, see
 server with the same rules as the CLI (`core.PlanOn` and friends) and reach
 all agents through SSE. A language switch (English/German) in the header overrides the
 browser language and is stored in a cookie.
+
+### Details
+
+Hats and activities stay fixed categories. A **detail** is a third, free and
+optional level: one line of text, never required, never set up beforehand.
+
+> **VENOM · review · PR 482** (hat · activity · detail)
+
+**Behaviour**
+
+- The first detail of a running entry applies to the whole entry, from its
+  start: it can be added after 20 minutes without splitting anything.
+- Changing a detail starts a new entry from now, like changing the activity.
+  Changing the activity or the hat starts without a detail (unless one is
+  given with it). Pause and resume keep the detail.
+- Time per detail can then be told apart: "review 3h, of which PR 482
+  1h 40m".
+
+**Entering it, quickly and anywhere**
+
+| Where | How |
+|---|---|
+| Panel | Typing "rev PR 482" + Enter: the first word picks the activity (prefix), the rest is the detail; without a rest nothing changes. The recent details of the worn activity are chips under it, one click each. |
+| CLI | `hat do review "PR 482"`, `hat on venom do review: PR 482`, `hat detail "PR 482"` for the current activity |
+| Web, Now | A quiet "+ Detail" below hat and activity in the head; a click turns it into a field, Enter saves; the recent details as chips |
+| Web, Day | The detail is part of each entry's edit form |
+| Tray menu | nothing, it stays slim |
+
+Suggestions are the last five details per hat and activity of the last two
+weeks; what is not used for a while disappears by itself.
+
+**Model**
+
+- `switch` and `activity` events get a field `detail`. A new event type
+  `detail` changes only the detail: `retro: true` (the first detail of an
+  entry) relabels the running interval from its start, otherwise it starts a
+  new interval with the same hat and activity. This stays append-only and
+  works offline in the agent, without corrections.
+- `State` and `Interval` carry the detail; the Day view's edits keep or change
+  it. The events table gets a column `detail` (migration).
+
+**Jira keys as learned links** (as in Ruumble)
+
+- A detail with an issue link (`https://jira.example/browse/TAG-1366`, Jira
+  Cloud and Data Center alike) teaches the server where project `TAG` lives
+  (`https://jira.example/browse/`). From then on a plain "TAG-1366" in any
+  detail links there. Only the shape of the URL counts, nothing is fetched,
+  Jira needs no configuration.
+- The detail is stored as typed (lossless, works offline); everywhere it is
+  shown as the key only ("TAG-1366"), linked if the project is known: web UI,
+  panel and CLI (key only, no link), CSV, MCP (`detail` plus `detail_url`).
+- The oldest link wins, so a later link cannot redirect a known project.
+  Setup lists the learned projects (project → address) with a reset each,
+  e.g. after a first link to the wrong Jira; the next link teaches it again.
+- Keys: an uppercase letter and 1–9 uppercase letters or digits, a dash, a
+  number (`TAG-1366`, `VKB2-17`); not inside words, paths or longer keys.
+
+**Evaluation**
+
+- Day and Week: each activity in the totals unfolds into its details.
+- CSV: the column `note` holds the detail (short form).
+- MCP: `list_entries` returns `detail` and `detail_url`; `query_time` gets
+  `group_by: detail` (hat, activity and detail).
 
 ### MCP
 
