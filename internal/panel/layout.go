@@ -83,16 +83,26 @@ type Layout struct {
 	Default  string // hint when nothing is hovered
 }
 
-// Palette of the panel (dark, like the icon).
+// Palette of the panel: a dark middle with lighter cards, a neutral footer
+// and a header tinted with the colour of the worn hat.
 var (
-	cBG     = color.RGBA{0x2a, 0x2e, 0x34, 255}
-	cBorder = color.RGBA{0x3d, 0x42, 0x4a, 255}
-	cBar    = color.RGBA{0x1a, 0x1c, 0x20, 255} // header and footer bands
-	cCard   = color.RGBA{0x34, 0x38, 0x3f, 255}
-	cChip   = color.RGBA{0x42, 0x47, 0x4f, 255}
+	cBG     = color.RGBA{0x17, 0x19, 0x1c, 255}
+	cBorder = color.RGBA{0x3a, 0x3f, 0x47, 255}
+	cBar    = color.RGBA{0x26, 0x29, 0x2e, 255} // footer band
+	cCard   = color.RGBA{0x24, 0x27, 0x2c, 255}
+	cChip   = color.RGBA{0x35, 0x3a, 0x41, 255}
 	cFG     = color.RGBA{0xf0, 0xe6, 0xdc, 255}
 	cDim    = color.RGBA{0x9a, 0x9f, 0xa8, 255}
+	cInk    = color.RGBA{0x18, 0x1a, 0x1e, 255} // text on light hat colours
 )
+
+// onColor picks light or dark text for a background.
+func onColor(bg color.RGBA) color.RGBA {
+	if lum := 0.299*float64(bg.R) + 0.587*float64(bg.G) + 0.114*float64(bg.B); lum > 150 {
+		return cInk
+	}
+	return color.RGBA{0xff, 0xff, 0xff, 255}
+}
 
 func rgba(hex string) color.RGBA { return parse(hex) }
 
@@ -276,8 +286,13 @@ func Build(snap agent.Snapshot, query string, scale float64, now time.Time) Layo
 	l.Boxes = append(l.Boxes, Box{R: Rect{0, y, W, 1}, Color: cBorder})
 	y += m.hintH
 	l.H = y
-	// header and footer are darker bands, so the choice in between stands out
-	l.Boxes = append([]Box{{R: Rect{0, 0, W, m.headerH - 1}, Color: cBar}, {R: Rect{0, footY, W, y - footY}, Color: cBar}}, l.Boxes...)
+	// the header is tinted with the hat colour, the footer a neutral band;
+	// the dark middle with lighter cards is where the choice happens
+	tint := 0.35
+	if st.Mode != core.ModeWearing {
+		tint = 0.18 // grey while paused or without a hat
+	}
+	l.Boxes = append([]Box{{R: Rect{0, 0, W, m.headerH - 1}, Color: mixc(cBG, hdrColor, tint)}, {R: Rect{0, footY, W, y - footY}, Color: cBar}}, l.Boxes...)
 	return l
 }
 

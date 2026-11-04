@@ -220,7 +220,7 @@ func (x *xwin) create(w, h int) error {
 	}
 	x.win = wid
 	mask := uint32(xproto.CwBackPixel | xproto.CwOverrideRedirect | xproto.CwEventMask)
-	vals := []uint32{0x2a2e34, 1, xproto.EventMaskExposure | xproto.EventMaskPointerMotion |
+	vals := []uint32{0x17191c, 1, xproto.EventMaskExposure | xproto.EventMaskPointerMotion |
 		xproto.EventMaskButtonPress | xproto.EventMaskKeyPress}
 	scr := xproto.Setup(x.c).DefaultScreen(x.c)
 	if err := xproto.CreateWindowChecked(x.c, x.depth, wid, x.root, int16(x.x), int16(x.y), uint16(w), uint16(h), 0,

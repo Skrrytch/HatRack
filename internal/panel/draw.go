@@ -173,7 +173,7 @@ func drawHit(img *image.RGBA, h Hit, hover, focus bool, scale float64) {
 		fg := cFG
 		switch {
 		case h.Current:
-			bg, fg = h.Color, color.RGBA{0x18, 0x1a, 0x1e, 255}
+			bg, fg = h.Color, onColor(h.Color)
 		case hover || focus:
 			bg = mixc(cChip, h.Color, .55)
 		case h.Match:
@@ -186,9 +186,9 @@ func drawHit(img *image.RGBA, h Hit, hover, focus bool, scale float64) {
 		label := fit(h.Label, h.Current, m.chipPx, h.R.W-2*m.chipPad)
 		drawText(img, Text{X: h.R.X + m.chipPad, Y: h.R.Y + (h.R.H-m.chipPx)/2 - 1, S: label, Bold: h.Current, Px: m.chipPx, Color: fg})
 	case KindTool:
-		bg := cCard
+		bg := cChip
 		if hover || focus {
-			bg = cChip
+			bg = mixc(cChip, cFG, .15)
 		}
 		fillRound(img, h.R, m.s6(), bg)
 		if focus {
