@@ -1,0 +1,18 @@
+version: 1
+defaults:
+  resume_activity: ask
+modules:
+  notify: {enabled: true}
+hats:
+  venom:
+    name: VENOM
+    color: "#7a1fa2"
+    resume_activity: last
+    activities: [development, review, meeting]
+    modules:
+      wallpaper: {image: ~/Bilder/hats/venom.jpg}
+      color_scheme: {theme: Mint-Y-Dark-Purple, prefer: dark}
+      exec: {enter: "~/bin/venom-on.sh", leave: "~/bin/venom-off.sh"}
+  private:
+    name: Private
+    activities: []
