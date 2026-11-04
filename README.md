@@ -11,25 +11,30 @@ hat, which activity, how long.
 
 ```
 hat on venom            # put on the VENOM hat
-hat on venom review     # ... with an activity
+hat on venom do review  # ... with an activity
 hat do meeting          # change the activity, keep the hat
-hat off                 # take the hat off (pause)
+hat off                 # pause: the look stays, the clock stops
+hat on                  # resume
 hat                     # what am I wearing, since when
 hat log today           # today's overview
 ```
 
-> **Status:** concept. Nothing is built yet. See [docs/concept.md](docs/concept.md)
-> and the open questions in [docs/decisions.md](docs/decisions.md).
+> **Status:** concept. Nothing is built yet. See [docs/concept.md](docs/concept.md),
+> the stages [MVP 1](docs/mvp-1.md), [MVP 2](docs/mvp-2.md),
+> [MVP 3 and outlook](docs/mvp-3.md), and the open questions in
+> [docs/decisions.md](docs/decisions.md).
 
 ## Components
 
-| Name | What | Package / command |
+All parts are one Go binary, `hat`.
+
+| Name | What | Command |
 |---|---|---|
-| **HatRack** | the tool as a whole | `hatrack` |
-| **hat** | command line and background agent | `hat` |
-| **HatTray** | tray icon and menu | `hattray` |
-| **HatRack Server** | optional central server: web UI, API, MCP for AI tools | `hatrack-server` |
-| *core* | shared library, not used directly | `hatrack-core` |
+| **HatRack** | the tool as a whole | – |
+| **hat** | command line | `hat` |
+| **agent** | background service that applies hats | `hat agent` |
+| **HatTray** | tray icon and menu | `hat tray run` |
+| **HatRack Server** | optional central server: web UI, API, MCP for AI tools | `hat server` |
 
 ## Goals
 
@@ -43,3 +48,7 @@ hat log today           # today's overview
   core runs locally.
 - **The log is the truth.** Events are appended, never changed. Corrections are
   new events.
+
+## License
+
+[MIT](LICENSE) © 2026 Bert Speckels

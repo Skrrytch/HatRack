@@ -4,7 +4,7 @@
 
 | Term | Meaning |
 |---|---|
-| **Hat** | a context such as Office, VENOM, TAG, Private. Exactly one hat is on, or none (pause). |
+| **Hat** | a context such as Office, VENOM, TAG, Private. At most one hat is worn at a time; when paused, the hat stays on the rack with its look but the clock stops. |
 | **Activity** | what you do while wearing a hat. Each hat has its own list (VENOM: development, review, meeting …). |
 | **Switch** | putting on a hat: leave the old one, apply the new one, write the log. |
 | **Module** | one capability that reacts to switches (wallpaper, colour scheme, launch, mqtt …). |
@@ -16,18 +16,20 @@
 ```
  Server (optional, e.g. Docker)               Devices (laptop, PC …)
 ┌──────────────────────────────┐             ┌───────────────────────────────┐
-│ hatrack-server               │  REST + SSE │ hat agent (user service, no UI)│
+│ hat server                   │  REST + SSE │ hat agent (user service)      │
 │  ├─ API          (/api) ◄────┼─────────────┤  ├─ module runtime            │
 │  ├─ web UI       (/)         │             │  ├─ offline queue             │
 │  ├─ MCP          (/mcp) ◄─ AI│             │  └─ local socket              │
-│  ├─ core modules (mqtt …)    │             │ hat (CLI)    ─┐                │
-│  └─ SQLite: event log        │             │ HatTray (Qt) ─┴─► local socket │
+│  ├─ core modules (mqtt …)    │             │ hat (CLI)    ─┐               │
+│  └─ SQLite: event log        │             │ hat tray     ─┴─► local socket│
 └──────────────────────────────┘             └───────────────────────────────┘
 ```
 
+- **One program, one binary.** `hat` contains the CLI, the agent, the server
+  and the tray as subcommands (`hat agent`, `hat server`, `hat tray run`).
 - **The core is a library**, not a server. Data model, event log, time
   calculation, module runtime, schema-driven forms, views and MCP tools live in
-  `hatrack-core`. The server and the agent are thin shells around it.
+  the core packages. The server and the agent are thin shells around it.
 - **Connected mode:** the server holds the truth; agents apply what it says and
   report what their device can do. A switch can come from anywhere (tray, CLI,
   web UI, MCP) and is pushed to all agents over SSE.
@@ -44,7 +46,7 @@
 module "wallpaper"
 ├─ manifest   id, version, runs_in: agent | core
 │             config_schema (JSON Schema) → forms in the web UI
-│             hooks: enter, leave, activity_change, idle
+│             hooks: enter, leave (idle later)
 └─ backends   gnome · cinnamon · kde · xfce · sway · hyprland …
               each: detect() → bool, apply(cfg), snapshot()
 ```
@@ -58,8 +60,9 @@ module "wallpaper"
    standalone mode.
 4. **Settings in three layers:** module default → hat → device.
 5. **`exec` as the universal fallback:** run any script on enter/leave.
-6. Modules are Python packages found via entry points. A folder is enough for
-   personal modules.
+6. Built-in modules are compiled into `hat`. External modules are executables
+   in a folder that exchange JSON over stdin/stdout, so a folder is enough for
+   personal modules, written in any language.
 7. A **neutral** state is saved on first start and can always be restored.
 
 ### Portability notes
@@ -70,15 +73,15 @@ module "wallpaper"
 | Notifications | D-Bus notifications | – |
 | Launch apps/URLs | exec, xdg-open, .desktop files | – |
 | Move/close windows | – | X11 wmctrl, KWin scripts, sway/hyprland IPC; GNOME Wayland hardly possible |
-| Tray | StatusNotifierItem via Qt | GNOME needs the AppIndicator extension |
+| Tray | StatusNotifierItem over D-Bus | GNOME needs the AppIndicator extension |
 | Global shortcuts | bind `hat …` in the desktop's own shortcut settings | XDG GlobalShortcuts portal later |
 | Idle/lock | logind partly | screensaver D-Bus per desktop |
 
 ## Data model
 
 ```
-hats(id, name, color, sort, archived, rev, updated_at)
-activities(id, hat_id, name, archived, rev, updated_at)
+hats(id, key, name, color, resume_activity, sort, archived, rev, updated_at)
+activities(id, hat_id, name, sort, archived, rev, updated_at)
 module_settings(module, hat_id?, device_id?, json, rev, updated_at)
 devices(id, name, token_hash, capabilities_json, last_seen)
 events(id uuid, ts, device_id, type, hat_id, activity_id, note, payload_json)
@@ -86,6 +89,8 @@ events(id uuid, ts, device_id, type, hat_id, activity_id, note, payload_json)
 
 - Event types: `switch`, `activity`, `off`, `idle_start`, `idle_end`,
   `correction`, `module_error`.
+- `key` is the stable identifier used in the YAML configuration; `name` is
+  the display name. Activities are identified by name within their hat.
 - Events are append-only. Intervals and reports are derived.
 - A correction is a new event that supersedes an old one, so every change,
   including one proposed by an AI, stays traceable.
@@ -97,10 +102,10 @@ events(id uuid, ts, device_id, type, hat_id, activity_id, note, payload_json)
 
 | Part | MVP choice |
 |---|---|
-| Language | Python, FastAPI |
-| Storage | SQLite behind a storage interface |
-| Web UI | server-rendered (Jinja + HTMX), forms from JSON Schemas |
-| MCP | official Python SDK, Streamable HTTP at `/mcp` (stdio in standalone mode) |
+| Language | Go, standard library `net/http` |
+| Storage | SQLite (`modernc.org/sqlite`, pure Go) behind a storage interface |
+| Web UI | server-rendered (`templ` + HTMX, embedded in the binary), forms from JSON Schemas |
+| MCP | official Go SDK, Streamable HTTP at `/mcp` (stdio in standalone mode) |
 | Auth | one token per device, one for MCP; write tools only with permission |
 
 **Views:** Now (current hat, activity, duration, devices online) · Day
@@ -113,35 +118,26 @@ events(id uuid, ts, device_id, type, hat_id, activity_id, note, payload_json)
 
 ## Client
 
-- **`hat agent`:** `systemd --user` service, installed with `pipx`/`uv tool`.
-  Holds the SSE connection, runs modules, queues offline events.
-- **`hat`:** `on`, `do`, `off`, `status`, `log`, `menu`. Talks to the agent over
-  a Unix socket.
-- **HatTray:** small Qt app (StatusNotifierItem), icon in the hat's colour,
-  menu with hats and their activities. Optional.
+- **`hat agent`:** `systemd --user` service. Installation is copying one
+  binary. Holds the SSE connection, runs modules, queues offline events.
+- **`hat`:** `on`, `do`, `off`, `status`, `log`, `config`. Talks to the agent
+  over a Unix socket.
+- **HatTray (`hat tray`):** StatusNotifierItem over D-Bus (`fyne.io/systray`,
+  no GTK or Qt), icon in the hat's colour, menu with hats and their
+  activities. Optional.
 
-## MVP scope
+## Stages
 
-**In:** server with API, SSE, SQLite, the five views and MCP (read + `switch`);
-agent with offline queue, CLI and tray; modules `wallpaper` (gnome/cinnamon,
-kde), `color_scheme` (gnome/cinnamon, kde), `notify`, `launch`, `exec`, `mqtt`
-(core); activities per hat.
+The MVP is split into stages. Each document starts with the capabilities,
+then the components, then how it works and the architecture.
 
-**Out, for now:** moving/closing windows, idle detection (comes right after),
-suggestions from the active window, multiple users, public access, standalone
-mode (planned as the next milestone; the MVP must keep the structure ready).
-
-## Milestones
-
-1. `hatrack-core`: data model, event log, time calculation, module runtime;
-   usable and testable locally.
-2. `hatrack-server` and `hat agent` on top of it; HatTray.
-3. Standalone mode.
-4. Idle detection, daily summary.
-5. Suggestions from the active window, window modules, more backends.
+1. [MVP 1](mvp-1.md): core, server with API and SSE, agent, CLI, config as
+   YAML, Cinnamon backends, `notify`, `exec`.
+2. [MVP 2](mvp-2.md): full web UI with corrections, MCP, `launch`, `mqtt`,
+   GNOME and KDE backends, several devices.
+3. [MVP 3 and outlook](mvp-3.md): HatTray, idle detection, export, standalone
+   mode, then everything else sorted by benefit.
 
 ## Later ideas
 
-Firefox profile per hat, git identity per hat (`includeIf gitdir`), SSH keys
-and VPN, focus mode, pause reminders and Pomodoro, calendar as activity
-suggestions, Home Assistant scenes via MQTT, export to Kimai.
+Collected and sorted by benefit in [MVP 3 and outlook](mvp-3.md).

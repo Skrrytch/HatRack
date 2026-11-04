@@ -4,18 +4,29 @@
 
 | Date | Decision |
 |---|---|
-| 2026-11-04 | Name **HatRack**; command `hat`, tray **HatTray**, server **HatRack Server**. PyPI `hat` is taken, so the package is `hatrack` and installs the command `hat`. |
+| 2026-11-04 | Name **HatRack**; command `hat`, tray **HatTray**, server **HatRack Server**. |
 | 2026-11-04 | Client/server split with an optional server; the core is a library so a standalone mode can follow without a rewrite. |
 | 2026-11-04 | Modules with per-desktop backends; no dependency on one distribution, display server or UI toolkit. |
 | 2026-11-04 | Commits carry no AI attribution (see `CLAUDE.md`). |
+| 2026-11-04 | The MVP comes in three stages: [MVP 1](mvp-1.md), [MVP 2](mvp-2.md), [MVP 3 and outlook](mvp-3.md). |
+| 2026-11-04 | Configuration (hats, activities, module settings) can be exported and imported as YAML, on the server and locally, so a setup moves with one export and one import. |
+| 2026-11-04 | Activities are optional. Per hat: `resume_activity: never \| last \| ask`. Unknown activities are rejected. |
+| 2026-11-04 | Hat and activity names ignore case and accept unique prefixes. |
+| 2026-11-04 | `hat off` is a pause: the look stays, only the clock stops. `hat off --neutral` restores the neutral look. |
+| 2026-11-04 | No `hat menu` for now. HatTray and `hat tray run\|show\|hide\|toggle` move to MVP 3. |
+| 2026-11-04 | One state per user: a switch on any device switches all devices, and the log never has overlapping intervals. Rejected: one state per device (overlaps, every report needs a rule which device counts; high effort, little benefit for one user). A per-device "don't follow" flag that only skips applying the look can come later without changing the model (see [MVP 3 and outlook](mvp-3.md)). |
+| 2026-11-04 | Licence MIT, as for OTP-Scout. Public repository on GitHub. |
+| 2026-11-04 | Go instead of Python: one static binary `hat` for CLI, agent, server and tray, no runtime to install, independent of the distribution. Web UI with `templ` + HTMX, tray with `fyne.io/systray` (StatusNotifierItem over D-Bus, no GTK/Qt), D-Bus with `godbus/dbus`, SQLite with `modernc.org/sqlite`, MCP with the official Go SDK. External modules are executables speaking JSON over stdin/stdout. Rejected: Rust (slower development for a glue-heavy tool), TypeScript (needs a runtime, weak D-Bus and tray support). |
+| 2026-11-04 | User interface in English and German. The web UI picks the language from the browser (`Accept-Language`) and can be switched; CLI, tray and notifications follow the locale (`LC_MESSAGES`/`LANG`) and can be overridden with `language: auto \| en \| de`. All texts come from message catalogs from MVP 1 on. |
+| 2026-11-04 | The activity is always introduced by `do`: `hat on venom do review` mirrors `hat do review` for the current hat. Longer, but one pattern to remember. |
+| 2026-11-04 | State transitions: `do` and `off` without a worn hat are errors that write no event. `hat on` / `hat on X` resumes a paused hat with a `switch` event. A backdated event (`--at`) changes the look only if it is the newest event. See [MVP 1](mvp-1.md). |
+| 2026-11-04 | Hats are identified by `key`, activities by name within the hat. Renaming a key or an activity creates a new one; history stays with the old one. |
+| 2026-11-04 | MVP 1 needs a server (local on `127.0.0.1` is fine); the agent caches the configuration for outages. Standalone mode stays in MVP 3. |
 
 ## Open
 
-1. **One state for all devices, or one per device?** Proposal: time tracking
-   knows exactly one active hat per user; a switch on one device switches all
-   others, unless a device is set to "don't follow".
-2. **Server hosting** on the home server: name, port, LAN only or public,
-   backup of the time data, data location.
-3. **Language of the user interface:** English base with German translation
-   (like PocketTray)?
-4. **Licence and public GitHub repository.**
+- **Web UI login (MVP 2):** how are the user and password created (first-run
+  setup, `hat server user set-password`, environment variable)?
+- **Cinnamon `color_scheme`:** does Cinnamon evaluate a light/dark preference,
+  or only the GTK theme? Test on the desktop early in MVP 1; if not, drop
+  `prefer`.
