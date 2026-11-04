@@ -36,7 +36,8 @@ hat server device add laptop  # prints a token
 hat agent login http://127.0.0.1:8421 <token>
 hat server user set-password  # login for the web UI at http://127.0.0.1:8421
 hat config import docs/example.yaml
-hat tray show                 # tray icon (needs a StatusNotifier host)
+hat tray show                 # tray icon (needs a StatusNotifier host); left click = panel
+hat panel                     # the panel; bind this to a keyboard shortcut
 
 hat on venom do review
 ```

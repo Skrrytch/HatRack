@@ -8,6 +8,7 @@ MVP 2 is built in slices, each usable on its own:
 
 1. **Web UI, read-only (done):** login, Now with switch bar, Day, Week, CSV.
 2. **HatTray (done):** icon and menu for switching.
+2b. **Panel (done):** the quick switcher, opened by left click on the tray icon or a keyboard shortcut.
 3. **Web UI, Setup:** hats, activities and module settings as forms.
 4. **Corrections:** editable Day view.
 5. **MCP, `launch`, `mqtt`, GNOME and KDE backends, several devices.**
@@ -15,9 +16,9 @@ MVP 2 is built in slices, each usable on its own:
 ## Capabilities
 
 - **HatTray.** A tray icon in the colour of the current hat (grey when
-  paused or none). Its menu lists the hats; each hat has its activities as a
-  submenu. Further entries: pause/resume, "Open HatRack" (the web UI) and
-  the current state as the first line. `hat tray run` starts it, `hat tray
+  paused or none). A left click opens the panel (below). The right-click menu is
+  slim: the current state as the first line, pause/resume, "Open HatRack"
+  (the web UI), "About HatRack" and "Quit tray". `hat tray run` starts it, `hat tray
   show` / `hide` / `toggle` control the icon from the command line or a
   shortcut. It follows switches made anywhere (CLI, web UI, other device).
 - **Full web UI.** Now, Day (timeline, editable), Week (totals per hat and
@@ -170,6 +171,28 @@ The tray is a thin client on the agent socket, like the CLI.
 - Cinnamon shows StatusNotifier icons through `xapp-sn-watcher` (Linux Mint).
   Where no watcher runs, `hat tray run` says so and exits. GNOME needs the
   AppIndicator extension; this is a hint in the message, not a dependency.
+
+### Panel
+
+The quick switcher: one small window with every hat as a card and its
+activities as chips, a toolbar (pause/resume, neutral look, open HatRack,
+about) and a hint line that says what a click on the hovered item does.
+
+- Opened by a left click on the tray icon (next to the pointer) or by
+  `hat panel` (middle of the monitor with the pointer; `--pointer` puts it at
+  the pointer). Bind `hat panel` to a keyboard shortcut in the desktop's
+  settings. A running tray shows it instantly; without a tray `hat panel`
+  draws it itself.
+- Closes with Escape or a click outside. One click on a hat or an activity
+  puts it on and closes the panel. Typing filters hats and activities by
+  prefix; arrow keys, Tab and Enter work too.
+- It is plain Go: layout and drawing (embedded Go fonts, software
+  rendering) are independent of the window system; the window itself is an
+  X11 backend (`github.com/jezek/xgb`, override-redirect window with
+  keyboard and pointer grab, size from `Xft.dpi`, monitor from RandR). A
+  Wayland backend can be added later. Without X11 the panel opens the web UI.
+- Tested with Xvfb, xdotool and ImageMagick (skipped where they are not
+  installed); never against the real display.
 
 ### Settings layers
 

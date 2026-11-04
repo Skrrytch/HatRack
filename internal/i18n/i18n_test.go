@@ -32,7 +32,7 @@ func TestCatalogsHaveSameKeys(t *testing.T) {
 
 // Every message key used in the source must exist in the English catalog.
 func TestKeysInSourceExist(t *testing.T) {
-	re := regexp.MustCompile(`"((?:cli|err|web|notify)\.[a-z_.]+)"`)
+	re := regexp.MustCompile(`"((?:cli|err|web|notify|panel|ui|tray)\.[a-z_.]+)"`)
 	known := map[string]bool{}
 	for _, k := range Keys("en") {
 		known[k] = true
@@ -43,7 +43,7 @@ func TestKeysInSourceExist(t *testing.T) {
 		}
 		b, _ := os.ReadFile(path)
 		for _, m := range re.FindAllStringSubmatch(string(b), -1) {
-			if !known[m[1]] {
+			if !known[m[1]] && m[1] != "tray.sock" { // a file name, not a message
 				t.Errorf("%s: unknown message key %s", path, m[1])
 			}
 		}

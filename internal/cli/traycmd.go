@@ -24,6 +24,7 @@ func (a *App) trayCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
+			tray.Version = Version
 			err := tray.Run(ctx, a.Socket)
 			if errors.Is(err, tray.ErrNoWatcher) {
 				return errors.New(i18n.T("err.no_watcher"))

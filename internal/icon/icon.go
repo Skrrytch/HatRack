@@ -1,4 +1,6 @@
-package tray
+// Package icon draws the HatRack icon: a dark rounded square with a frame in
+// the hat's colour and a cream top hat. It is used by the tray and the panel.
+package icon
 
 import (
 	"bytes"
@@ -8,6 +10,9 @@ import (
 	"strconv"
 	"strings"
 )
+
+// Grey is the frame colour while paused or without a hat.
+const Grey = "#8a8f98"
 
 // ParseColor reads #rrggbb; anything else gives the paused grey.
 func ParseColor(s string) color.RGBA {
@@ -23,7 +28,7 @@ func ParseColor(s string) color.RGBA {
 type pt struct{ x, y float64 }
 
 // The icon is a dark rounded square with a frame in the hat's colour and a
-// cream top hat whose band has the same colour (see deploy/hatrack.svg). All
+// cream top hat whose band has the same colour (see internal/server/static/hatrack.svg). All
 // coordinates are on a 64 x 64 grid.
 var (
 	cream = color.RGBA{0xf0, 0xe6, 0xdc, 255}

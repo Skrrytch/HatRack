@@ -58,6 +58,7 @@ type HatInfo struct {
 	Color      string   `json:"color,omitempty"`
 	Activities []string `json:"activities"`
 	Resume     string   `json:"resume"`
+	Last       string   `json:"last,omitempty"` // last activity used, if still valid
 }
 
 // Snapshot is everything a menu client needs: the status, the hats and the
@@ -203,8 +204,14 @@ func (a *Agent) snapshot() Snapshot {
 		if acts == nil {
 			acts = []string{}
 		}
-		snap.Hats = append(snap.Hats, HatInfo{Key: h.Key, Name: h.DisplayName(), Color: h.Color,
-			Activities: acts, Resume: a.config.ResumeMode(h)})
+		info := HatInfo{Key: h.Key, Name: h.DisplayName(), Color: h.Color,
+			Activities: acts, Resume: a.config.ResumeMode(h)}
+		if l := a.last[h.Key]; l != "" {
+			if act, err := core.ResolveActivity(h, l); err == nil {
+				info.Last = act
+			}
+		}
+		snap.Hats = append(snap.Hats, info)
 	}
 	return snap
 }

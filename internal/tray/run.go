@@ -21,6 +21,8 @@ import (
 
 	"hatrack/internal/agent"
 	"hatrack/internal/i18n"
+	"hatrack/internal/icon"
+	"hatrack/internal/panel"
 )
 
 // ControlSocket is where a running tray listens for show, hide and toggle.
@@ -100,6 +102,54 @@ type app struct {
 	gen  chan struct{} // closed when the menu is rebuilt
 	icon string
 	tip  string
+
+	panelOpen bool
+}
+
+// Version and ProjectURL are shown in the about screen.
+var (
+	Version    = "dev"
+	ProjectURL = "https://github.com/Skrrytch/HatRack"
+)
+
+// PanelRemote asks a running tray to show the panel, centred on the pointer's
+// monitor or at the pointer (used by the keyboard shortcut). It reports whether a tray did.
+func PanelRemote(atPointer bool) bool {
+	cmd := "panel"
+	if atPointer {
+		cmd = "panel-pointer"
+	}
+	r, err := control(cmd)
+	return err == nil && r == "ok"
+}
+
+// showPanel opens the panel unless one is open already. It runs in its own
+// goroutine and performs the chosen action afterwards.
+func (a *app) showPanel(where panel.Where, about bool) {
+	a.mu.Lock()
+	if a.panelOpen {
+		a.mu.Unlock()
+		return
+	}
+	a.panelOpen = true
+	a.mu.Unlock()
+	go func() {
+		defer func() { a.mu.Lock(); a.panelOpen = false; a.mu.Unlock() }()
+		act, err := panel.Run(context.Background(), panel.Options{
+			Snapshot: func() agent.Snapshot { a.mu.Lock(); defer a.mu.Unlock(); return a.snap },
+			Where:    where, About: about, Version: Version, ProjectURL: ProjectURL,
+		})
+		if err != nil {
+			log.Printf("panel: %v", err)
+			if errors.Is(err, panel.ErrNoDisplay) {
+				a.perform(&Action{Open: true})
+			}
+			return
+		}
+		if act != (Action{}) {
+			a.perform(&act)
+		}
+	}()
 }
 
 // Run shows the tray icon until it is told to quit. It blocks.
@@ -118,6 +168,7 @@ func Run(ctx context.Context, agentSocket string) error {
 		return err
 	}
 	defer os.Remove(ControlSocket())
+	systray.SetOnTapped(func() { a.showPanel(panel.AtPointer, false) })
 	go a.serveControl(ln, cancel)
 	go func() { <-ctx.Done(); systray.Quit() }()
 	systray.Run(func() { a.ready(ctx) }, func() { ln.Close() })
@@ -150,6 +201,15 @@ func (a *app) serveControl(ln net.Listener, quit func()) {
 			case "quit":
 				fmt.Fprintln(c, "ok")
 				quit()
+			case "panel":
+				fmt.Fprintln(c, "ok")
+				a.showPanel(panel.Centered, false)
+			case "panel-pointer":
+				fmt.Fprintln(c, "ok")
+				a.showPanel(panel.AtPointer, false)
+			case "about":
+				fmt.Fprintln(c, "ok")
+				a.showPanel(panel.Centered, true)
 			}
 		}()
 	}
@@ -185,7 +245,7 @@ func (a *app) setIcon(color string) {
 		return
 	}
 	a.icon = color
-	systray.SetIcon(Icon(color, 64))
+	systray.SetIcon(icon.Icon(color, 64))
 }
 
 // watchLoop follows the agent and reconnects when it restarts.
@@ -303,6 +363,12 @@ func (a *app) perform(act *Action) {
 	switch {
 	case act.Quit:
 		systray.Quit()
+	case act.About:
+		a.showPanel(panel.Centered, true)
+	case act.Link != "":
+		if err := exec.Command("xdg-open", act.Link).Start(); err != nil {
+			log.Printf("xdg-open: %v", err)
+		}
 	case act.Open:
 		a.mu.Lock()
 		url := a.snap.Server

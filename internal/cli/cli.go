@@ -58,7 +58,7 @@ func (a *App) Root() *cobra.Command {
 	root.SetOut(a.Out)
 	root.SetErr(a.Err)
 	root.CompletionOptions.DisableDefaultCmd = true
-	root.AddCommand(a.statusCmd(), a.onCmd(), a.doCmd(), a.offCmd(), a.logCmd(), a.configCmd(), a.agentCmd(), a.serverCmd(), a.trayCmd())
+	root.AddCommand(a.statusCmd(), a.onCmd(), a.doCmd(), a.offCmd(), a.logCmd(), a.configCmd(), a.agentCmd(), a.serverCmd(), a.trayCmd(), a.panelCmd())
 	friendlyUsage(root)
 	return root
 }

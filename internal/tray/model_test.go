@@ -1,9 +1,6 @@
 package tray
 
 import (
-	"bytes"
-	"image/png"
-	"strings"
 	"testing"
 	"time"
 
@@ -39,27 +36,20 @@ func TestMenuWearing(t *testing.T) {
 	if !m[0].Disabled || m[0].Label[:5] != "VENOM" {
 		t.Fatalf("first line: %+v", m[0])
 	}
-	venom := find(m, "VENOM")
-	if venom == nil || !venom.Checked || len(venom.Children) != 3 {
-		t.Fatalf("venom: %+v", venom)
-	}
-	review := find(venom.Children, "review")
-	if !review.Checked || review.Action.Request.Cmd != "on" || review.Action.Request.Hat != "venom" ||
-		review.Action.Request.Activity != "review" || !review.Action.Request.HasActivity {
-		t.Fatalf("review: %+v", review)
-	}
-	if find(venom.Children, "development").Checked || find(venom.Children, "Hat only").Checked {
-		t.Fatal("only the current activity is checked")
-	}
-	priv := find(m, "Private")
-	if priv == nil || priv.Checked || priv.Children != nil || priv.Action.Request.Hat != "private" {
-		t.Fatalf("private: %+v", priv)
+	// the hats live in the panel, not in the menu
+	if find(m, "VENOM") != nil || find(m, "Private") != nil {
+		t.Fatal("the menu does not list hats")
 	}
 	if find(m, "Pause") == nil || find(m, "Resume") != nil {
 		t.Fatal("wearing: Pause, not Resume")
 	}
-	if find(m, "Open HatRack") == nil || find(m, "Quit tray") == nil {
-		t.Fatal("open and quit missing")
+	for _, l := range []string{"Open HatRack", "About HatRack", "Quit tray"} {
+		if find(m, l) == nil {
+			t.Fatalf("%s missing", l)
+		}
+	}
+	if !find(m, "About HatRack").Action.About {
+		t.Fatal("about action")
 	}
 }
 
@@ -68,12 +58,6 @@ func TestMenuPausedAndNone(t *testing.T) {
 	m := BuildMenu(snapshot(core.ModePaused, "venom", "review"), time.Now())
 	if r := find(m, "Resume"); r == nil || r.Action.Request.Cmd != "on" || r.Action.Request.Hat != "" {
 		t.Fatalf("resume: %+v", r)
-	}
-	if v := find(m, "VENOM"); !v.Checked {
-		t.Fatal("the paused hat stays marked")
-	}
-	if find(find(m, "VENOM").Children, "review").Checked {
-		t.Fatal("no activity is checked while paused")
 	}
 	none := BuildMenu(snapshot(core.ModeNone, "", ""), time.Now())
 	if find(none, "Pause") != nil || find(none, "Resume") != nil {
@@ -97,42 +81,9 @@ func TestMenuOffline(t *testing.T) {
 	}
 }
 
-func TestIconAndColor(t *testing.T) {
+func TestIconColor(t *testing.T) {
 	if IconColor(snapshot(core.ModeWearing, "venom", "")) != "#7a1fa2" || IconColor(snapshot(core.ModePaused, "venom", "")) != Grey ||
 		IconColor(snapshot(core.ModeNone, "", "")) != Grey {
 		t.Fatal("icon colour")
-	}
-	img, err := png.Decode(bytes.NewReader(Icon("#7a1fa2", 64)))
-	if err != nil || img.Bounds().Dx() != 64 {
-		t.Fatalf("icon: %v", err)
-	}
-	at := func(x, y int) [4]uint32 {
-		r, g, b, a := img.At(x, y).RGBA()
-		return [4]uint32{r >> 8, g >> 8, b >> 8, a >> 8}
-	}
-	// the frame has the hat colour, the crown is cream, the band has the hat colour again
-	if f := at(32, 7); f != [4]uint32{0x7a, 0x1f, 0xa2, 255} {
-		t.Fatalf("frame pixel: %v", f)
-	}
-	if c := at(32, 22); c != [4]uint32{0xf0, 0xe6, 0xdc, 255} {
-		t.Fatalf("crown pixel: %v", c)
-	}
-	if b := at(32, 34); b != [4]uint32{0x7a, 0x1f, 0xa2, 255} {
-		t.Fatalf("band pixel: %v", b)
-	}
-	if d := at(10, 30); d != [4]uint32{0x2a, 0x2d, 0x33, 255} {
-		t.Fatalf("background pixel: %v", d)
-	}
-	if _, _, _, a := img.At(0, 0).RGBA(); a != 0 {
-		t.Fatal("corner should be transparent")
-	}
-	if small, err := png.Decode(bytes.NewReader(Icon("#7a1fa2", 22))); err != nil || small.Bounds().Dx() != 22 {
-		t.Fatalf("small icon: %v", err)
-	}
-	if got := SVG("#2FA7E0"); !strings.Contains(got, `stroke="#2fa7e0"`) || !strings.Contains(got, `fill="#2fa7e0"`) {
-		t.Fatalf("svg: %s", got)
-	}
-	if c := ParseColor("nonsense"); c.R != 0x8a {
-		t.Fatalf("bad colour: %+v", c)
 	}
 }
