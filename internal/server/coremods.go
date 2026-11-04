@@ -92,7 +92,8 @@ func (s *Server) publishCore(ctx context.Context) {
 // mqttState is the published form of a state: names instead of keys only,
 // no detail.
 func mqttState(st core.State, cfg core.Config, loc *time.Location) modules.MQTTState {
-	out := modules.MQTTState{Mode: string(st.Mode), Working: st.Mode == core.ModeWearing}
+	// "working": a hat is on and its time is working time (not e.g. Private)
+	out := modules.MQTTState{Mode: string(st.Mode), Working: st.Mode == core.ModeWearing && cfg.IsWork(st.Hat)}
 	if out.Mode == "" {
 		out.Mode = string(core.ModeNone)
 	}

@@ -112,6 +112,19 @@ type Hat struct {
 	Archived         bool                 `yaml:"archived,omitempty" json:"archived,omitempty"`
 	ArchivedActivity []string             `yaml:"archived_activities,omitempty" json:"archived_activities,omitempty"`
 	Modules          map[string]ModuleCfg `yaml:"modules,omitempty" json:"modules,omitempty"`
+	// WorkTime false: the hat's time is recorded but is no working time
+	// (e.g. Private): left out of the sums, "today" and MQTT "working".
+	WorkTime *bool `yaml:"work_time,omitempty" json:"work_time,omitempty"`
+}
+
+// CountsAsWork reports whether the hat's time is working time (the default).
+func (h Hat) CountsAsWork() bool { return h.WorkTime == nil || *h.WorkTime }
+
+// IsWork reports whether time in a hat counts as working time; unknown
+// hats (e.g. deleted ones) count.
+func (c Config) IsWork(key string) bool {
+	h, ok := c.Hat(key)
+	return !ok || h.CountsAsWork()
 }
 
 // DisplayName returns the name, or the key if no name is set.
@@ -391,7 +404,7 @@ func Merge(cur, in Config, replace bool) (Config, []string) {
 func mergeHat(old, in Hat, replace bool) Hat {
 	h := old
 	h.Name, h.Color, h.ResumeActivity = in.Name, in.Color, in.ResumeActivity
-	h.Archived = in.Archived
+	h.Archived, h.WorkTime = in.Archived, in.WorkTime
 	if replace || len(in.Modules) > 0 {
 		if replace {
 			h.Modules = nil

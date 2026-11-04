@@ -49,7 +49,8 @@ type StatusData struct {
 	Color     string     `json:"color,omitempty"`
 	Connected bool       `json:"connected"`
 	Queued    int        `json:"queued"`
-	Changed   bool       `json:"changed"` // false if the command was a no-op
+	Rejected  int        `json:"rejected,omitempty"` // events the server refused, set aside
+	Changed   bool       `json:"changed"`            // false if the command was a no-op
 }
 
 // HatInfo describes a hat for clients that show a menu.
@@ -84,6 +85,8 @@ type InfoData struct {
 type LogData struct {
 	server.IntervalsResponse
 	Names map[string]string `json:"names"`
+	// NotWork lists hats whose time is no working time (left out of the sum)
+	NotWork map[string]bool `json:"not_work,omitempty"`
 }
 
 // ImportData is the data of a config_import answer.
@@ -121,6 +124,8 @@ func errText(err error) string {
 		return i18n.T("err.paused")
 	case errors.Is(err, core.ErrFuture):
 		return i18n.T("err.future")
+	case errors.Is(err, core.ErrBeforeEntry):
+		return i18n.T("err.before_entry")
 	case errors.Is(err, ErrUnauthorized):
 		return i18n.T("err.unauthorized")
 	}
@@ -224,6 +229,10 @@ func (a *Agent) snapshot() Snapshot {
 // status builds the answer for status and for changes. Caller holds a.mu.
 func (a *Agent) status(changed bool) Response {
 	d := StatusData{State: a.state, Connected: a.connected, Queued: a.db.QueueLen(), Changed: changed}
+	var kept []RejectedEvent
+	if found, _ := a.db.Get("rejected", &kept); found {
+		d.Rejected = len(kept)
+	}
 	if h, found := a.config.Hat(a.state.Hat); found {
 		d.HatName, d.Color = h.DisplayName(), h.Color
 	} else {
@@ -245,12 +254,15 @@ func (a *Agent) log(ctx context.Context, req Request) Response {
 		return fail(a.serverErr(err))
 	}
 	a.mu.Lock()
-	names := map[string]string{}
+	names, notWork := map[string]string{}, map[string]bool{}
 	for _, h := range a.config.Hats {
 		names[h.Key] = h.DisplayName()
+		if !h.CountsAsWork() {
+			notWork[h.Key] = true
+		}
 	}
 	a.mu.Unlock()
-	return ok(LogData{IntervalsResponse: res, Names: names})
+	return ok(LogData{IntervalsResponse: res, Names: names, NotWork: notWork})
 }
 
 func (a *Agent) serverErr(err error) string {

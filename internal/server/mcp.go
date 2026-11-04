@@ -189,6 +189,7 @@ type queryTimeOut struct {
 	To             string      `json:"to"`
 	GroupBy        string      `json:"group_by"`
 	TotalMinutes   int         `json:"total_minutes"`
+	WorkMinutes    int         `json:"work_minutes"` // without hats that are no working time (work_time: false)
 	Total          string      `json:"total"`
 	OutsideMinutes int         `json:"outside_work_minutes"`
 	Groups         []timeGroup `json:"groups"`
@@ -310,7 +311,7 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 				durs[i] += d
 				outs[i] += outside
 			}
-			var total, outside time.Duration
+			var total, outside, workTotal time.Duration
 			for _, i := range iv {
 				parts := []core.Interval{i}
 				if group == "day" || group == "week" {
@@ -323,6 +324,9 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 					d := p.Duration()
 					o := d - insideWork(p, work, s.Loc)
 					total, outside = total+d, outside+o
+					if cfg.IsWork(p.Hat) {
+						workTotal += d
+					}
 					switch group {
 					case "hat":
 						add(p.Hat, timeGroup{Hat: p.Hat, HatName: nameOf(nm, p.Hat)}, d, o)
@@ -355,6 +359,7 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 				sort.SliceStable(out.Groups, func(a, b int) bool { return out.Groups[a].Day < out.Groups[b].Day })
 			}
 			out.TotalMinutes, out.Total, out.OutsideMinutes = minutes(total), core.FormatDuration(total), minutes(outside)
+			out.WorkMinutes = minutes(workTotal)
 			return nil, out, nil
 		})
 
@@ -438,7 +443,7 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 				out.Today = append(out.Today, hatTotal{Hat: tot[i].Hat, HatName: nameOf(nm, tot[i].Hat), Minutes: m,
 					Duration: core.FormatDuration(time.Duration(m) * time.Minute)})
 			}
-			out.TodayTotal = core.FormatDuration(sumOf(tot))
+			out.TodayTotal = core.FormatDuration(sumOf(tot, cfg)) // working time only
 			return nil, out, nil
 		})
 

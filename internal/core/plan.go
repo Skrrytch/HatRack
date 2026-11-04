@@ -19,6 +19,9 @@ var (
 	ErrNoHat         = errors.New("no hat is on")
 	ErrPaused        = errors.New("the hat is paused")
 	ErrFuture        = errors.New("the time is in the future")
+	// ErrBeforeEntry: an activity or detail backdated before the running
+	// entry began would land in an earlier entry.
+	ErrBeforeEntry = errors.New("the time is before the running entry began")
 )
 
 // Ask answers for resume_activity: ask.
@@ -43,6 +46,26 @@ func (in Input) ts() (time.Time, error) {
 		return time.Time{}, ErrFuture
 	}
 	return in.At, nil
+}
+
+// tsAfter is ts for a command on top of st: without --at the event never
+// lies before the newest event the state knows, even if this device's clock
+// is behind another's (otherwise the switch would be ignored).
+func (in Input) tsAfter(st State) (time.Time, error) {
+	ts, err := in.ts()
+	if err == nil && in.At.IsZero() && !ts.After(st.LastTS) && !st.LastTS.IsZero() {
+		ts = st.LastTS.Add(time.Millisecond)
+	}
+	return ts, err
+}
+
+// tsInEntry is tsAfter for changes of the running entry (activity, detail):
+// a backdated time must not reach before the entry began.
+func (in Input) tsInEntry(st State) (time.Time, error) {
+	if !in.At.IsZero() && in.At.Before(st.Since) {
+		return time.Time{}, ErrBeforeEntry
+	}
+	return in.tsAfter(st)
 }
 
 func hatItems(hats []Hat) []Named {
@@ -113,7 +136,7 @@ func InfoOn(cfg Config, last map[string]string, name string) (ResumeInfo, error)
 
 // PlanOn turns "hat on" into an event. A nil event means nothing changes.
 func PlanOn(cfg Config, st State, last map[string]string, a OnArgs, in Input) (*Event, error) {
-	ts, err := in.ts()
+	ts, err := in.tsAfter(st)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +204,7 @@ func PlanOn(cfg Config, st State, last map[string]string, a OnArgs, in Input) (*
 // PlanDo turns "hat do" into an event. activity "-" clears it. A new
 // activity starts without a detail unless one is given.
 func PlanDo(cfg Config, st State, activity, detail string, in Input) (*Event, error) {
-	ts, err := in.ts()
+	ts, err := in.tsInEntry(st)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +238,7 @@ func PlanDo(cfg Config, st State, activity, detail string, in Input) (*Event, er
 // running entry applies to all of it (a detail event); a changed detail
 // starts a new entry (an activity event). "-" clears it.
 func PlanDetail(st State, detail string, in Input) (*Event, error) {
-	ts, err := in.ts()
+	ts, err := in.tsInEntry(st)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +266,7 @@ func PlanDetail(st State, detail string, in Input) (*Event, error) {
 
 // PlanOff turns "hat off" into an event. A nil event means nothing changes.
 func PlanOff(st State, neutral bool, in Input) (*Event, error) {
-	ts, err := in.ts()
+	ts, err := in.tsAfter(st)
 	if err != nil {
 		return nil, err
 	}

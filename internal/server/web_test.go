@@ -307,3 +307,28 @@ func TestFleetingEntriesHidden(t *testing.T) {
 		t.Fatalf("and out of the band: %d", n)
 	}
 }
+
+func TestNotWorkingTime(t *testing.T) {
+	e, b := setupBrowser(t)
+	// TAG becomes private time: still recorded, not in the sums
+	_, out := b.do("GET", "/setup/hat?key=tag", nil)
+	if !strings.Contains(out, `name="work" value="1" checked`) {
+		t.Fatal("hats count as working time by default")
+	}
+	b.do("POST", "/setup/hat", url.Values{"key": {"tag"}, "name": {"TAG"}, "color": {"#4e79a7"}, "act.0": {"support"}, "op": {"save"}})
+	cfg, _, _ := e.st.GetConfig(context.Background())
+	if cfg.IsWork("tag") || !cfg.IsWork("venom") {
+		t.Fatalf("work_time: %+v", cfg.Hats)
+	}
+	_, out = b.do("GET", "/day?date=2026-11-04", nil)
+	// venom 2h counts, tag 30m is listed below the sum
+	sum := strings.Index(out, `<td class="num"><strong>2h 00m</strong></td></tr>`)
+	note := strings.Index(out, `<tr class="notwork">`)
+	if sum < 0 || note < sum || strings.Contains(out, "2h 30m") {
+		i := strings.Index(out, "Totals")
+		t.Fatalf("sum without TAG, TAG below it: %s", out[i:min(len(out), i+1500)])
+	}
+	if st := mqttState(core.State{Mode: core.ModeWearing, Hat: "tag"}, cfg, time.UTC); st.Working {
+		t.Fatal("MQTT: not working while in a hat without working time")
+	}
+}

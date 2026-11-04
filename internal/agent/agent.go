@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"sync"
 	"time"
 
@@ -271,6 +272,60 @@ func (a *Agent) flushLoop(ctx context.Context) {
 	}
 }
 
+// rejected reports an answer that sending again will not change: the server
+// understood the request and refused it (not a login problem, not overload).
+func rejected(err error) bool {
+	var api *APIError
+	if !errors.As(err, &api) {
+		return false
+	}
+	switch api.Status {
+	case http.StatusUnauthorized, http.StatusRequestTimeout, http.StatusTooManyRequests:
+		return false
+	}
+	return api.Status >= 400 && api.Status < 500
+}
+
+// maxRejected is how many refused events are kept for a look.
+const maxRejected = 100
+
+// sendSingly sends a batch one event at a time. Events the server refuses
+// are taken out of the queue and kept under "rejected" (see hat status);
+// the others are sent. It returns the newest event revision.
+func (a *Agent) sendSingly(ctx context.Context, batch []core.Event) (int64, error) {
+	var rev int64
+	for _, ev := range batch {
+		r, err := a.client.PostEvents(ctx, []core.Event{ev})
+		switch {
+		case rejected(err):
+			log.Printf("the server refused event %s (%s at %s), set aside: %v", ev.ID, ev.Type, ev.TS.Format(time.RFC3339), err)
+			var kept []RejectedEvent
+			a.db.Get("rejected", &kept)
+			kept = append(kept, RejectedEvent{Event: ev, Reason: err.Error()})
+			if len(kept) > maxRejected {
+				kept = kept[len(kept)-maxRejected:]
+			}
+			if err := a.db.Put("rejected", kept); err != nil {
+				return rev, err
+			}
+		case err != nil:
+			return rev, err
+		default:
+			rev = max(rev, r)
+		}
+		if err := a.db.Dequeue([]core.Event{ev}); err != nil {
+			return rev, err
+		}
+	}
+	return rev, nil
+}
+
+// RejectedEvent is an event the server refused, kept for a look.
+type RejectedEvent struct {
+	Event  core.Event `json:"event"`
+	Reason string     `json:"reason"`
+}
+
 // flush sends the queue in order. When it is empty, the server's state is
 // adopted, so a replay of old events ends in the right look.
 func (a *Agent) flush(ctx context.Context) error {
@@ -284,14 +339,20 @@ func (a *Agent) flush(ctx context.Context) error {
 			break
 		}
 		rev, err := a.client.PostEvents(ctx, batch)
-		if err != nil {
+		if rejected(err) {
+			// one bad event must not block the queue for good: send them one
+			// by one and set aside what the server refuses
+			if rev, err = a.sendSingly(ctx, batch); err != nil {
+				return err
+			}
+		} else if err != nil {
 			return err
 		}
 		// raise minRev before the queue empties, so no stale state slips in
 		a.mu.Lock()
 		a.minRev = max(a.minRev, rev)
 		a.mu.Unlock()
-		if err := a.db.Dequeue(batch); err != nil {
+		if err := a.db.Dequeue(batch); err != nil { // already gone if sent singly
 			return err
 		}
 		sent = true

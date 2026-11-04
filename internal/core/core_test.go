@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -423,5 +424,63 @@ func TestRoundTotals(t *testing.T) {
 	}
 	if got := ApportionTo([]time.Duration{10 * s, 50 * s}, 1); got[0] != 0 || got[1] != 1 {
 		t.Fatalf("largest remainder: %v", got)
+	}
+}
+
+func TestActivityKeepsItsHat(t *testing.T) {
+	// a on at 10:00, "do review" at 10:30, then a backdated "on b" at 10:15
+	evs := []Event{ev(0, EvSwitch, "a", ""), ev(30, EvActivity, "a", "review"), ev(15, EvSwitch, "b", "")}
+	st := Fold(Effective(evs))
+	if st.Hat != "a" || st.Activity != "review" {
+		t.Fatalf("the activity puts its own hat back on: %+v", st)
+	}
+	iv := Intervals(evs, at(60))
+	var got []string
+	for _, i := range iv {
+		got = append(got, i.Hat+"/"+i.Activity)
+	}
+	if strings.Join(got, ",") != "a/,b/,a/review" {
+		t.Fatalf("intervals: %v", got)
+	}
+}
+
+func TestTimestampsAfterTheState(t *testing.T) {
+	cfg := testConfig()
+	// another device's clock is ahead: the state's last event lies in our future
+	st := State{Mode: ModeWearing, Hat: "venom", Since: at(10), LastTS: at(10)}
+	e, err := PlanOn(cfg, st, nil, OnArgs{Hat: "private"}, Input{Device: "d", Now: at(9)})
+	if err != nil || !e.TS.After(st.LastTS) || st.Apply(*e).Hat != "private" {
+		t.Fatalf("a switch with a slow clock still counts: %+v %v", e, err)
+	}
+	// with --at the time is taken as given
+	if e, _ := PlanOff(st, false, Input{Now: at(20), At: at(12)}); !e.TS.Equal(at(12)) {
+		t.Fatalf("explicit time: %v", e.TS)
+	}
+	// an activity or detail cannot be backdated before the running entry
+	if _, err := PlanDo(cfg, st, "review", "", Input{Now: at(20), At: at(5)}); err != ErrBeforeEntry {
+		t.Fatalf("do before the entry: %v", err)
+	}
+	if _, err := PlanDetail(st, "X", Input{Now: at(20), At: at(5)}); err != ErrBeforeEntry {
+		t.Fatalf("detail before the entry: %v", err)
+	}
+}
+
+func TestSettle(t *testing.T) {
+	sec := func(s int) time.Time { return t0.Add(time.Duration(s) * time.Second) }
+	iv := []Interval{
+		{Hat: "a", Start: sec(0), End: sec(600)},
+		{Hat: "b", Start: sec(600), End: sec(610)},   // clicked through
+		{Hat: "c", Start: sec(610), End: sec(640)},   // clicked through
+		{Hat: "d", Start: sec(640), End: sec(1200)},  // gets their 40 s
+		{Hat: "e", Start: sec(1300), End: sec(1320)}, // short, then a gap: dropped
+		{Hat: "f", Start: sec(1400), End: sec(1405), Open: true},
+	}
+	got := Settle(iv)
+	var s []string
+	for _, i := range got {
+		s = append(s, fmt.Sprintf("%s:%d-%d", i.Hat, int(i.Start.Sub(t0).Seconds()), int(i.End.Sub(t0).Seconds())))
+	}
+	if strings.Join(s, ",") != "a:0-600,d:600-1200,f:1400-1405" {
+		t.Fatalf("settle: %v", s)
 	}
 }

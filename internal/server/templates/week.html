@@ -19,11 +19,14 @@
 <h1>{{t $.Lang "cli.log.totals"}}</h1>
 <table class="card">
   <tr><th></th><th class="num">{{t $.Lang "ui.thisweek"}}</th><th class="num">{{t $.Lang "ui.vsprev"}}</th></tr>
-  {{range .Totals}}
+  {{range .Totals}}{{if not .NotWork}}
   <tr><td><span class="dot" style="--c:{{.Color}}"></span><strong>{{.Hat}}</strong></td><td class="num"><strong>{{.Duration}}</strong></td><td class="num dim">{{.Delta}}</td></tr>
   {{template "acttotals" (dict "Acts" .Activities "Cols" 3)}}
-  {{end}}
+  {{end}}{{end}}
   <tr><td>{{t $.Lang "cli.log.sum"}}</td><td class="num"><strong>{{.Sum}}</strong></td><td class="num dim">{{.SumDelta}}</td></tr>
+  {{range .Totals}}{{if .NotWork}}
+  <tr class="notwork"><td><span class="dot" style="--c:{{.Color}}"></span>{{.Hat}} <small class="dim">{{t $.Lang "web.notwork"}}</small></td><td class="num dim">{{.Duration}}</td><td class="num dim">{{.Delta}}</td></tr>
+  {{end}}{{end}}
 </table>
 {{end}}
 {{end}}

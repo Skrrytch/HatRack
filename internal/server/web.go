@@ -195,7 +195,7 @@ func (s *Server) timeline(day time.Time, cfg core.Config, iv []core.Interval, la
 
 // fleeting reports an entry that ended within a minute of its start, e.g.
 // while clicking through hats. Day lists and bands leave it out.
-func fleeting(i core.Interval) bool { return !i.Open && i.Duration() < time.Minute }
+func fleeting(i core.Interval) bool { return !i.Open && i.Duration() < core.FleetingMax }
 
 type rowView struct {
 	Start, End, Hat, Color, Activity, Duration string
@@ -225,6 +225,7 @@ type detailTotal struct {
 }
 
 type totalView struct {
+	NotWork                     bool // not working time: shown below the sum
 	Hat, Color, Duration, Delta string
 	Pct                         float64
 	Activities                  []actTotal
@@ -584,10 +585,10 @@ func (s *Server) nowPage(w http.ResponseWriter, r *http.Request, acc access) {
 				c.BaseMS = (byHat[c.Key] - s.Now().Sub(since)).Milliseconds()
 			}
 		}
-		n.TodaySum = core.FormatDuration(sumOf(tot))
-		if n.Running {
+		n.TodaySum = core.FormatDuration(sumOf(tot, cfg))
+		if n.Running && cfg.IsWork(st.Hat) {
 			n.SumSince = since.UnixMilli()
-			n.SumBase = (sumOf(tot) - s.Now().Sub(since)).Milliseconds()
+			n.SumBase = (sumOf(tot, cfg) - s.Now().Sub(since)).Milliseconds()
 		}
 		n.TL = s.timeline(day, cfg, iv, s.langOf(r))
 	}
@@ -676,7 +677,7 @@ func (s *Server) intervalsIn(ctx context.Context, from, to time.Time) ([]core.In
 	if err != nil {
 		return nil, nil, err
 	}
-	iv := core.Clip(core.Intervals(ev, s.Now()), from, to)
+	iv := core.Clip(core.Settle(core.Intervals(ev, s.Now())), from, to)
 	return iv, core.Totals(iv), nil
 }
 
@@ -697,7 +698,7 @@ func dayLabel(lang string, t time.Time, year bool) string {
 	return wd + " " + t.Format("01-02")
 }
 
-func (s *Server) totalViews(tot []core.HatTotal, prev map[string]time.Duration, pal palette, nm map[string]string, lang string, links core.TicketLinks) []totalView {
+func (s *Server) totalViews(tot []core.HatTotal, prev map[string]time.Duration, pal palette, nm map[string]string, lang string, links core.TicketLinks, cfg core.Config) []totalView {
 	var max time.Duration
 	for _, t := range tot {
 		if t.Duration > max {
@@ -707,7 +708,7 @@ func (s *Server) totalViews(tot []core.HatTotal, prev map[string]time.Duration, 
 	var out []totalView
 	hatMin, actMin, detMin, _ := core.RoundTotalsDetails(tot) // rows add up to the sum
 	for i, t := range tot {
-		tv := totalView{Hat: nameOf(nm, t.Hat), Color: pal.color(t.Hat), Duration: core.FormatMinutes(hatMin[i])}
+		tv := totalView{Hat: nameOf(nm, t.Hat), Color: pal.color(t.Hat), Duration: core.FormatMinutes(hatMin[i]), NotWork: !cfg.IsWork(t.Hat)}
 		if max > 0 {
 			tv.Pct = float64(t.Duration) / float64(max) * 100
 		}
@@ -746,10 +747,13 @@ func delta(d time.Duration) string {
 	return "+" + core.FormatDuration(d)
 }
 
-func sumOf(tot []core.HatTotal) time.Duration {
+// sumOf adds up the working time: hats with work_time: false are left out.
+func sumOf(tot []core.HatTotal, cfg core.Config) time.Duration {
 	var s time.Duration
 	for _, t := range tot {
-		s += t.Duration
+		if cfg.IsWork(t.Hat) {
+			s += t.Duration
+		}
 	}
 	return s
 }
@@ -803,8 +807,8 @@ func (s *Server) dayPage(w http.ResponseWriter, r *http.Request, acc access) {
 		}
 		d.Rows = append(d.Rows, row)
 	}
-	d.Totals = s.totalViews(tot, nil, pal, nm, lang, links)
-	d.Sum = core.FormatDuration(sumOf(tot))
+	d.Totals = s.totalViews(tot, nil, pal, nm, lang, links, cfg)
+	d.Sum = core.FormatDuration(sumOf(tot, cfg))
 	s.render(w, v, http.StatusOK)
 }
 
@@ -872,9 +876,9 @@ func (s *Server) weekPage(w http.ResponseWriter, r *http.Request, acc access) {
 		wv.Days = append(wv.Days, bar)
 	}
 	links, _ := s.st.TicketLinks(r.Context())
-	wv.Totals = s.totalViews(tot, prev, pal, nm, lang, links)
-	wv.Sum = core.FormatDuration(sumOf(tot))
-	wv.SumDelta = delta(sumOf(tot) - sumOf(prevTot))
+	wv.Totals = s.totalViews(tot, prev, pal, nm, lang, links, cfg)
+	wv.Sum = core.FormatDuration(sumOf(tot, cfg))
+	wv.SumDelta = delta(sumOf(tot, cfg) - sumOf(prevTot, cfg))
 	s.render(w, v, http.StatusOK)
 }
 

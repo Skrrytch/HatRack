@@ -275,7 +275,7 @@ func (s *Server) getIntervals(w http.ResponseWriter, r *http.Request, _ store.De
 		serverError(w, err)
 		return
 	}
-	iv := core.Intervals(ev, now)
+	iv := core.Settle(core.Intervals(ev, now))
 	if !from.IsZero() {
 		iv = core.Clip(iv, from, to)
 	} else {

@@ -228,3 +228,26 @@ func TestTicketLinksSetup(t *testing.T) {
 		t.Fatalf("relearned: %v", links)
 	}
 }
+
+func TestDayEditOverMidnight(t *testing.T) {
+	e, b := setupBrowser(t)
+	post := func(start, end string) string {
+		r, _ := b.do("POST", "/day/edit", url.Values{"date": {"2026-11-03"}, "op": {"insert"}, "start": {start}, "end": {end}, "what": {"tag|"}})
+		u, _ := url.Parse(r.Header.Get("Location"))
+		return u.Query().Get("e")
+	}
+	if msg := post("14:00", "13:00"); msg == "" {
+		t.Fatal("an end before the start is a typo, not 23 hours")
+	}
+	if msg := post("22:00", "02:00"); msg != "" {
+		t.Fatalf("a night entry over midnight: %s", msg)
+	}
+	iv, _ := e.st.Effective(context.Background(), time.Time{})
+	var long bool
+	for _, i := range core.Intervals(iv, e.now) {
+		long = long || i.Duration() > 12*time.Hour
+	}
+	if long {
+		t.Fatal("no entry longer than 12 hours")
+	}
+}

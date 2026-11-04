@@ -489,3 +489,31 @@ func TestDetailOverSocket(t *testing.T) {
 		return false
 	})
 }
+
+func TestRefusedEventDoesNotBlockTheQueue(t *testing.T) {
+	r := newRig(t)
+	r.importConfig()
+	a, _ := r.agent("laptop")
+	// a correction (refused for devices) queued before a real switch
+	c := core.NewEvent("laptop", core.EvCorrection, time.Now().Add(-time.Minute))
+	c.Supersedes = []string{"x"}
+	a.db.Enqueue(c)
+	sw := core.NewEvent("laptop", core.EvSwitch, time.Now())
+	sw.Hat = "venom"
+	a.db.Enqueue(sw)
+	if err := a.flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if a.db.QueueLen() != 0 {
+		t.Fatalf("queue: %d", a.db.QueueLen())
+	}
+	if st, _ := r.st.CurrentState(context.Background()); st.Hat != "venom" {
+		t.Fatalf("the switch arrived: %+v", st)
+	}
+	a.mu.Lock()
+	d := statusOf(t, a.status(false))
+	a.mu.Unlock()
+	if d.Rejected != 1 {
+		t.Fatalf("the refused event is set aside and counted: %+v", d)
+	}
+}

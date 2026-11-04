@@ -152,6 +152,13 @@ func (s State) Apply(ev Event) State {
 		return State{Mode: ModeWearing, Hat: ev.Hat, Activity: ev.Activity, Detail: ev.Detail,
 			Since: ev.TS, EventID: ev.ID, LastTS: ev.TS}
 	case EvActivity:
+		if ev.Hat != "" && (s.Mode != ModeWearing || ev.Hat != s.Hat) {
+			// an activity of a hat that is not on (e.g. a switch arrived
+			// later or was backdated): it puts its own hat on, it never
+			// lands in another hat
+			return State{Mode: ModeWearing, Hat: ev.Hat, Activity: ev.Activity, Detail: ev.Detail,
+				Since: ev.TS, EventID: ev.ID, LastTS: ev.TS}
+		}
 		if s.Mode != ModeWearing {
 			return s
 		}
@@ -271,8 +278,11 @@ func Intervals(events []Event, now time.Time) []Interval {
 			closeAt(e.TS)
 			cur = &Interval{Hat: e.Hat, Activity: e.Activity, Detail: e.Detail, Start: e.TS, StartID: e.ID}
 		case EvActivity:
-			if cur != nil {
-				hat := cur.Hat
+			hat := e.Hat // its own hat, as in State.Apply
+			if hat == "" && cur != nil {
+				hat = cur.Hat
+			}
+			if hat != "" && (cur != nil || e.Hat != "") {
 				closeAt(e.TS)
 				cur = &Interval{Hat: hat, Activity: e.Activity, Detail: e.Detail, Start: e.TS, StartID: e.ID}
 			}
@@ -291,6 +301,38 @@ func Intervals(events []Event, now time.Time) []Interval {
 			closeAt(now)
 			out[len(out)-1].Open = true
 		}
+	}
+	return out
+}
+
+// FleetingMax is the length below which a closed entry counts as passed
+// through (clicking through hats), not as work.
+const FleetingMax = time.Minute
+
+// Settle hands the time of fleeting entries (closed, shorter than
+// FleetingMax) to the entry that directly follows; with a gap after them
+// they are dropped. Reports use it, so lists, totals, CSV and MCP agree. Edits
+// work on the raw intervals.
+func Settle(in []Interval) []Interval {
+	out := make([]Interval, 0, len(in))
+	var carry *Interval // fleeting entries waiting for their successor
+	for _, i := range in {
+		fleeting := !i.Open && i.Duration() < FleetingMax // by its own length
+		end := i.End
+		if carry != nil && i.Start.Equal(carry.End) {
+			i.Start = carry.Start
+		} else {
+			carry = nil
+		}
+		if fleeting {
+			if carry == nil {
+				carry = &Interval{Start: i.Start}
+			}
+			carry.End = end
+			continue
+		}
+		carry = nil
+		out = append(out, i)
 	}
 	return out
 }

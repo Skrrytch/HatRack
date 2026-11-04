@@ -17,6 +17,7 @@
       <div class="colorpick"><span class="dim">{{t $.Lang "web.setup.color"}}</span>
         <span class="row">{{template "swatches" (dict "Lang" $.Lang "Color" .Color)}}<input type="color" name="color" value="{{.Color}}" title="{{t $.Lang "web.setup.own_color"}}" aria-label="{{t $.Lang "web.setup.own_color"}}"></span></div>
     </div>
+    <label class="inline"><input type="checkbox" name="work" value="1"{{if .Work}} checked{{end}}> {{t $.Lang "web.setup.work"}}</label>
     {{template "resumeradios" (dict "Lang" $.Lang "Opts" .Resume)}}
   </div>
 

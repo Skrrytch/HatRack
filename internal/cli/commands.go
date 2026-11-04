@@ -44,6 +44,9 @@ func (a *App) printStatus(resp agent.Response, afterChange bool) {
 	if !d.Connected {
 		fmt.Fprintln(a.Err, i18n.T("cli.offline", d.Queued))
 	}
+	if d.Rejected > 0 && !afterChange {
+		fmt.Fprintln(a.Err, i18n.T("cli.rejected", d.Rejected))
+	}
 }
 
 // parseAt reads HH:MM (today), "YYYY-MM-DD HH:MM" or RFC 3339 and returns

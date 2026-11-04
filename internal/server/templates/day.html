@@ -83,11 +83,14 @@
 {{if .Totals}}
   <h1>{{t $.Lang "cli.log.totals"}}</h1>
   <table class="card">
-    {{range .Totals}}
+    {{range .Totals}}{{if not .NotWork}}
     <tr><td><span class="dot" style="--c:{{.Color}}"></span><strong>{{.Hat}}</strong></td><td class="num"><strong>{{.Duration}}</strong></td></tr>
     {{template "acttotals" (dict "Acts" .Activities "Cols" 2)}}
-    {{end}}
+    {{end}}{{end}}
     <tr><td>{{t $.Lang "cli.log.sum"}}</td><td class="num"><strong>{{.Sum}}</strong></td></tr>
+    {{range .Totals}}{{if .NotWork}}
+    <tr class="notwork"><td><span class="dot" style="--c:{{.Color}}"></span>{{.Hat}} <small class="dim">{{t $.Lang "web.notwork"}}</small></td><td class="num dim">{{.Duration}}</td></tr>
+    {{end}}{{end}}
   </table>
 {{end}}
 {{end}}

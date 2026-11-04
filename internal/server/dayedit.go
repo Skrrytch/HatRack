@@ -92,7 +92,14 @@ func (s *Server) dayEdit(w http.ResponseWriter, r *http.Request, _ access) {
 				return
 			}
 			if !ed.End.After(ed.Start) {
-				ed.End = ed.End.AddDate(0, 0, 1) // over midnight
+				// over midnight only for a night entry of at most 12 hours
+				// (22:00-02:00); 14:00-13:00 is a typo, not 23 hours
+				if over := ed.End.AddDate(0, 0, 1); over.Sub(ed.Start) <= overnightMax {
+					ed.End = over
+				} else {
+					fail(i18n.In(lang, "web.day.endbeforestart"))
+					return
+				}
 			}
 		}
 		ed.Hat, ed.Activity, _ = strings.Cut(r.PostFormValue("what"), "|")
@@ -149,6 +156,9 @@ func (s *Server) dayEdit(w http.ResponseWriter, r *http.Request, _ access) {
 	}
 	http.Redirect(w, r, back+"&done="+url.QueryEscape(c.ID), http.StatusSeeOther)
 }
+
+// overnightMax is the longest entry an end before the start may mean.
+const overnightMax = 12 * time.Hour
 
 func editError(lang string, err error) string {
 	switch {

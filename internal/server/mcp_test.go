@@ -242,7 +242,8 @@ func TestMCPShortEntries(t *testing.T) {
 		for _, g := range q.Groups {
 			sum += g.Minutes
 		}
-		if q.TotalMinutes != 152 || sum != 152 {
+		// clicked through and then paused: the two minutes are no work
+		if q.TotalMinutes != 150 || sum != 150 {
 			t.Errorf("%s: total %d, groups add up to %d: %+v", group, q.TotalMinutes, sum, q.Groups)
 		}
 	}

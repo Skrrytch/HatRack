@@ -96,8 +96,13 @@ func RenderLog(w io.Writer, d agent.LogData, from, to time.Time) {
 	fmt.Fprintf(w, "\n%s\n", i18n.T("cli.log.totals"))
 	var sum time.Duration
 	for _, t := range d.Totals {
-		sum += t.Duration
-		fmt.Fprintf(w, "  %-36s %8s\n", label(d.Names, t.Hat), hm(t.Duration))
+		name := label(d.Names, t.Hat)
+		if d.NotWork[t.Hat] {
+			name += " (" + i18n.T("web.notwork") + ")"
+		} else {
+			sum += t.Duration
+		}
+		fmt.Fprintf(w, "  %-36s %8s\n", name, hm(t.Duration))
 		if len(t.Activities) == 1 && t.Activities[0].Activity == "" {
 			continue
 		}

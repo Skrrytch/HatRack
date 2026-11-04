@@ -289,7 +289,9 @@ func (s *SQLite) CurrentState(ctx context.Context) (core.State, error) {
 		return core.Fold(ev), nil
 	}
 	var last sql.NullInt64
-	if err := s.db.QueryRowContext(ctx, `SELECT MAX(ts) FROM events WHERE type = 'switch'`).Scan(&last); err != nil {
+	// an activity carries its hat and stands on its own like a switch
+	// (core.State.Apply), so folding can start at the newest of either
+	if err := s.db.QueryRowContext(ctx, `SELECT MAX(ts) FROM events WHERE type IN ('switch', 'activity')`).Scan(&last); err != nil {
 		return core.State{}, err
 	}
 	if !last.Valid {
