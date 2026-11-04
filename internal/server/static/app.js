@@ -24,6 +24,14 @@
     }
   }
   tick();
+  // "add a program": append the choice as a new line of the list field
+  document.addEventListener("change", function (e) {
+    var t = e.target;
+    if (!t.dataset || !t.dataset.append || !t.value) return;
+    var area = document.getElementById(t.dataset.append);
+    if (area) area.value = (area.value.replace(/\s+$/, "") + "\n" + t.value).replace(/^\n/, "");
+    t.value = "";
+  });
   // picking a wallpaper from the gallery fills in its path
   document.addEventListener("change", function (e) {
     var t = e.target;

@@ -69,6 +69,7 @@ type field struct {
 	ID          string // of the input, for the pick list
 	Choices     []pick // what the devices have installed
 	Gallery     bool   // the choices have previews
+	AddLabel    string // list fields: "add …" pick list
 }
 
 type moduleForm struct {
@@ -185,6 +186,9 @@ type propSchema struct {
 	Type        any    `json:"type"`
 	Enum        []any  `json:"enum"`
 	Description string `json:"description"`
+	Items       *struct {
+		Type any `json:"type"`
+	} `json:"items"`
 }
 
 type objSchema struct {
@@ -202,6 +206,8 @@ func (p propSchema) kind() string {
 		return "number"
 	case p.Type == "string":
 		return "text"
+	case p.Type == "array" && p.Items != nil && p.Items.Type == "string":
+		return "list" // one entry per line
 	}
 	return "" // not shown as a field
 }
@@ -250,6 +256,14 @@ func valueString(v any) string {
 		return strconv.FormatBool(x)
 	case float64:
 		return strconv.FormatFloat(x, 'f', -1, 64)
+	case []any:
+		parts := make([]string, len(x))
+		for i, e := range x {
+			parts[i] = valueString(e)
+		}
+		return strings.Join(parts, "\n")
+	case []string:
+		return strings.Join(x, "\n")
 	}
 	return fmt.Sprint(v)
 }
@@ -330,8 +344,9 @@ func (s *Server) moduleForms(lang string, own, inherited map[string]core.ModuleC
 			}
 			fl := field{Name: "m/" + id + "/" + k, Label: tr(lang, "web.prop."+k, k), Kind: kind,
 				Value: valueString(own[id][k]), Required: req[k] && !hatPage, ID: "f-" + id + "-" + k}
-			if kind == "text" {
+			if kind == "text" || kind == "list" {
 				fl.Choices = picks(choices[id][k])
+				fl.AddLabel = i18n.In(lang, "web.setup.addchoice", fl.Label)
 				for _, c := range fl.Choices {
 					fl.Gallery = fl.Gallery || c.Thumb != ""
 				}
@@ -383,7 +398,7 @@ func summary(lang string, fields []field, hatPage bool) string {
 					v = o.Label
 				}
 			}
-			own = append(own, f.Label+": "+v)
+			own = append(own, f.Label+": "+strings.ReplaceAll(v, "\n", ", "))
 		}
 		if f.Inherited != "" {
 			inherited = true
@@ -483,6 +498,14 @@ func (s *Server) readModules(r *http.Request, cur map[string]core.ModuleCfg) (ma
 				} else {
 					c[k] = n
 				}
+			case kind == "list":
+				var list []any
+				for _, line := range strings.Split(v, "\n") {
+					if line = strings.TrimSpace(line); line != "" {
+						list = append(list, line)
+					}
+				}
+				c[k] = list
 			default:
 				c[k] = v
 			}

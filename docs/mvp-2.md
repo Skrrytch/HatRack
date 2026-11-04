@@ -52,7 +52,7 @@ MVP 2 is built in slices, each usable on its own:
 | Server | `internal/server` (`hat server`) | web UI (`templ` + HTMX), MCP endpoint `/mcp`, token scopes, runtime for `core` modules |
 | Agent / CLI | `internal/agent`, `internal/cli` | `watch` and `hats` socket commands, notification actions, device settings layer, `config export --bundle` |
 | HatTray | `internal/tray` (`hat tray`) | StatusNotifierItem and menu (`fyne.io/systray`), talks only to the agent socket |
-| Module `launch` | built in | backend `xdg` (exec, `gtk-launch`/`.desktop`, `xdg-open`) |
+| Module `launch` (done) | built in | backend `xdg`: programs by `.desktop` id with `gtk-launch`, addresses, folders and files with `xdg-open`; on putting a hat on only, nothing is closed |
 | Module `mqtt` | built in, `runs_in: core` | publishes state to a broker |
 | Backends | built in | `wallpaper` and `color_scheme` for `gnome` and `kde` |
 

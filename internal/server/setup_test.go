@@ -334,3 +334,25 @@ func TestDevicesPage(t *testing.T) {
 		t.Fatalf("delete: %d devices", len(devs))
 	}
 }
+
+func TestSetupListField(t *testing.T) {
+	e, b := setupBrowser(t)
+	e.do("POST", "/api/devices/hello", `{"capabilities":{"launch":{"backend":"xdg","available":true,"choices":{"apps":[{"value":"firefox","label":"Firefox"}]}}}}`)
+	_, out := b.do("GET", "/setup/hat?key=venom", nil)
+	if !strings.Contains(out, `<textarea name="m/launch/apps"`) || !strings.Contains(out, `data-append="f-launch-apps"`) || !strings.Contains(out, "Firefox (firefox)") {
+		t.Fatal("launch form with a program pick list")
+	}
+	r, _ := b.do("POST", "/setup/hat", hatForm(map[string]string{"m/launch/apps": "firefox\n\n  thunderbird \n", "m/launch/open": "https://x.example"}))
+	if r.StatusCode != 303 {
+		t.Fatalf("save: %d", r.StatusCode)
+	}
+	h, _ := config(t, e).Hat("venom")
+	apps, _ := h.Modules["launch"]["apps"].([]any)
+	if len(apps) != 2 || apps[0] != "firefox" || apps[1] != "thunderbird" {
+		t.Fatalf("apps: %#v", h.Modules["launch"])
+	}
+	_, out = b.do("GET", "/setup/hat?key=venom", nil)
+	if !strings.Contains(out, ">firefox\nthunderbird</textarea>") || !strings.Contains(out, "firefox, thunderbird") {
+		t.Fatal("the list comes back one per line, and in the summary on one line")
+	}
+}

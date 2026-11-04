@@ -114,6 +114,7 @@ func Builtin(run Runner) *Registry {
 	r.Register(NewWallpaper(run))
 	r.Register(NewColorScheme(run))
 	r.Register(NewExec())
+	r.Register(NewLaunch(nil))
 	r.Register(NewNotify())
 	return r
 }

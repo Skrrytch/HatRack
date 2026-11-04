@@ -14,6 +14,9 @@
     <label>{{.Label}}{{if .Required}} *{{end}}
     {{if or (eq .Kind "bool") (eq .Kind "enum")}}
       <select name="{{.Name}}">{{range .Options}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select>
+    {{else if eq .Kind "list"}}
+      <textarea name="{{.Name}}" id="{{.ID}}" rows="3"{{if .Inherited}} placeholder="{{.Inherited}}"{{end}}>{{.Value}}</textarea>
+      {{if .Choices}}<select data-append="{{.ID}}"><option value="">{{.AddLabel}}</option>{{range .Choices}}<option value="{{.Value}}">{{if .Label}}{{.Label}} ({{.Value}}){{else}}{{.Value}}{{end}}</option>{{end}}</select>{{end}}
     {{else if eq .Kind "number"}}
       <input type="number" step="any" name="{{.Name}}" value="{{.Value}}"{{if .Inherited}} placeholder="{{.Inherited}}"{{end}}>
     {{else}}

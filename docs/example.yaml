@@ -13,6 +13,9 @@ hats:
       wallpaper: {image: ~/Bilder/hats/venom.jpg}
       color_scheme: {theme: Mint-Y-Dark-Purple, prefer: dark}
       exec: {enter: "~/bin/venom-on.sh", leave: "~/bin/venom-off.sh"}
+      launch:
+        apps: [firefox]                       # .desktop ids, started with gtk-launch
+        open: [https://jira.example.org, ~/Projekte/venom]   # opened with xdg-open
   private:
     name: Private
     activities: []
