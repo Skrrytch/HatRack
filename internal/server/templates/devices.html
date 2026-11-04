@@ -1,0 +1,49 @@
+{{define "content"}}
+{{with .Devices}}
+<nav class="crumbs"><a href="/setup">{{template "icon" "back"}} {{t $.Lang "web.nav.setup"}}</a> <span class="dim">/</span> <span>{{t $.Lang "web.devices"}}</span></nav>
+
+{{with .Added}}
+<div class="card added">
+  <strong>{{t $.Lang "web.dev.added" .Name}}</strong>
+  <p class="dim small">{{t $.Lang "web.dev.token_once"}}</p>
+  <pre>{{.Command}}</pre>
+  <p class="dim small">{{t $.Lang "web.dev.token_only"}} <code>{{.Token}}</code></p>
+</div>
+{{end}}
+
+<h1>{{t $.Lang "web.devices"}}</h1>
+{{if not .Devices}}<p class="dim">{{t $.Lang "web.dev.none"}}</p>{{end}}
+<div class="devlist">
+{{range .Devices}}
+  <div class="card device">
+    <div class="devhead">
+      <span class="dot" style="--c:{{if .Online}}#3a3{{else}}#999{{end}}"></span>
+      <strong>{{.Name}}</strong>
+      <span class="dim small">{{if .Online}}{{t $.Lang "web.online"}}{{else if .Seen}}{{t $.Lang "web.lastseen" .Seen}}{{else}}{{t $.Lang "web.neverseen"}}{{end}}</span>
+      <span class="grow"></span>
+      <form method="post" action="/setup/devices"><input type="hidden" name="op" value="delete"><input type="hidden" name="id" value="{{.ID}}">
+        <button class="danger" title="{{t $.Lang "web.dev.remove_hint" .Name}}" onclick="return confirm(this.title)">{{t $.Lang "web.dev.remove"}}</button></form>
+    </div>
+    {{if .Reported}}
+    <table class="mods">
+      {{range .Modules}}<tr><td>{{.Title}}</td><td>{{if .OK}}<span class="okmark">✓</span> {{.Backend}}{{else}}<span class="dim">{{t $.Lang "web.dev.unavailable"}}</span>{{end}}</td><td class="dim small">{{.Choices}}</td></tr>{{end}}
+    </table>
+    {{else}}<p class="dim small">{{t $.Lang "web.dev.nocaps"}}</p>{{end}}
+    {{if .Errors}}
+    <details class="errs"><summary>{{t $.Lang "web.dev.errors" (len .Errors)}}</summary>
+      <ul>{{range .Errors}}<li><span class="ivtime">{{.When}}</span> {{.Text}}</li>{{end}}</ul>
+    </details>
+    {{end}}
+  </div>
+{{end}}
+</div>
+
+<h1>{{t $.Lang "web.dev.add"}}</h1>
+<form method="post" action="/setup/devices" class="card newhat">
+  <input type="hidden" name="op" value="add">
+  <input type="text" name="name" placeholder="{{t $.Lang "web.dev.name"}}" required class="grow">
+  <button class="primary">{{t $.Lang "web.setup.add"}}</button>
+</form>
+<p class="dim small">{{t $.Lang "web.dev.add_note"}}</p>
+{{end}}
+{{end}}

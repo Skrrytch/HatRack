@@ -3,12 +3,14 @@ package server
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"hatrack/internal/core"
 )
@@ -296,5 +298,39 @@ func TestSetupDeleteUnusedHat(t *testing.T) {
 	}
 	if _, ok := config(t, e).Hat("tag"); !ok {
 		t.Fatal("used hat gone")
+	}
+}
+
+func TestDevicesPage(t *testing.T) {
+	e, b := setupBrowser(t)
+	e.do("POST", "/api/devices/hello", `{"capabilities":{"wallpaper":{"backend":"cinnamon","available":true,"choices":{"image":[{"value":"/a.jpg"}]}},"color_scheme":{"available":false}}}`)
+	ev := core.NewEvent("laptop", core.EvModuleError, e.now.Add(-time.Hour))
+	ev.Note = "wallpaper: /pics/x.jpg not found"
+	body, _ := json.Marshal([]core.Event{ev})
+	e.do("POST", "/api/events", string(body))
+	_, out := b.do("GET", "/setup/devices", nil)
+	for _, want := range []string{"laptop", "cinnamon", "1 × Image file", "not available here", "Errors in the last 7 days: 1", "/pics/x.jpg not found"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("devices page lacks %q", want)
+		}
+	}
+	// adding shows the token once, in the answer, not in an address
+	r, out := b.do("POST", "/setup/devices", url.Values{"op": {"add"}, "name": {"desk"}})
+	if r.StatusCode != 200 || !strings.Contains(out, "hat setup --server http://") || !strings.Contains(out, "--token hat_") {
+		t.Fatalf("add: %d", r.StatusCode)
+	}
+	if r, _ := b.do("POST", "/setup/devices", url.Values{"op": {"add"}, "name": {"desk"}}); !strings.Contains(r.Header.Get("Location"), "e=") {
+		t.Fatal("duplicate name")
+	}
+	devs, _ := e.st.Devices(context.Background())
+	var id string
+	for _, d := range devs {
+		if d.Name == "desk" {
+			id = d.ID
+		}
+	}
+	b.do("POST", "/setup/devices", url.Values{"op": {"delete"}, "id": {id}})
+	if devs, _ := e.st.Devices(context.Background()); len(devs) != 1 {
+		t.Fatalf("delete: %d devices", len(devs))
 	}
 }

@@ -196,6 +196,20 @@ fieldset.radios label { display: flex; gap: .5rem; align-items: center; cursor: 
 .login { max-width: 22rem; margin: 4rem auto; }
 .login input[type=password] { width: 100%; }
 
+/* ---- devices ---- */
+.devlist { display: grid; gap: 1rem; }
+.devchip { margin-right: 1rem; white-space: nowrap; }
+.devhead { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.devhead form { margin: 0; }
+table.mods { margin-top: .6rem; }
+table.mods td { padding: .3rem .5rem; border-bottom: 1px dashed var(--perf); }
+.okmark { color: #3a3; font-weight: 700; }
+details.errs { margin-top: .6rem; }
+details.errs summary { cursor: pointer; color: var(--danger); font-weight: 600; }
+details.errs ul { margin: .4rem 0 0; padding-left: 1.2rem; }
+.added { border-color: #3a3; margin-top: 1rem; }
+code { font-family: var(--mono); font-size: .9em; word-break: break-all; }
+
 /* ---- phones ---- */
 @media (max-width: 640px) {
   header { grid-template-columns: 1fr auto; padding: .6rem .7rem; gap: .5rem; }
