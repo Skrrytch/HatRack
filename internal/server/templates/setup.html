@@ -48,6 +48,12 @@
   <a class="btn" href="/setup/defaults">{{t $.Lang "web.setup.edit"}}</a>
 </div>
 
+<h1>{{t $.Lang "web.ai.title"}}</h1>
+<div class="card row">
+  <span class="grow">{{t $.Lang "web.ai.short"}}</span>
+  <a class="btn" href="/setup/ai">{{t $.Lang "web.setup.edit"}}</a>
+</div>
+
 <h1>{{t $.Lang "web.devices"}}</h1>
 <div class="card row">
   <span class="grow">{{range .Devices}}<span class="devchip"><span class="dot" style="--c:{{if .Online}}#3a3{{else}}#999{{end}}"></span>{{.Name}}</span>{{else}}<span class="dim">{{t $.Lang "web.dev.none"}}</span>{{end}}</span>

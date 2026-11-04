@@ -59,6 +59,7 @@ func (a *App) serverCmd() *cobra.Command {
 				return err
 			}
 			defer st.Close()
+			server.Version = Version
 			web := server.New(st, modules.Builtin(nil))
 			if tz != "" {
 				loc, err := time.LoadLocation(tz)

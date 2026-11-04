@@ -115,7 +115,7 @@ An AI assistant reads HatRack's configuration and, above all, the time log:
 is read-only; Bert uses Claude Code, which talks to `/mcp` over HTTP, so no
 local bridge is needed.
 
-**Step 1 (planned):**
+**Step 1 (done):**
 
 1. **Access:** MCP tokens, managed in Setup → "AI access": name ("Claude Code
    laptop"), shown once, only the hash stored (table `mcp_tokens`: id, name,
@@ -146,10 +146,11 @@ local bridge is needed.
 **Connecting Claude Code:**
 
 ```
-claude mcp add --transport http hatrack https://<server>/mcp --header "Authorization: Bearer <token>"
+claude mcp add --scope user --transport http hatrack https://<server>/mcp --header "Authorization: Bearer <token>"
 ```
 
-The Setup page shows this line, filled in, when a token is created.
+The Setup page shows this line, filled in, when a token is created
+(`--scope user`: available in every project, not only the current folder).
 
 **Tests:** the SDK's client runs every tool against an `httptest` server:
 auth (no token, device token, revoked token), each tool, periods, prefix

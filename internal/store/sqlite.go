@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -47,6 +48,14 @@ CREATE TABLE IF NOT EXISTS settings (
 CREATE TABLE IF NOT EXISTS sessions (
   token_hash TEXT PRIMARY KEY,
   expires    INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS mcp_tokens (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL UNIQUE,
+  token_hash TEXT NOT NULL UNIQUE,
+  scopes     TEXT NOT NULL DEFAULT 'read',
+  created    INTEGER NOT NULL,
+  last_used  INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS devices (
   id         TEXT PRIMARY KEY,
@@ -418,6 +427,77 @@ func (s *SQLite) TouchDevice(ctx context.Context, id string, caps json.RawMessag
 		return err
 	}
 	_, err := s.db.ExecContext(ctx, `UPDATE devices SET last_seen = ? WHERE id = ?`, time.Now().UnixNano(), id)
+	return err
+}
+
+// MCP tokens give an AI assistant access to /mcp, and nothing else. They
+// look different from device tokens ("hrm_" instead of "hat_").
+
+func (s *SQLite) AddMCPToken(ctx context.Context, name string, scopes []string) (MCPToken, string, error) {
+	if name == "" {
+		return MCPToken{}, "", errors.New("token name is empty")
+	}
+	var raw [32]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return MCPToken{}, "", err
+	}
+	token := "hrm_" + base64.RawURLEncoding.EncodeToString(raw[:])
+	t := MCPToken{ID: core.NewID(), Name: name, Scopes: scopes, Created: time.Now()}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO mcp_tokens (id, name, token_hash, scopes, created) VALUES (?,?,?,?,?)`,
+		t.ID, t.Name, hashToken(token), strings.Join(scopes, ","), t.Created.UnixNano())
+	if err != nil {
+		return MCPToken{}, "", fmt.Errorf("add MCP token %q: %w", name, err)
+	}
+	return t, token, nil
+}
+
+func scanMCP(sc interface{ Scan(...any) error }) (MCPToken, error) {
+	var t MCPToken
+	var scopes string
+	var created, used int64
+	if err := sc.Scan(&t.ID, &t.Name, &scopes, &created, &used); err != nil {
+		return t, err
+	}
+	t.Scopes = strings.Split(scopes, ",")
+	t.Created = time.Unix(0, created)
+	if used != 0 {
+		t.LastUsed = time.Unix(0, used)
+	}
+	return t, nil
+}
+
+func (s *SQLite) MCPTokenByToken(ctx context.Context, token string) (MCPToken, error) {
+	t, err := scanMCP(s.db.QueryRowContext(ctx, `SELECT id, name, scopes, created, last_used FROM mcp_tokens WHERE token_hash = ?`, hashToken(token)))
+	if errors.Is(err, sql.ErrNoRows) {
+		return t, ErrNotFound
+	}
+	return t, err
+}
+
+func (s *SQLite) MCPTokens(ctx context.Context) ([]MCPToken, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name, scopes, created, last_used FROM mcp_tokens ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []MCPToken
+	for rows.Next() {
+		t, err := scanMCP(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLite) TouchMCPToken(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE mcp_tokens SET last_used = ? WHERE id = ?`, time.Now().UnixNano(), id)
+	return err
+}
+
+func (s *SQLite) DeleteMCPToken(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM mcp_tokens WHERE id = ?`, id)
 	return err
 }
 

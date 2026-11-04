@@ -14,6 +14,15 @@ import (
 // ErrNotFound is returned when a device or record does not exist.
 var ErrNotFound = errors.New("not found")
 
+// MCPToken lets an AI assistant use /mcp. Scopes: "read" for now.
+type MCPToken struct {
+	ID       string
+	Name     string
+	Scopes   []string
+	Created  time.Time
+	LastUsed time.Time
+}
+
 // Device is a machine that runs an agent.
 type Device struct {
 	ID           string          `json:"id"`
@@ -48,6 +57,12 @@ type Store interface {
 	AddDevice(ctx context.Context, name string) (Device, string, error)
 	DeviceByToken(ctx context.Context, token string) (Device, error)
 	Devices(ctx context.Context) ([]Device, error)
+	// MCP tokens: created with their scopes, the token is returned once.
+	AddMCPToken(ctx context.Context, name string, scopes []string) (MCPToken, string, error)
+	MCPTokenByToken(ctx context.Context, token string) (MCPToken, error)
+	MCPTokens(ctx context.Context) ([]MCPToken, error)
+	TouchMCPToken(ctx context.Context, id string) error
+	DeleteMCPToken(ctx context.Context, id string) error
 	// DeleteDevice removes a device; its token stops working at once.
 	DeleteDevice(ctx context.Context, id string) error
 	// HatUsed reports whether any event (or correction) refers to the hat.

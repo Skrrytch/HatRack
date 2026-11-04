@@ -40,6 +40,10 @@ hat on work do focus          # or switch from the command line
 After every change to the code: `scripts/update.sh` (add `--test` to run the
 tests first). It rebuilds `hat` and restarts the services that are installed.
 
+An AI assistant such as Claude Code can read your hats and the time log over
+MCP: create a token in Setup → AI access and run the `claude mcp add …` line
+shown there; then ask "how much time did I spend on VENOM last week?".
+
 The server also runs as a Docker image: see [deploy/Dockerfile](deploy/Dockerfile).
 Then add a device on the server (`docker exec <container> hat server device add laptop`)
 and run `hat setup --server http://host:8421 --token <token>` on the laptop.

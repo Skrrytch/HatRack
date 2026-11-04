@@ -20,6 +20,9 @@ import (
 )
 
 // Server serves the API for agents and the "Now" page.
+// Version is reported to MCP clients; the command line sets it.
+var Version = "dev"
+
 type Server struct {
 	st  store.Store
 	reg *modules.Registry
@@ -56,11 +59,14 @@ func New(st store.Store, reg *modules.Registry) *Server {
 	s.mux.HandleFunc("POST /login", s.loginPage)
 	s.mux.HandleFunc("POST /logout", s.page(true, s.logout))
 	s.mux.HandleFunc("GET /static/{file}", s.static)
+	s.mux.Handle("/mcp", s.mcpHandler(Version))
 	s.mux.HandleFunc("POST /day/edit", s.page(true, s.dayEdit))
 	s.mux.HandleFunc("GET /setup", s.page(true, s.setupPage))
 	s.mux.HandleFunc("POST /setup/hats", s.page(true, s.hatsAction))
 	s.mux.HandleFunc("GET /setup/hat", s.page(true, s.hatPage))
 	s.mux.HandleFunc("POST /setup/hat", s.page(true, s.hatSave))
+	s.mux.HandleFunc("GET /setup/ai", s.page(true, s.aiPage))
+	s.mux.HandleFunc("POST /setup/ai", s.page(true, s.aiAction))
 	s.mux.HandleFunc("GET /setup/devices", s.page(true, s.devicesPage))
 	s.mux.HandleFunc("POST /setup/devices", s.page(true, s.devicesAction))
 	s.mux.HandleFunc("GET /setup/defaults", s.page(true, s.defaultsPage))

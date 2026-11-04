@@ -1,0 +1,39 @@
+{{define "content"}}
+{{with .AI}}
+<nav class="crumbs"><a href="/setup">{{template "icon" "back"}} {{t $.Lang "web.nav.setup"}}</a> <span class="dim">/</span> <span>{{t $.Lang "web.ai.title"}}</span></nav>
+<p class="dim">{{t $.Lang "web.ai.intro"}}</p>
+
+{{with .Added}}
+<div class="card added">
+  <strong>{{t $.Lang "web.ai.added" .Name}}</strong>
+  <p class="dim small">{{t $.Lang "web.ai.once"}}</p>
+  <pre>{{.Command}}</pre>
+  <p class="dim small">{{t $.Lang "web.dev.token_only"}} <code>{{.Token}}</code></p>
+</div>
+{{end}}
+
+<h1>{{t $.Lang "web.ai.tokens"}}</h1>
+<div class="card">
+  {{if not .Tokens}}<p class="dim">{{t $.Lang "web.ai.none"}}</p>{{end}}
+  <table class="list">
+  {{range .Tokens}}
+    <tr>
+      <td><strong>{{.Name}}</strong></td>
+      <td class="dim small">{{t $.Lang "web.ai.created" .Created}}</td>
+      <td class="dim small">{{if .Used}}{{t $.Lang "web.ai.used" .Used}}{{else}}{{t $.Lang "web.ai.unused"}}{{end}}</td>
+      <td class="acts"><form method="post" action="/setup/ai"><input type="hidden" name="op" value="delete"><input type="hidden" name="id" value="{{.ID}}">
+        <button class="danger" title="{{t $.Lang "web.ai.revoke_hint" .Name}}" onclick="return confirm(this.title)">{{t $.Lang "web.ai.revoke"}}</button></form></td>
+    </tr>
+  {{end}}
+  </table>
+</div>
+
+<h1>{{t $.Lang "web.ai.add"}}</h1>
+<form method="post" action="/setup/ai" class="card newhat">
+  <input type="hidden" name="op" value="add">
+  <input type="text" name="name" placeholder="{{t $.Lang "web.ai.name"}}" required class="grow">
+  <button class="primary">{{t $.Lang "web.ai.create"}}</button>
+</form>
+<p class="dim small">{{t $.Lang "web.ai.endpoint"}} <code>{{.Endpoint}}</code></p>
+{{end}}
+{{end}}
