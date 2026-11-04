@@ -85,10 +85,11 @@ type Layout struct {
 
 // Palette of the panel (dark, like the icon).
 var (
-	cBG     = color.RGBA{0x23, 0x26, 0x2b, 255}
+	cBG     = color.RGBA{0x2a, 0x2e, 0x34, 255}
 	cBorder = color.RGBA{0x3d, 0x42, 0x4a, 255}
-	cCard   = color.RGBA{0x2c, 0x30, 0x36, 255}
-	cChip   = color.RGBA{0x3a, 0x3f, 0x47, 255}
+	cBar    = color.RGBA{0x1a, 0x1c, 0x20, 255} // header and footer bands
+	cCard   = color.RGBA{0x34, 0x38, 0x3f, 255}
+	cChip   = color.RGBA{0x42, 0x47, 0x4f, 255}
 	cFG     = color.RGBA{0xf0, 0xe6, 0xdc, 255}
 	cDim    = color.RGBA{0x9a, 0x9f, 0xa8, 255}
 )
@@ -246,6 +247,7 @@ func Build(snap agent.Snapshot, query string, scale float64, now time.Time) Layo
 	y += m.pad - m.gap
 
 	// toolbar
+	footY := y
 	l.Boxes = append(l.Boxes, Box{R: Rect{0, y, W, 1}, Color: cBorder})
 	ty := y + (m.toolH-m.toolBtnH)/2
 	tx := m.pad
@@ -274,6 +276,8 @@ func Build(snap agent.Snapshot, query string, scale float64, now time.Time) Layo
 	l.Boxes = append(l.Boxes, Box{R: Rect{0, y, W, 1}, Color: cBorder})
 	y += m.hintH
 	l.H = y
+	// header and footer are darker bands, so the choice in between stands out
+	l.Boxes = append([]Box{{R: Rect{0, 0, W, m.headerH - 1}, Color: cBar}, {R: Rect{0, footY, W, y - footY}, Color: cBar}}, l.Boxes...)
 	return l
 }
 
