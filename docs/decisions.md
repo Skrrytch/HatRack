@@ -33,6 +33,7 @@
 | 2026-11-04 | HatTray: `hat tray hide` ends the tray process and `show` starts it, because `fyne.io/systray` cannot hide the icon of a running process on Linux. Clicking a hat is `hat on <hat>`, so its `resume_activity` applies; "Hat only" in the submenu starts it without an activity. |
 | 2026-11-04 | Icon: a dark rounded square with a frame in the hat's colour and a cream top hat whose band has the hat's colour; grey (`#8a8f98`) while paused or without a hat. Designed by Bert, drawn in code by `internal/icon` for the tray and used as `hatrack.svg` (blue) for the web UI favicon. |
 | 2026-11-04 | Panel (quick switcher) instead of a long tray menu: a left click on the tray icon or `hat panel` (keyboard shortcut) opens a small window with all hats and activities; right click gives a slim menu (open, pause/resume, about, quit). Technique: own X11 window in pure Go (no toolkit, no cgo, embedded Go fonts, software drawing), Wayland later as another backend. Icon code moved to `internal/icon`. |
+| 2026-11-04 | First-time setup is one interactive command, `hat setup`: it asks where the server runs (here by default, else address and token), installs server and agent as user services, creates this computer's device token itself (no copying for a local server), asks for the web password, offers two starter hats and sets up the tray. It can be run again; flags (`--server`, `--token`, `--yes`, `--no-services`, `--no-tray`) make it scriptable. A setup page in the web UI can later build on the same steps. |
 
 ## Open
 

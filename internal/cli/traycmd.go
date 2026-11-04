@@ -104,18 +104,8 @@ func (a *App) trayCmd() *cobra.Command {
 	install := &cobra.Command{
 		Use: "install", Short: i18n.T("cli.tray.install"), Args: cobra.NoArgs,
 		RunE: func(*cobra.Command, []string) error {
-			p, err := exe()
+			file, err := installTrayAutostart()
 			if err != nil {
-				return err
-			}
-			if p, err = filepath.EvalSymlinks(p); err != nil {
-				return err
-			}
-			file := autostartPath()
-			if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
-				return err
-			}
-			if err := os.WriteFile(file, []byte(autostartText(p)), 0o644); err != nil {
 				return err
 			}
 			fmt.Fprintln(a.Out, i18n.T("cli.tray.installed", file))
@@ -133,6 +123,22 @@ func (a *App) trayCmd() *cobra.Command {
 	}
 	c.AddCommand(run, show, hide, toggle, restart, install, uninstall)
 	return c
+}
+
+// installTrayAutostart makes the tray start at login.
+func installTrayAutostart() (string, error) {
+	p, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	if p, err = filepath.EvalSymlinks(p); err != nil {
+		return "", err
+	}
+	file := autostartPath()
+	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		return "", err
+	}
+	return file, os.WriteFile(file, []byte(autostartText(p)), 0o644)
 }
 
 func autostartPath() string { return filepath.Join(configHome(), "autostart", "hatrack-tray.desktop") }

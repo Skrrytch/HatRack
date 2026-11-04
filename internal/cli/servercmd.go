@@ -152,16 +152,7 @@ func (a *App) serverCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			hash, err := server.HashPassword(pw)
-			if err != nil {
-				return err
-			}
-			st, err := openStore(data)
-			if err != nil {
-				return err
-			}
-			defer st.Close()
-			if err := st.SetPasswordHash(cmd.Context(), hash); err != nil {
+			if err := a.storePasswordIn(cmd.Context(), data, pw); err != nil {
 				return err
 			}
 			fmt.Fprintln(a.Err, i18n.T("cli.password.done"))
@@ -189,6 +180,23 @@ func (a *App) serverCmd() *cobra.Command {
 	}
 	c.AddCommand(device, backup, user, install, uninstall)
 	return c
+}
+
+func (a *App) storePassword(ctx context.Context, pw string) error {
+	return a.storePasswordIn(ctx, defaultData(), pw)
+}
+
+func (a *App) storePasswordIn(ctx context.Context, data, pw string) error {
+	hash, err := server.HashPassword(pw)
+	if err != nil {
+		return err
+	}
+	st, err := openStore(data)
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	return st.SetPasswordHash(ctx, hash)
 }
 
 // readPassword asks twice on a terminal (without echo); from a pipe it reads

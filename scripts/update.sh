@@ -3,8 +3,7 @@
 #
 #   scripts/update.sh            build, install, restart server/agent/tray
 #   scripts/update.sh --test     run the tests first, stop if they fail
-#   scripts/update.sh --setup    first time: also install server, agent and
-#                                tray autostart as user services
+#   scripts/update.sh --setup    first time: build, install, then run `hat setup`
 #
 # HAT_BIN changes the install path (default ~/.local/bin/hat).
 set -euo pipefail
@@ -67,17 +66,7 @@ trap - EXIT
 echo "installed: $DEST ($("$DEST" --version))"
 
 if [ "$SETUP" = 1 ]; then
-  say "Setting up services"
-  "$DEST" server install
-  "$DEST" agent install
-  "$DEST" tray install
-  echo
-  echo "Still to do once (if not done yet):"
-  echo "  hat server device add $(hostname)      # prints a token"
-  echo "  hat agent login http://127.0.0.1:8421 <token>"
-  echo "  hat server user set-password"
-  echo "  hat tray show"
-  exit 0
+  exec "$DEST" setup          # asks a few questions and does the rest
 fi
 
 # Restart what is installed as a user service

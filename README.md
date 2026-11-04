@@ -31,21 +31,18 @@ Needs Go 1.24 or newer. One script builds, installs and restarts:
 
 ```
 scripts/update.sh --setup     # first time: build, install to ~/.local/bin/hat,
-                              # run server, agent and tray at login as user services
-hat server device add laptop  # prints a token
-hat agent login http://127.0.0.1:8421 <token>
-hat server user set-password  # login for the web UI at http://127.0.0.1:8421
-hat config import docs/example.yaml
-hat tray show                 # tray icon (needs a StatusNotifier host); left click = panel
-hat panel                     # the panel; bind this to a keyboard shortcut
-
-hat on venom do review
+                              # then `hat setup` asks a few questions: server here
+                              # or elsewhere, web password, starter hats, tray
+hat panel                     # quick switcher; bind it to a keyboard shortcut
+hat on work do focus          # or switch from the command line
 ```
 
 After every change to the code: `scripts/update.sh` (add `--test` to run the
 tests first). It rebuilds `hat` and restarts the services that are installed.
 
 The server also runs as a Docker image: see [deploy/Dockerfile](deploy/Dockerfile).
+Then add a device on the server (`docker exec <container> hat server device add laptop`)
+and run `hat setup --server http://host:8421 --token <token>` on the laptop.
 
 ## Components
 
