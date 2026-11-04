@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -75,6 +77,71 @@ func (a *App) trayCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.AddCommand(run, show, hide, toggle)
+	restart := &cobra.Command{
+		Use: "restart", Short: i18n.T("cli.tray.restart"), Args: cobra.NoArgs,
+		RunE: func(*cobra.Command, []string) error {
+			if !tray.Running() {
+				return nil // nothing to restart; the tray was not started
+			}
+			p, err := exe()
+			if err != nil {
+				return err
+			}
+			if err := tray.Hide(); err != nil {
+				return err
+			}
+			for i := 0; i < 40 && tray.Running(); i++ {
+				time.Sleep(50 * time.Millisecond)
+			}
+			if err := tray.Show(p); err != nil {
+				return err
+			}
+			fmt.Fprintln(a.Out, i18n.T("cli.tray.shown"))
+			return nil
+		},
+	}
+	install := &cobra.Command{
+		Use: "install", Short: i18n.T("cli.tray.install"), Args: cobra.NoArgs,
+		RunE: func(*cobra.Command, []string) error {
+			p, err := exe()
+			if err != nil {
+				return err
+			}
+			if p, err = filepath.EvalSymlinks(p); err != nil {
+				return err
+			}
+			file := autostartPath()
+			if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+				return err
+			}
+			if err := os.WriteFile(file, []byte(autostartText(p)), 0o644); err != nil {
+				return err
+			}
+			fmt.Fprintln(a.Out, i18n.T("cli.tray.installed", file))
+			return nil
+		},
+	}
+	uninstall := &cobra.Command{
+		Use: "uninstall", Short: i18n.T("cli.tray.uninstall"), Args: cobra.NoArgs,
+		RunE: func(*cobra.Command, []string) error {
+			os.Remove(autostartPath())
+			tray.Hide()
+			fmt.Fprintln(a.Out, i18n.T("cli.tray.removed"))
+			return nil
+		},
+	}
+	c.AddCommand(run, show, hide, toggle, restart, install, uninstall)
 	return c
+}
+
+func autostartPath() string { return filepath.Join(configHome(), "autostart", "hatrack-tray.desktop") }
+
+func autostartText(exe string) string {
+	return fmt.Sprintf(`[Desktop Entry]
+Type=Application
+Name=HatTray
+Comment=HatRack tray icon
+Exec=%q tray run
+X-GNOME-Autostart-enabled=true
+`, exe)
 }

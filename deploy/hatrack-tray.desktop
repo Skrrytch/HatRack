@@ -1,8 +1,0 @@
-# Start the HatTray at login: copy to ~/.config/autostart/
-[Desktop Entry]
-Type=Application
-Name=HatTray
-Comment=HatRack tray icon
-Exec=hat tray run
-Icon=preferences-desktop-theme
-X-GNOME-Autostart-enabled=true

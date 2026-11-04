@@ -168,7 +168,26 @@ func (a *App) serverCmd() *cobra.Command {
 			return nil
 		},
 	})
-	c.AddCommand(device, backup, user)
+	install := &cobra.Command{
+		Use: "install", Short: i18n.T("cli.server.install"), Args: cobra.NoArgs,
+		RunE: func(*cobra.Command, []string) error {
+			p, err := installUnit("hatrack-server.service", "HatRack Server", "server")
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(a.Out, i18n.T("cli.install.done", p))
+			return nil
+		},
+	}
+	uninstall := &cobra.Command{
+		Use: "uninstall", Short: i18n.T("cli.server.uninstall"), Args: cobra.NoArgs,
+		RunE: func(*cobra.Command, []string) error {
+			removeUnit("hatrack-server.service")
+			fmt.Fprintln(a.Out, i18n.T("cli.server.removed"))
+			return nil
+		},
+	}
+	c.AddCommand(device, backup, user, install, uninstall)
 	return c
 }
 

@@ -165,7 +165,8 @@ The tray is a thin client on the agent socket, like the CLI.
   `hat tray hide` ends the tray process (over its own small socket,
   `tray.sock`), `hat tray show` starts one in the background and `hat tray
   toggle` does whichever applies. `hat tray run` runs in the foreground; for
-  start at login copy `deploy/hatrack-tray.desktop` to `~/.config/autostart/`.
+  start at login run `hat tray install` (writes `~/.config/autostart/hatrack-tray.desktop`);
+  `hat tray restart` restarts a running tray after an update.
 - Cinnamon shows StatusNotifier icons through `xapp-sn-watcher` (Linux Mint).
   Where no watcher runs, `hat tray run` says so and exits. GNOME needs the
   AppIndicator extension; this is a hint in the message, not a dependency.

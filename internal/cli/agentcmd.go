@@ -20,27 +20,63 @@ import (
 
 const unitName = "hatrack-agent.service"
 
-func unitPath() string {
-	base := os.Getenv("XDG_CONFIG_HOME")
-	if base == "" {
-		home, _ := os.UserHomeDir()
-		base = filepath.Join(home, ".config")
+func configHome() string {
+	if base := os.Getenv("XDG_CONFIG_HOME"); base != "" {
+		return base
 	}
-	return filepath.Join(base, "systemd", "user", unitName)
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".config")
 }
 
-func unitText(exe string) string {
+func unitPath(name string) string { return filepath.Join(configHome(), "systemd", "user", name) }
+
+func unitText(desc, exe string, args ...string) string {
+	cmd := fmt.Sprintf("%q", exe)
+	for _, a := range args {
+		cmd += " " + a
+	}
 	return fmt.Sprintf(`[Unit]
-Description=HatRack agent
+Description=%s
 
 [Service]
-ExecStart=%q agent run
+ExecStart=%s
 Restart=on-failure
 RestartSec=5
 
 [Install]
 WantedBy=default.target
-`, exe)
+`, desc, cmd)
+}
+
+// installUnit writes a systemd user unit for this binary and starts it.
+func installUnit(name, desc string, args ...string) (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	if exe, err = filepath.EvalSymlinks(exe); err != nil {
+		return "", err
+	}
+	p := unitPath(name)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(p, []byte(unitText(desc, exe, args...)), 0o644); err != nil {
+		return "", err
+	}
+	for _, args := range [][]string{{"daemon-reload"}, {"enable", "--now", name}} {
+		if out, err := exec.Command("systemctl", append([]string{"--user"}, args...)...).CombinedOutput(); err != nil {
+			return "", fmt.Errorf("systemctl --user %v: %w\n%s", args, err, out)
+		}
+	}
+	return p, nil
+}
+
+// removeUnit stops and removes a systemd user unit.
+func removeUnit(name string) {
+	exec.Command("systemctl", "--user", "disable", "--now", name).Run()
+	os.Remove(unitPath(name))
+	exec.Command("systemctl", "--user", "daemon-reload").Run()
 }
 
 func (a *App) agentCmd() *cobra.Command {
@@ -80,24 +116,9 @@ func (a *App) agentCmd() *cobra.Command {
 	install := &cobra.Command{
 		Use: "install", Short: i18n.T("cli.install.short"), Args: cobra.NoArgs,
 		RunE: func(*cobra.Command, []string) error {
-			exe, err := os.Executable()
+			p, err := installUnit(unitName, "HatRack agent", "agent", "run")
 			if err != nil {
 				return err
-			}
-			if exe, err = filepath.EvalSymlinks(exe); err != nil {
-				return err
-			}
-			p := unitPath()
-			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-				return err
-			}
-			if err := os.WriteFile(p, []byte(unitText(exe)), 0o644); err != nil {
-				return err
-			}
-			for _, args := range [][]string{{"daemon-reload"}, {"enable", "--now", unitName}} {
-				if out, err := exec.Command("systemctl", append([]string{"--user"}, args...)...).CombinedOutput(); err != nil {
-					return fmt.Errorf("systemctl --user %v: %w\n%s", args, err, out)
-				}
 			}
 			fmt.Fprintln(a.Out, i18n.T("cli.install.done", p))
 			return nil
@@ -107,9 +128,7 @@ func (a *App) agentCmd() *cobra.Command {
 	uninstall := &cobra.Command{
 		Use: "uninstall", Short: i18n.T("cli.uninstall.short"), Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			exec.Command("systemctl", "--user", "disable", "--now", unitName).Run()
-			os.Remove(unitPath())
-			exec.Command("systemctl", "--user", "daemon-reload").Run()
+			removeUnit(unitName)
 			if err := a.restoreNeutral(cmd.Context()); err != nil {
 				return err
 			}

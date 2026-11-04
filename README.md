@@ -27,20 +27,22 @@ hat log today           # today's overview
 
 ## Try it
 
-Needs Go 1.24 or newer.
+Needs Go 1.24 or newer. One script builds, installs and restarts:
 
 ```
-go build -o ~/.local/bin/hat ./cmd/hat
-
-hat server &                                   # listens on 127.0.0.1:8421
-hat server device add laptop                   # prints a token
+scripts/update.sh --setup     # first time: build, install to ~/.local/bin/hat,
+                              # run server, agent and tray at login as user services
+hat server device add laptop  # prints a token
 hat agent login http://127.0.0.1:8421 <token>
-hat agent install                              # systemd user service
-hat config import hats.yaml                    # see docs/example.yaml for the format
-hat server user set-password                   # login for the web UI at http://127.0.0.1:8421
+hat server user set-password  # login for the web UI at http://127.0.0.1:8421
+hat config import docs/example.yaml
+hat tray show                 # tray icon (needs a StatusNotifier host)
+
 hat on venom do review
-hat tray show                                  # tray icon with a menu (needs a StatusNotifier host)
 ```
+
+After every change to the code: `scripts/update.sh` (add `--test` to run the
+tests first). It rebuilds `hat` and restarts the services that are installed.
 
 The server also runs as a Docker image: see [deploy/Dockerfile](deploy/Dockerfile).
 
