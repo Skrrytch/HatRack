@@ -49,6 +49,7 @@ func (a *App) agentCmd() *cobra.Command {
 	var name string
 	login := &cobra.Command{
 		Use: "login <url> <token>", Short: i18n.T("cli.login.short"), Args: cobra.ExactArgs(2),
+		Example: "  hat agent login http://127.0.0.1:8421 hat_AbC123...",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			url, token := args[0], args[1]
 			if _, err := agent.NewClient(url, token).State(cmd.Context()); err != nil {

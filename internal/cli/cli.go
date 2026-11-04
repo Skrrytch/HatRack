@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -58,7 +59,45 @@ func (a *App) Root() *cobra.Command {
 	root.SetErr(a.Err)
 	root.CompletionOptions.DisableDefaultCmd = true
 	root.AddCommand(a.statusCmd(), a.onCmd(), a.doCmd(), a.offCmd(), a.logCmd(), a.configCmd(), a.agentCmd(), a.serverCmd())
+	friendlyUsage(root)
 	return root
+}
+
+// usageError explains a wrong call: what was wrong, how to call the command,
+// and where to read more. Cobra's own messages are English and bare.
+func usageError(c *cobra.Command, problem string) error {
+	var b strings.Builder
+	b.WriteString(problem + "\n\n")
+	b.WriteString(i18n.T("err.usage", c.UseLine()) + "\n")
+	if c.Short != "" {
+		b.WriteString("  " + c.Short + "\n")
+	}
+	if c.Example != "" {
+		b.WriteString("\n" + i18n.T("err.example") + "\n" + c.Example + "\n")
+	}
+	b.WriteString("\n" + i18n.T("err.morehelp", c.CommandPath()))
+	return silentUsage{errors.New(b.String())}
+}
+
+// silentUsage marks errors whose text already is complete.
+type silentUsage struct{ error }
+
+// friendlyUsage replaces cobra's argument and flag errors in all commands.
+func friendlyUsage(c *cobra.Command) {
+	if orig := c.Args; orig != nil {
+		c.Args = func(cmd *cobra.Command, args []string) error {
+			if err := orig(cmd, args); err != nil {
+				return usageError(cmd, i18n.T("err.args", len(args)))
+			}
+			return nil
+		}
+	}
+	c.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
+		return usageError(cmd, i18n.T("err.flags", err.Error()))
+	})
+	for _, sub := range c.Commands() {
+		friendlyUsage(sub)
+	}
 }
 
 // Execute runs the command line and returns the exit code.

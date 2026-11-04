@@ -87,3 +87,25 @@ func TestStatusLineAndLog(t *testing.T) {
 func serverIntervals(iv []core.Interval) server.IntervalsResponse {
 	return server.IntervalsResponse{Intervals: iv, Totals: core.Totals(iv)}
 }
+
+func TestWrongArgumentsShowUsage(t *testing.T) {
+	t.Setenv("LC_ALL", "de_DE.UTF-8")
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	defer i18n.Set("en")
+	var out, errb bytes.Buffer
+	app := &App{Out: &out, Err: &errb, Socket: "/nonexistent/sock", IsTTY: func() bool { return false }}
+	if code := app.Execute([]string{"agent", "login", "nur-ein-token"}); code == 0 {
+		t.Fatal("expected a failure")
+	}
+	msg := errb.String()
+	for _, want := range []string{"Falsche Argumente", "hat agent login <url> <token>", "Beispiel:", "hat agent login --help"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("message lacks %q:\n%s", want, msg)
+		}
+	}
+	errb.Reset()
+	app.Execute([]string{"off", "--bogus"})
+	if !strings.Contains(errb.String(), "Falsche Option") || !strings.Contains(errb.String(), "hat off") {
+		t.Errorf("flag error:\n%s", errb.String())
+	}
+}
