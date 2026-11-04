@@ -101,9 +101,9 @@ func TestIntervals(t *testing.T) {
 	}
 	got := Intervals(events, at(120))
 	want := []Interval{
-		{"venom", "review", at(0), at(30), false},
-		{"venom", "meeting", at(30), at(60), false},
-		{"tag", "", at(90), at(120), true},
+		{"venom", "review", at(0), at(30), false, events[0].ID, events[1].ID},
+		{"venom", "meeting", at(30), at(60), false, events[1].ID, events[2].ID},
+		{"tag", "", at(90), at(120), true, events[3].ID, ""},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v\nwant %+v", got, want)

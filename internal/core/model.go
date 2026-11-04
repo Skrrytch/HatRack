@@ -17,6 +17,14 @@ const (
 	EvActivity    EventType = "activity"
 	EvOff         EventType = "off"
 	EvModuleError EventType = "module_error"
+	EvCorrection  EventType = "correction"
+)
+
+// Status of a correction.
+const (
+	StatusApplied  = "applied"
+	StatusProposed = "proposed" // waits for confirmation (corrections by an AI)
+	StatusRejected = "rejected"
 )
 
 // Event is one append-only entry of the log. The ID and the device timestamp
@@ -30,6 +38,13 @@ type Event struct {
 	Activity string    `json:"activity,omitempty"` // activity name
 	Neutral  bool      `json:"neutral,omitempty"`  // off: restore the neutral look
 	Note     string    `json:"note,omitempty"`
+
+	// Corrections only: the events that no longer count and the events that
+	// count instead. Nothing is ever deleted from the log.
+	Supersedes  []string `json:"supersedes,omitempty"`
+	Replacement []Event  `json:"replacement,omitempty"`
+	Source      string   `json:"source,omitempty"` // user | ai
+	Status      string   `json:"status,omitempty"` // applied | proposed | rejected
 }
 
 // NewID returns a random UUID (version 4).
@@ -62,6 +77,23 @@ func (e Event) Validate() error {
 			return fmt.Errorf("switch event %s without hat", e.ID)
 		}
 	case EvActivity, EvOff, EvModuleError:
+	case EvCorrection:
+		if len(e.Supersedes) == 0 && len(e.Replacement) == 0 {
+			return fmt.Errorf("correction %s changes nothing", e.ID)
+		}
+		switch e.Status {
+		case "", StatusApplied, StatusProposed, StatusRejected:
+		default:
+			return fmt.Errorf("correction %s has unknown status %q", e.ID, e.Status)
+		}
+		for _, r := range e.Replacement {
+			if r.Type == EvCorrection || r.Type == EvModuleError {
+				return fmt.Errorf("correction %s: replacement %s must be a switch, activity or off", e.ID, r.ID)
+			}
+			if err := r.Validate(); err != nil {
+				return fmt.Errorf("correction %s: %w", e.ID, err)
+			}
+		}
 	default:
 		return fmt.Errorf("event %s has unknown type %q", e.ID, e.Type)
 	}
@@ -106,7 +138,7 @@ func (s State) Apply(ev Event) State {
 	if s.Mode == "" {
 		s.Mode = ModeNone
 	}
-	if ev.Type == EvModuleError || ev.TS.Before(s.LastTS) {
+	if ev.Type == EvModuleError || ev.Type == EvCorrection || ev.TS.Before(s.LastTS) {
 		return s
 	}
 	switch ev.Type {
@@ -132,10 +164,41 @@ func (s State) Apply(ev Event) State {
 	return s
 }
 
-// Fold derives the state from a list of events in any order.
+// Applied reports whether a correction counts.
+func (e Event) Applied() bool {
+	return e.Type == EvCorrection && (e.Status == "" || e.Status == StatusApplied)
+}
+
+// Effective returns the events that count: applied corrections drop the
+// events they supersede and add their replacements. The result has no
+// corrections in it and is sorted by time.
+func Effective(events []Event) []Event {
+	gone := map[string]bool{}
+	var added []Event
+	for _, e := range events {
+		if e.Applied() {
+			for _, id := range e.Supersedes {
+				gone[id] = true
+			}
+			added = append(added, e.Replacement...)
+		}
+	}
+	out := make([]Event, 0, len(events)+len(added))
+	for _, list := range [][]Event{events, added} {
+		for _, e := range list {
+			if e.Type != EvCorrection && !gone[e.ID] {
+				out = append(out, e)
+			}
+		}
+	}
+	SortEvents(out)
+	return out
+}
+
+// Fold derives the state from a list of events in any order. Corrections are
+// taken into account.
 func Fold(events []Event) State {
-	ev := append([]Event(nil), events...)
-	SortEvents(ev)
+	ev := Effective(events)
 	s := NewState()
 	for _, e := range ev {
 		s = s.Apply(e)
@@ -164,43 +227,47 @@ type Interval struct {
 	Start    time.Time `json:"start"`
 	End      time.Time `json:"end"`
 	Open     bool      `json:"open,omitempty"`
+	StartID  string    `json:"start_id,omitempty"` // the event that opened it
+	EndID    string    `json:"end_id,omitempty"`   // the event that closed it
 }
 
 // Duration of the interval.
 func (i Interval) Duration() time.Duration { return i.End.Sub(i.Start) }
 
-// Intervals derives the intervals from events. An interval that is still
-// open ends at now.
+// Intervals derives the intervals from events, corrections included. An
+// interval that is still open ends at now.
 func Intervals(events []Event, now time.Time) []Interval {
-	ev := append([]Event(nil), events...)
-	SortEvents(ev)
+	ev := Effective(events)
 	var out []Interval
 	var cur *Interval
+	endID := ""
 	closeAt := func(t time.Time) {
 		if cur == nil {
 			return
 		}
-		cur.End = t
+		cur.End, cur.EndID = t, endID
 		if cur.End.After(cur.Start) {
 			out = append(out, *cur)
 		}
 		cur = nil
 	}
 	for _, e := range ev {
+		endID = e.ID
 		switch e.Type {
 		case EvSwitch:
 			closeAt(e.TS)
-			cur = &Interval{Hat: e.Hat, Activity: e.Activity, Start: e.TS}
+			cur = &Interval{Hat: e.Hat, Activity: e.Activity, Start: e.TS, StartID: e.ID}
 		case EvActivity:
 			if cur != nil {
 				hat := cur.Hat
 				closeAt(e.TS)
-				cur = &Interval{Hat: hat, Activity: e.Activity, Start: e.TS}
+				cur = &Interval{Hat: hat, Activity: e.Activity, Start: e.TS, StartID: e.ID}
 			}
 		case EvOff:
 			closeAt(e.TS)
 		}
 	}
+	endID = ""
 	if cur != nil {
 		cur.Open = true
 		if now.After(cur.Start) {

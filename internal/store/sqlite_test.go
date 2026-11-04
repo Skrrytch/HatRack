@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"testing"
 	"time"
@@ -154,5 +155,64 @@ func TestPasswordAndSessions(t *testing.T) {
 	}
 	if h, _ := s.PasswordHash(ctx); h != "hash2" {
 		t.Fatalf("hash: %q", h)
+	}
+}
+
+func TestCorrections(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	// a database from before corrections existed
+	old, err := sql.Open("sqlite", "file:"+filepath.Join(dir, "old.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := old.Exec(`CREATE TABLE events (seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, ts INTEGER NOT NULL,
+	  device TEXT NOT NULL DEFAULT '', type TEXT NOT NULL, hat TEXT NOT NULL DEFAULT '', activity TEXT NOT NULL DEFAULT '',
+	  neutral INTEGER NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '')`); err != nil {
+		t.Fatal(err)
+	}
+	old.Close()
+	s, err := Open(filepath.Join(dir, "old.db"))
+	if err != nil {
+		t.Fatalf("migration: %v", err)
+	}
+	defer s.Close()
+
+	t0 := time.Date(2026, 11, 4, 9, 0, 0, 0, time.UTC)
+	mk := func(min int, typ core.EventType, hat, act string) core.Event {
+		e := core.NewEvent("pc", typ, t0.Add(time.Duration(min)*time.Minute))
+		e.Hat, e.Activity = hat, act
+		return e
+	}
+	a, b := mk(0, core.EvSwitch, "venom", "dev"), mk(60, core.EvSwitch, "tag", "support")
+	if _, err := s.AppendEvents(ctx, []core.Event{a, b}); err != nil {
+		t.Fatal(err)
+	}
+	// it was private, not tag
+	c, err := core.PlanChange([]core.Event{a, b}, b.ID, core.Edit{Start: b.TS, Hat: "private", Activity: "garden"},
+		core.Input{Device: "web", Now: t0.Add(2 * time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AppendEvents(ctx, []core.Event{*c}); err != nil {
+		t.Fatal(err)
+	}
+	st, _ := s.CurrentState(ctx)
+	if st.Hat != "private" || st.Activity != "garden" {
+		t.Fatalf("state after the correction: %+v", st)
+	}
+	last, _ := s.LastActivities(ctx)
+	if last["private"] != "garden" || last["tag"] != "" || last["venom"] != "dev" {
+		t.Fatalf("last activities: %v", last)
+	}
+	// a correction made now still changes the past: Effective before 10:30
+	eff, _ := s.Effective(ctx, t0.Add(90*time.Minute))
+	if len(eff) != 2 || eff[1].Hat != "private" {
+		t.Fatalf("effective: %+v", eff)
+	}
+	// the raw log keeps everything, the correction with its details
+	raw, _ := s.EventsBetween(ctx, time.Time{}, time.Time{})
+	if len(raw) != 3 || raw[2].Type != core.EvCorrection || len(raw[2].Supersedes) != 1 || len(raw[2].Replacement) != 1 {
+		t.Fatalf("raw log: %+v", raw)
 	}
 }

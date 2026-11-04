@@ -30,6 +30,9 @@ type Store interface {
 	// EventsBetween returns events with from <= ts < to ordered by time.
 	// A zero from or to leaves that side open.
 	EventsBetween(ctx context.Context, from, to time.Time) ([]core.Event, error)
+	// Effective returns the events before to (zero: all) that count, with
+	// corrections applied.
+	Effective(ctx context.Context, to time.Time) ([]core.Event, error)
 	// CurrentState derives the current state from the log.
 	CurrentState(ctx context.Context) (core.State, error)
 	// LastActivities returns, per hat key, the last activity used.

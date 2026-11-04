@@ -74,7 +74,42 @@ func Open(path string) (*SQLite, error) {
 		db.Close()
 		return nil, fmt.Errorf("init database %s: %w", path, err)
 	}
+	if err := migrate(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate database %s: %w", path, err)
+	}
 	return &SQLite{db: db}, nil
+}
+
+// migrate brings databases of older versions up to date.
+func migrate(db *sql.DB) error {
+	// MVP 2: corrections keep their details as JSON in events.data
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('events') WHERE name = 'data'`).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		if _, err := db.Exec(`ALTER TABLE events ADD COLUMN data TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// correctionData is what events.data holds for a correction.
+type correctionData struct {
+	Supersedes  []string     `json:"supersedes,omitempty"`
+	Replacement []core.Event `json:"replacement,omitempty"`
+	Source      string       `json:"source,omitempty"`
+	Status      string       `json:"status,omitempty"`
+}
+
+func eventData(e core.Event) string {
+	if e.Type != core.EvCorrection {
+		return ""
+	}
+	b, _ := json.Marshal(correctionData{e.Supersedes, e.Replacement, e.Source, e.Status})
+	return string(b)
 }
 
 // Close closes the database.
@@ -101,8 +136,8 @@ func (s *SQLite) AppendEvents(ctx context.Context, ev []core.Event) (int, error)
 	n := 0
 	for _, e := range ev {
 		res, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO events
-		  (id, ts, device, type, hat, activity, neutral, note) VALUES (?,?,?,?,?,?,?,?)`,
-			e.ID, e.TS.UnixNano(), e.Device, string(e.Type), e.Hat, e.Activity, b2i(e.Neutral), e.Note)
+		  (id, ts, device, type, hat, activity, neutral, note, data) VALUES (?,?,?,?,?,?,?,?,?)`,
+			e.ID, e.TS.UnixNano(), e.Device, string(e.Type), e.Hat, e.Activity, b2i(e.Neutral), e.Note, eventData(e))
 		if err != nil {
 			return 0, err
 		}
@@ -112,7 +147,7 @@ func (s *SQLite) AppendEvents(ctx context.Context, ev []core.Event) (int, error)
 	return n, tx.Commit()
 }
 
-const eventCols = `id, ts, device, type, hat, activity, neutral, note`
+const eventCols = `id, ts, device, type, hat, activity, neutral, note, data`
 
 func scanEvents(rows *sql.Rows) ([]core.Event, error) {
 	defer rows.Close()
@@ -122,10 +157,17 @@ func scanEvents(rows *sql.Rows) ([]core.Event, error) {
 		var ts int64
 		var typ string
 		var neutral int
-		if err := rows.Scan(&e.ID, &ts, &e.Device, &typ, &e.Hat, &e.Activity, &neutral, &e.Note); err != nil {
+		var data string
+		if err := rows.Scan(&e.ID, &ts, &e.Device, &typ, &e.Hat, &e.Activity, &neutral, &e.Note, &data); err != nil {
 			return nil, err
 		}
 		e.TS, e.Type, e.Neutral = time.Unix(0, ts).UTC(), core.EventType(typ), neutral != 0
+		if data != "" {
+			var d correctionData
+			if err := json.Unmarshal([]byte(data), &d); err == nil {
+				e.Supersedes, e.Replacement, e.Source, e.Status = d.Supersedes, d.Replacement, d.Source, d.Status
+			}
+		}
 		out = append(out, e)
 	}
 	return out, rows.Err()
@@ -149,7 +191,56 @@ func (s *SQLite) EventsBetween(ctx context.Context, from, to time.Time) ([]core.
 	return scanEvents(rows)
 }
 
+// Effective returns the events before to that count, with corrections
+// applied (see core.Effective). Corrections are read whatever their own
+// time, because they may change any part of the log.
+func (s *SQLite) Effective(ctx context.Context, to time.Time) ([]core.Event, error) {
+	q := `SELECT ` + eventCols + ` FROM events WHERE type = 'correction'`
+	var args []any
+	if !to.IsZero() {
+		q += ` OR ts < ?`
+		args = append(args, to.UnixNano())
+	} else {
+		q += ` OR 1=1`
+	}
+	rows, err := s.db.QueryContext(ctx, q+` ORDER BY ts, seq`, args...)
+	if err != nil {
+		return nil, err
+	}
+	all, err := scanEvents(rows)
+	if err != nil {
+		return nil, err
+	}
+	eff := core.Effective(all)
+	if to.IsZero() {
+		return eff, nil
+	}
+	out := eff[:0]
+	for _, e := range eff {
+		if e.TS.Before(to) {
+			out = append(out, e)
+		}
+	}
+	return out, nil
+}
+
+func (s *SQLite) hasCorrections(ctx context.Context) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM events WHERE type = 'correction')`).Scan(&n)
+	return n == 1, err
+}
+
 func (s *SQLite) CurrentState(ctx context.Context) (core.State, error) {
+	// With corrections, any part of the log may have changed: fold it all.
+	if corr, err := s.hasCorrections(ctx); err != nil {
+		return core.State{}, err
+	} else if corr {
+		ev, err := s.Effective(ctx, time.Time{})
+		if err != nil {
+			return core.State{}, err
+		}
+		return core.Fold(ev), nil
+	}
 	var last sql.NullInt64
 	if err := s.db.QueryRowContext(ctx, `SELECT MAX(ts) FROM events WHERE type = 'switch'`).Scan(&last); err != nil {
 		return core.State{}, err
@@ -175,6 +266,21 @@ func (s *SQLite) EventRev(ctx context.Context) (int64, error) {
 }
 
 func (s *SQLite) LastActivities(ctx context.Context) (map[string]string, error) {
+	if corr, err := s.hasCorrections(ctx); err != nil {
+		return nil, err
+	} else if corr {
+		ev, err := s.Effective(ctx, time.Time{})
+		if err != nil {
+			return nil, err
+		}
+		out := map[string]string{}
+		for _, e := range ev { // sorted by time: the last one wins
+			if (e.Type == core.EvSwitch || e.Type == core.EvActivity) && e.Hat != "" && e.Activity != "" {
+				out[e.Hat] = e.Activity
+			}
+		}
+		return out, nil
+	}
 	rows, err := s.db.QueryContext(ctx, `
 	  SELECT e.hat, e.activity FROM events e
 	  WHERE e.activity != '' AND e.type IN ('switch','activity') AND e.hat != ''
