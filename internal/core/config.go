@@ -473,6 +473,13 @@ func ExpandEnv(v any) any {
 }
 
 var envRe = regexp.MustCompile(`\$\{env:([A-Za-z_][A-Za-z0-9_]*)\}`)
+
+// IsSecretKey reports a setting that holds a secret (password, token …).
+func IsSecretKey(k string) bool { return secretKeyRe.MatchString(k) }
+
+// IsEnvRef reports a value that only names an environment variable.
+func IsEnvRef(s string) bool { return envRe.MatchString(s) && envRe.ReplaceAllString(s, "") == "" }
+
 var secretKeyRe = regexp.MustCompile(`(?i)(token|password|passwd|secret|api_?key)`)
 
 // Warnings returns hints about a configuration that is valid but suspicious:

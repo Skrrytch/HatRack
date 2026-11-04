@@ -73,6 +73,8 @@ type field struct {
 	Choices     []pick // what the devices have installed
 	Gallery     bool   // the choices have previews
 	AddLabel    string // list fields: "add …" pick list
+	Secret      bool   // a password or token: never shown in the summary
+	Masked      bool   // a secret typed in plain: the input hides it
 }
 
 type moduleForm struct {
@@ -370,7 +372,8 @@ func (s *Server) moduleForms(lang string, own, inherited map[string]core.ModuleC
 				continue
 			}
 			fl := field{Name: "m/" + id + "/" + k, Label: tr(lang, "web.prop."+k, k), Kind: kind,
-				Value: valueString(own[id][k]), Required: req[k] && !hatPage, ID: "f-" + id + "-" + k}
+				Value: valueString(own[id][k]), Required: req[k] && !hatPage, ID: "f-" + id + "-" + k, Secret: core.IsSecretKey(k)}
+			fl.Masked = fl.Secret && fl.Value != "" && !core.IsEnvRef(fl.Value)
 			if kind == "text" || kind == "list" {
 				fl.Choices = picks(choices[id][k])
 				fl.AddLabel = i18n.In(lang, "web.setup.addchoice", fl.Label)
@@ -420,6 +423,9 @@ func summary(lang string, fields []field, hatPage bool) string {
 	for _, f := range fields {
 		if f.Value != "" {
 			v := f.Value
+			if f.Secret && !core.IsEnvRef(v) {
+				v = "••••••" // a ${env:NAME} reference may show, the secret itself not
+			}
 			for _, o := range f.Options {
 				if o.Value == f.Value {
 					v = o.Label

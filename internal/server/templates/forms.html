@@ -24,7 +24,7 @@
     {{else if eq .Kind "number"}}
       <input type="number" step="any" name="{{.Name}}" value="{{.Value}}"{{if .Inherited}} placeholder="{{.Inherited}}"{{end}}>
     {{else}}
-      <input type="text" name="{{.Name}}" id="{{.ID}}" value="{{.Value}}"{{if .Inherited}} placeholder="{{.Inherited}}"{{end}}{{if and .Choices (not .Gallery)}} list="{{.ID}}-list"{{end}}>
+      <input type="{{if .Masked}}password{{else}}text{{end}}" name="{{.Name}}" id="{{.ID}}" value="{{.Value}}"{{if .Inherited}} placeholder="{{.Inherited}}"{{end}}{{if and .Choices (not .Gallery)}} list="{{.ID}}-list"{{end}}>
       {{if and .Choices (not .Gallery)}}<datalist id="{{.ID}}-list">{{range .Choices}}<option value="{{.Value}}">{{end}}</datalist>{{end}}
     {{end}}
     </label>

@@ -113,6 +113,23 @@ hats:
 		t.Fatal("no mqtt form on the hat page")
 	}
 	_, out := br.do("GET", "/setup/defaults", nil)
+	if !strings.Contains(out, "${env:HATRACK_TEST_MQTT_PW}") {
+		t.Fatal("an env reference may show")
+	}
+	e.do("PUT", "/api/config", `version: 1
+modules:
+  mqtt:
+    broker: mqtt://broker
+    password: klartext-pw
+hats:
+  tickets:
+    name: Tickets
+    activities: [Testen]
+`)
+	_, out = br.do("GET", "/setup/defaults", nil)
+	if strings.Count(out, "klartext-pw") != 1 || !strings.Contains(out, `type="password" name="m/mqtt/password"`) {
+		t.Fatal("a plain password shows neither in the summary nor readable in the field")
+	}
 	var at []int
 	for _, k := range []string{"enabled", "broker", "username", "password", "topic", "discovery", "discovery_prefix"} {
 		at = append(at, strings.Index(out, `name="m/mqtt/`+k+`"`))
