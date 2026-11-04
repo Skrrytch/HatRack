@@ -2,7 +2,7 @@
 #   docker build -f deploy/Dockerfile -t hatrack .
 #   docker run -d --name hatrack -p 127.0.0.1:8421:8421 -v hatrack-data:/data hatrack
 #   docker exec hatrack hat server device add laptop
-FROM golang:1.24 AS build
+FROM golang:1.27 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
