@@ -29,13 +29,8 @@ var iconShapes = map[string]shape{
 	"play": func(u, v float64) bool {
 		return u >= .22 && u <= .86 && math.Abs(v-.5) <= (.86-u)*(.40/.64)
 	},
-	// power symbol: a ring open at the top with a stem
-	"off": func(u, v float64) bool {
-		d := math.Hypot(u-.5, v-.56)
-		ring := d >= .28 && d <= .40 && !(math.Abs(u-.5) < .11 && v < .56)
-		stem := math.Abs(u-.5) <= .055 && v >= .06 && v <= .46
-		return ring || stem
-	},
+	// stop, like on a tape recorder: a filled square
+	"stop": rectS(.20, .20, .80, .80),
 	// external link: a box open at the top right and an arrow leaving it
 	"open": func(u, v float64) bool {
 		box := (u >= .10 && u <= .74 && v >= .26 && v <= .90) &&

@@ -48,7 +48,8 @@ type Hit struct {
 	Match    bool // matches the typed filter
 	Action   Action
 	Disabled bool
-	Icon     string // "pause", "play" or ""
+	Icon     string // "pause", "play", "stop", "open" or ""
+	Card     Rect   // hats: the whole card, for the frame
 }
 
 // Box is a filled rounded rectangle behind other things.
@@ -211,13 +212,9 @@ func Build(snap agent.Snapshot, query string, scale float64, now time.Time) Layo
 				col = rgba("#4e79a7")
 			}
 			card := Rect{x, y, m.cardW, rowH}
-			border := color.RGBA{}
-			if current {
-				border = col
-			}
-			l.Boxes = append(l.Boxes, Box{R: card, Radius: m.s6(), Color: cCard, Border: border})
+			l.Boxes = append(l.Boxes, Box{R: card, Radius: m.s6(), Color: cCard})
 			// title
-			titleHit := Hit{R: Rect{x, y, m.cardW, m.titleH}, Kind: KindHat, Label: h.Name, Color: col, Current: current,
+			titleHit := Hit{R: Rect{x, y, m.cardW, m.titleH}, Kind: KindHat, Label: h.Name, Color: col, Card: card, Current: current,
 				Match: prefix(h.Name, query), Hint: hatHint(h, st),
 				Action: Action{Request: &agent.Request{Cmd: "on", Hat: h.Key}}}
 			if st.Mode == core.ModePaused && st.Hat == h.Key {
@@ -259,11 +256,11 @@ func Build(snap agent.Snapshot, query string, scale float64, now time.Time) Layo
 	switch st.Mode {
 	case core.ModeWearing:
 		tool(i18n.T("ui.pause"), "pause", i18n.T("panel.hint.pause"), Action{Request: &agent.Request{Cmd: "off"}})
-		tool(i18n.T("panel.takeoff"), "off", i18n.T("panel.hint.takeoff"), Action{Request: &agent.Request{Cmd: "off", Neutral: true}})
+		tool(i18n.T("panel.takeoff"), "stop", i18n.T("panel.hint.takeoff"), Action{Request: &agent.Request{Cmd: "off", Neutral: true}})
 	case core.ModePaused:
 		tool(i18n.T("ui.resume"), "play", i18n.T("panel.hint.resume_tool"), Action{Request: &agent.Request{Cmd: "on"}})
 		if !st.Neutral {
-			tool(i18n.T("panel.takeoff"), "off", i18n.T("panel.hint.takeoff"), Action{Request: &agent.Request{Cmd: "off", Neutral: true}})
+			tool(i18n.T("panel.takeoff"), "stop", i18n.T("panel.hint.takeoff"), Action{Request: &agent.Request{Cmd: "off", Neutral: true}})
 		}
 	}
 	// the web UI sits at the right edge; About lives in the tray's right-click menu
@@ -377,6 +374,7 @@ func BuildAbout(version, url string, scale float64) Layout {
 	l.IconHex = "#2fa7e0"
 	y := m.pad*2 + iconSize + m.gap*2
 	center := func(s string, bold bool, px int, c color.RGBA) {
+		s = fit(s, bold, px, W-2*m.pad)
 		w := textWidth(s, bold, px)
 		l.Texts = append(l.Texts, Text{X: (W - w) / 2, Y: y, S: s, Bold: bold, Px: px, Color: c})
 		y += px + m.gap
@@ -387,7 +385,7 @@ func BuildAbout(version, url string, scale float64) Layout {
 	center(i18n.T("cli.short"), false, m.chipPx, cFG)
 	center(i18n.T("panel.about.license"), false, m.chipPx, cDim)
 	y += m.gap
-	bw := u(150)
+	bw := textWidth(i18n.T("panel.about.project"), false, m.chipPx) + 4*m.chipPad
 	l.Hits = append(l.Hits, Hit{R: Rect{(W - bw) / 2, y, bw, m.chipH + u(4)}, Kind: KindTool, Label: i18n.T("panel.about.project"),
 		Hint: url, Action: Action{Link: url}, Color: cFG})
 	y += m.chipH + u(4) + m.pad*2

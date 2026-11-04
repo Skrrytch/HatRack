@@ -152,9 +152,12 @@ func drawHit(img *image.RGBA, h Hit, hover, focus bool, scale float64) {
 	m := newMetrics(scale)
 	switch h.Kind {
 	case KindHat:
-		if hover || focus {
-			bg := color.RGBA{h.Color.R, h.Color.G, h.Color.B, 255}
-			fillRound(img, Rect{h.R.X + 6, h.R.Y + 3, h.R.W - 9, h.R.H - 6}, m.s6(), mixc(cCard, bg, .35))
+		// the card gets a frame in the hat's colour when worn, a softer one on hover
+		switch {
+		case h.Current:
+			frame(img, h.Card, m.s6(), 2, h.Color, cCard)
+		case hover || focus:
+			frame(img, h.Card, m.s6(), 2, mixc(cCard, h.Color, .6), cCard)
 		}
 		tc := cFG
 		if !h.Match {
@@ -178,7 +181,7 @@ func drawHit(img *image.RGBA, h Hit, hover, focus bool, scale float64) {
 		}
 		fillRound(img, h.R, h.R.H/2, bg)
 		if focus {
-			ring(img, h.R, h.R.H/2, cFG)
+			frame(img, h.R, h.R.H/2, 1, cFG, bg)
 		}
 		label := fit(h.Label, h.Current, m.chipPx, h.R.W-2*m.chipPad)
 		drawText(img, Text{X: h.R.X + m.chipPad, Y: h.R.Y + (h.R.H-m.chipPx)/2 - 1, S: label, Bold: h.Current, Px: m.chipPx, Color: fg})
@@ -189,14 +192,14 @@ func drawHit(img *image.RGBA, h Hit, hover, focus bool, scale float64) {
 		}
 		fillRound(img, h.R, m.s6(), bg)
 		if focus {
-			ring(img, h.R, m.s6(), cDim)
+			frame(img, h.R, m.s6(), 1, cDim, bg)
 		}
 		sz := m.toolBtnH * 5 / 9
 		ir := Rect{h.R.X + (h.R.W-sz)/2, h.R.Y + (h.R.H-sz)/2, sz, sz}
 		if h.Icon != "" {
 			drawIcon(img, h.Icon, ir, cFG)
 		} else {
-			drawText(img, Text{X: h.R.X + m.chipPad, Y: h.R.Y + (h.R.H-m.chipPx)/2 - 1, S: h.Label, Px: m.chipPx, Color: cFG})
+			drawText(img, Text{X: h.R.X + (h.R.W-textWidth(h.Label, false, m.chipPx))/2, Y: h.R.Y + (h.R.H-m.chipPx)/2 - 1, S: h.Label, Px: m.chipPx, Color: cFG})
 		}
 	}
 }
@@ -208,17 +211,11 @@ func abs(a int) int {
 	return a
 }
 
-func ring(img *image.RGBA, r Rect, rad int, c color.RGBA) {
-	// 1px outline: draw the outer shape in c, then the inner shape over it
-	// using whatever is below (kept simple: edges only).
-	for x := r.X + rad; x < r.X+r.W-rad; x++ {
-		img.SetRGBA(x, r.Y, c)
-		img.SetRGBA(x, r.Y+r.H-1, c)
-	}
-	for y := r.Y + rad; y < r.Y+r.H-rad; y++ {
-		img.SetRGBA(r.X, y, c)
-		img.SetRGBA(r.X+r.W-1, y, c)
-	}
+// frame draws a rounded outline of the given width on top of a filled
+// rounded shape: the outer shape in c, then the inner one back in fill.
+func frame(img *image.RGBA, r Rect, rad, width int, c, fill color.RGBA) {
+	fillRound(img, r, rad, c)
+	fillRound(img, Rect{r.X + width, r.Y + width, r.W - 2*width, r.H - 2*width}, max(rad-width, 0), fill)
 }
 
 func mixc(a, b color.RGBA, t float64) color.RGBA {
