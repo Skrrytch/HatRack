@@ -152,10 +152,31 @@ func (a *app) showPanel(where panel.Where, about bool) {
 	}()
 }
 
+// watcherWait is how long a starting tray waits for a StatusNotifier host.
+// At login the autostart can run before the session's watcher is up.
+const watcherWait = 30 * time.Second
+
+// waitWatcher polls for a StatusNotifier host until one appears, the wait
+// runs out (ErrNoWatcher) or ctx is done.
+func waitWatcher(ctx context.Context, wait time.Duration) error {
+	deadline := time.Now().Add(wait)
+	for !HasWatcher() {
+		if time.Now().After(deadline) {
+			return ErrNoWatcher
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
+	return nil
+}
+
 // Run shows the tray icon until it is told to quit. It blocks.
 func Run(ctx context.Context, agentSocket string) error {
-	if !HasWatcher() {
-		return ErrNoWatcher
+	if err := waitWatcher(ctx, watcherWait); err != nil {
+		return err
 	}
 	if Running() {
 		return fmt.Errorf("%s", i18n.T("err.tray_running"))
