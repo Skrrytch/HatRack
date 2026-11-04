@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -216,5 +217,58 @@ func TestAIAccessPage(t *testing.T) {
 	ro.do("GET", "/?token="+e.token, nil)
 	if r, _ := ro.do("GET", "/setup/ai", nil); r.StatusCode != 303 {
 		t.Fatal("AI access needs the login")
+	}
+}
+
+func TestMCPShortEntries(t *testing.T) {
+	e := setup(t)
+	seed(t, e)
+	// three entries of 40 seconds each from 11:35: venom, tag, venom
+	at := func(sec int, typ core.EventType, hat, act string) core.Event {
+		ev := core.NewEvent("laptop", typ, e.now.Add(-25*time.Minute+time.Duration(sec)*time.Second))
+		ev.Hat, ev.Activity = hat, act
+		return ev
+	}
+	b, _ := json.Marshal([]core.Event{at(0, core.EvSwitch, "venom", "review"), at(40, core.EvSwitch, "tag", ""),
+		at(80, core.EvSwitch, "venom", "review"), at(120, core.EvOff, "venom", "")})
+	e.do("POST", "/api/events", string(b))
+	_, token, _ := e.st.AddMCPToken(context.Background(), "c", []string{"read"})
+	cs, _ := mcpSession(t, e, token)
+	for _, group := range []string{"hat", "activity", "day", "week"} {
+		var q queryTimeOut
+		call(t, cs, "query_time", map[string]any{"group_by": group}, &q)
+		sum := 0
+		for _, g := range q.Groups {
+			sum += g.Minutes
+		}
+		if q.TotalMinutes != 152 || sum != 152 {
+			t.Errorf("%s: total %d, groups add up to %d: %+v", group, q.TotalMinutes, sum, q.Groups)
+		}
+	}
+}
+
+func TestApportion(t *testing.T) {
+	s, m := time.Second, time.Minute
+	for _, c := range []struct {
+		in   []time.Duration
+		want []int
+	}{
+		{nil, []int{}},
+		{[]time.Duration{30 * s, 30 * s}, []int{1, 0}},            // 1 minute in all, not 2
+		{[]time.Duration{20 * s, 20 * s, 20 * s}, []int{1, 0, 0}}, // 1 minute, not 0
+		{[]time.Duration{m + 10*s, 2*m + 50*s}, []int{1, 3}},
+		{[]time.Duration{29 * s}, []int{0}},
+	} {
+		got := apportion(c.in)
+		if len(got) != len(c.want) {
+			t.Errorf("%v: %v", c.in, got)
+			continue
+		}
+		for i := range got {
+			if got[i] != c.want[i] {
+				t.Errorf("%v: %v, want %v", c.in, got, c.want)
+				break
+			}
+		}
 	}
 }

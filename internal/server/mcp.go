@@ -135,6 +135,31 @@ func mcpHat(cfg core.Config, name string) (core.Hat, error) {
 
 func minutes(d time.Duration) int { return int(d.Round(time.Minute) / time.Minute) }
 
+// apportion rounds durations to whole minutes so that they add up to the
+// rounded sum: every part gets its full minutes, the minutes left over go to
+// the parts with the largest remainders. Rounding each part on its own would
+// let many short entries drift away from the total.
+func apportion(ds []time.Duration) []int {
+	out := make([]int, len(ds))
+	var sum time.Duration
+	left := 0
+	for i, d := range ds {
+		sum += d
+		out[i] = int(d / time.Minute)
+		left -= out[i]
+	}
+	left += minutes(sum)
+	order := make([]int, len(ds))
+	for i := range order {
+		order[i] = i
+	}
+	sort.SliceStable(order, func(a, b int) bool { return ds[order[a]]%time.Minute > ds[order[b]]%time.Minute })
+	for _, i := range order[:left] {
+		out[i]++
+	}
+	return out
+}
+
 // insideWork is the part of an interval within the working hours.
 func insideWork(i core.Interval, w core.WorkHours, loc *time.Location) time.Duration {
 	ws, we := w.Minutes()
@@ -291,15 +316,17 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 			nm, work := names(cfg), cfg.Work()
 			out := queryTimeOut{From: from.Format(time.RFC3339), To: to.Format(time.RFC3339), GroupBy: group, Groups: []timeGroup{}}
 			idx := map[string]int{}
+			var durs, outs []time.Duration // exact per group, rounded at the end
 			add := func(key string, g timeGroup, d, outside time.Duration) {
 				i, ok := idx[key]
 				if !ok {
 					i = len(out.Groups)
 					idx[key] = i
 					out.Groups = append(out.Groups, g)
+					durs, outs = append(durs, 0), append(outs, 0)
 				}
-				out.Groups[i].Minutes += minutes(d)
-				out.Groups[i].OutsideMinutes += minutes(outside)
+				durs[i] += d
+				outs[i] += outside
 			}
 			var total, outside time.Duration
 			for _, i := range iv {
@@ -330,8 +357,10 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 					}
 				}
 			}
+			mins, outMins := apportion(durs), apportion(outs)
 			for i := range out.Groups {
-				out.Groups[i].Duration = core.FormatDuration(time.Duration(out.Groups[i].Minutes) * time.Minute)
+				out.Groups[i].Minutes, out.Groups[i].OutsideMinutes = mins[i], outMins[i]
+				out.Groups[i].Duration = core.FormatDuration(time.Duration(mins[i]) * time.Minute)
 			}
 			if group == "hat" || group == "activity" {
 				sort.SliceStable(out.Groups, func(a, b int) bool { return out.Groups[a].Minutes > out.Groups[b].Minutes })
@@ -410,8 +439,13 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 			if err != nil {
 				return nil, currentOut{}, err
 			}
-			for _, t := range tot {
-				out.Today = append(out.Today, hatTotal{Hat: t.Hat, HatName: nameOf(nm, t.Hat), Minutes: minutes(t.Duration), Duration: core.FormatDuration(t.Duration)})
+			ds := make([]time.Duration, len(tot))
+			for i, t := range tot {
+				ds[i] = t.Duration
+			}
+			for i, m := range apportion(ds) {
+				out.Today = append(out.Today, hatTotal{Hat: tot[i].Hat, HatName: nameOf(nm, tot[i].Hat), Minutes: m,
+					Duration: core.FormatDuration(time.Duration(m) * time.Minute)})
 			}
 			out.TodayTotal = core.FormatDuration(sumOf(tot))
 			return nil, out, nil
