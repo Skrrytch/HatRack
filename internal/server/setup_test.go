@@ -216,8 +216,12 @@ func TestSetupQuickPaths(t *testing.T) {
 	e, b := setupBrowser(t)
 	// a new hat with its activities in one step, in a colour nobody uses
 	_, out := b.do("GET", "/setup", nil)
-	if !strings.Contains(out, `name="color" value="#4e79a7"`) && !strings.Contains(out, `name="color" value="#f28e2b"`) {
+	if !strings.Contains(out, `name="color" value="#8c4ea3"`) && !strings.Contains(out, `name="color" value="#ee6d24"`) {
 		t.Fatalf("next colour missing")
+	}
+	// the palette is offered as swatches, one of them picked
+	if strings.Count(out, `<button type="button" class="swatch`) != len(core.HatColors) || !strings.Contains(out, `class="swatch on"`) || !strings.Contains(out, `data-name="mint"`) {
+		t.Fatalf("swatches missing")
 	}
 	b.do("POST", "/setup/hats", url.Values{"op": {"add"}, "name": {"Kunde"}, "activities": {"Angebot, Workshop; workshop\nSupport"}})
 	h, _ := config(t, e).Hat("kunde")

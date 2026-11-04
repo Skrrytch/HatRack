@@ -21,7 +21,7 @@
   </table>
   <form method="post" action="/setup/hats" class="newhat">
     <input type="hidden" name="op" value="add">
-    <input type="color" name="color" value="{{.NextColor}}" title="{{t $.Lang "web.setup.color"}}">
+    {{template "swatches" (dict "Lang" $.Lang "Color" .NextColor)}}<input type="color" name="color" value="{{.NextColor}}" title="{{t $.Lang "web.setup.own_color"}}">
     <input type="text" name="name" placeholder="{{t $.Lang "web.setup.newhat"}}" required>
     <input type="text" name="activities" placeholder="{{t $.Lang "web.setup.newhat_acts"}}" class="grow">
     <button class="primary">{{t $.Lang "web.setup.add"}}</button>

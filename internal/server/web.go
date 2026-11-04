@@ -33,6 +33,14 @@ const (
 var pageFuncs = template.FuncMap{
 	"t": func(lang, key string, args ...any) string { return i18n.In(lang, key, args...) },
 	// dict passes several values to a sub-template: dict "A" 1 "B" 2
+	// palette lists the hat colours with their names in a language
+	"palette": func(lang string) []swatch {
+		var out []swatch
+		for _, c := range core.HatColors {
+			out = append(out, swatch{c.Name, c.Hex, i18n.In(lang, "web.color."+c.Name)})
+		}
+		return out
+	},
 	"dict": func(kv ...any) map[string]any {
 		m := map[string]any{}
 		for i := 0; i+1 < len(kv); i += 2 {
@@ -309,7 +317,17 @@ func (s *Server) locOf(r *http.Request) *time.Location {
 	return s.Loc
 }
 
-var fallbackColors = []string{"#4e79a7", "#f28e2b", "#59a14f", "#e15759", "#76b7b2", "#b07aa1", "#edc948", "#9c755f"}
+// fallbackColors are the hat colours offered in Setup, in their order.
+var fallbackColors = func() []string {
+	var out []string
+	for _, c := range core.HatColors {
+		out = append(out, c.Hex)
+	}
+	return out
+}()
+
+// swatch is a palette colour for the colour pickers in Setup.
+type swatch struct{ Name, Hex, Label string }
 
 type palette map[string]string
 

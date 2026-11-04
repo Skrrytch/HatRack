@@ -14,7 +14,8 @@
   <div class="card">
     <div class="namerow">
       <label class="grow">{{t $.Lang "web.setup.name"}}<input type="text" name="name" value="{{.Name}}" placeholder="{{.Key}}"></label>
-      <label>{{t $.Lang "web.setup.color"}}<input type="color" name="color" value="{{.Color}}"></label>
+      <div class="colorpick"><span class="dim">{{t $.Lang "web.setup.color"}}</span>
+        <span class="row">{{template "swatches" (dict "Lang" $.Lang "Color" .Color)}}<input type="color" name="color" value="{{.Color}}" title="{{t $.Lang "web.setup.own_color"}}" aria-label="{{t $.Lang "web.setup.own_color"}}"></span></div>
     </div>
     {{template "resumeradios" (dict "Lang" $.Lang "Opts" .Resume)}}
   </div>

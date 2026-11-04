@@ -5,6 +5,10 @@
 </fieldset>
 {{end}}
 
+{{define "swatches"}}
+<span class="swatches" role="group" aria-label="{{t .Lang "web.setup.palette"}}">{{range palette .Lang}}<button type="button" class="swatch{{if eq .Hex $.Color}} on{{end}}" style="--s:{{.Hex}}" data-color="{{.Hex}}" data-name="{{.Name}}" title="{{.Label}}" aria-label="{{.Label}}"></button>{{end}}</span>
+{{end}}
+
 {{define "modforms"}}
 {{range .}}
 <details class="card mod">
@@ -27,7 +31,7 @@
     {{if .Gallery}}
     {{$f := .}}
     <div class="gallery">
-      {{range .Choices}}<label class="thumb{{if eq .Value $f.Value}} on{{end}}" title="{{.Value}}"><input type="radio" name="pick/{{$f.Name}}" value="{{.Value}}" data-target="{{$f.ID}}"{{if eq .Value $f.Value}} checked{{end}}><img src="{{.Thumb}}" alt="" loading="lazy"><span>{{.Label}}</span></label>{{end}}
+      {{range .Choices}}<label class="thumb{{if eq .Value $f.Value}} on{{end}}" title="{{.Value}}" data-value="{{.Value}}"><input type="radio" name="pick/{{$f.Name}}" value="{{.Value}}" data-target="{{$f.ID}}"{{if eq .Value $f.Value}} checked{{end}}><img src="{{.Thumb}}" alt="" loading="lazy"><span>{{.Label}}</span></label>{{end}}
     </div>
     {{end}}
   {{end}}

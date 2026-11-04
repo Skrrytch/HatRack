@@ -168,6 +168,15 @@ table.list a { text-decoration: none; }
 table.list a:hover { text-decoration: underline; }
 td.acts { text-align: right; white-space: nowrap; }
 td.acts form { margin: 0; display: inline-flex; gap: .3rem; }
+.hatpage .bighat .hatglyph path + path { fill: var(--c) !important; } /* follows a picked colour at once */
+.colorpick { display: flex; flex-direction: column; gap: .2rem; font-size: .85rem; }
+.colorpick .row { display: flex; gap: .6rem; align-items: center; }
+.swatches { display: inline-flex; gap: .35rem; align-items: center; flex-wrap: wrap; }
+.swatch { width: 1.6rem; height: 1.6rem; padding: 0; border-radius: 50%; background: var(--s); border: 2px solid var(--card, #fff); box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 18%, transparent); cursor: pointer; }
+.swatch:hover { box-shadow: 0 0 0 2px color-mix(in srgb, var(--s) 70%, transparent); }
+.swatch.on { box-shadow: 0 0 0 2px var(--s); }
+.thumb.suggest { border-color: color-mix(in srgb, var(--c, var(--accent)) 55%, transparent); border-style: dashed; }
+.thumb.suggest.on { border-style: solid; border-color: var(--accent); }
 .newhat { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-top: .8rem; }
 details.mod { margin: .5rem 0; padding: .7rem 1.2rem; }
 details.mod .fields { margin-top: .8rem; }

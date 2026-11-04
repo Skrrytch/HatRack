@@ -49,6 +49,52 @@
     var g = t.closest(".gallery");
     if (g) g.querySelectorAll(".thumb").forEach(function (l) { l.classList.toggle("on", l.contains(t)); });
   });
+  // colour swatches: pick a palette colour and bring its wallpapers forward
+  function suggestWallpapers(name, fill) {
+    var re = new RegExp("^hatrack:wp\\d+-" + name + "$");
+    document.querySelectorAll(".gallery").forEach(function (g) {
+      var thumbs = Array.prototype.slice.call(g.querySelectorAll(".thumb"));
+      var hits = thumbs.filter(function (l) { return name && re.test(l.dataset.value || ""); });
+      thumbs.forEach(function (l) { l.classList.remove("suggest"); });
+      for (var i = hits.length - 1; i >= 0; i--) { hits[i].classList.add("suggest"); g.insertBefore(hits[i], g.firstChild); }
+      if (!fill || !hits.length) return;
+      var radio = hits[0].querySelector("input");
+      var input = radio && document.getElementById(radio.dataset.target);
+      if (input && !input.value) {
+        radio.checked = true;
+        radio.dispatchEvent(new Event("change", { bubbles: true }));
+        var d = g.closest("details");
+        if (d) d.open = true;
+      }
+    });
+  }
+  function markSwatches(form, hex) {
+    var name = "";
+    form.querySelectorAll(".swatch").forEach(function (b) {
+      var on = b.dataset.color.toLowerCase() === hex.toLowerCase();
+      b.classList.toggle("on", on);
+      if (on) name = b.dataset.name;
+    });
+    var page = form.closest(".hatpage");
+    if (page) page.style.setProperty("--c", hex);
+    return name;
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest(".swatch");
+    if (!b) return;
+    var form = b.closest("form");
+    var input = form && form.querySelector("input[name=color]");
+    if (input) input.value = b.dataset.color;
+    suggestWallpapers(markSwatches(form, b.dataset.color), true);
+  });
+  document.addEventListener("input", function (e) {
+    var t = e.target;
+    if (t.name !== "color" || t.type !== "color") return;
+    var form = t.closest("form");
+    if (form) suggestWallpapers(markSwatches(form, t.value), false);
+  });
+  var cur = document.querySelector(".hatpage .swatch.on");
+  if (cur) suggestWallpapers(cur.dataset.name, false);
   setInterval(tick, 20000);
   if (!document.body.dataset.live || !window.EventSource) return;
   var reconnected = false, first = true;
