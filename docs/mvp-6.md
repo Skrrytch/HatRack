@@ -16,6 +16,7 @@ usable on its own:
 
 ## Status
 
+- **Released:** `v0.6.0`, the first stable version with these files.
 - **Done, tested locally:** self-restart of agent, server and tray
   (`internal/reexec`); version and protocol in the hello, a mismatch shown in
   `hat status` (`internal/agent`, `internal/server`); `hat update`
