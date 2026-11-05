@@ -52,6 +52,7 @@ type setupOpts struct {
 	server, token, name string
 	local, noServices   bool
 	noTray, yes         bool
+	remove, purge       bool
 }
 
 // setupCmd walks through the first-time setup as a dialog.
@@ -61,8 +62,14 @@ func (a *App) setupCmd() *cobra.Command {
 		Use: "setup", Short: i18n.T("cli.setup.short"), Args: cobra.NoArgs,
 		Long: i18n.T("cli.setup.long"),
 		Example: "  hat setup\n" +
-			"  hat setup --server https://hat.example.org --token hat_AbC123...",
-		RunE: func(cmd *cobra.Command, _ []string) error { return a.runSetup(cmd.Context(), o) },
+			"  hat setup --server https://hat.example.org --token hat_AbC123...\n" +
+			"  hat setup --remove",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if o.remove || o.purge {
+				return a.runRemove(cmd.Context(), o)
+			}
+			return a.runSetup(cmd.Context(), o)
+		},
 	}
 	c.Flags().StringVar(&o.server, "server", "", i18n.T("cli.setup.server"))
 	c.Flags().StringVar(&o.token, "token", "", i18n.T("cli.setup.token"))
@@ -71,6 +78,8 @@ func (a *App) setupCmd() *cobra.Command {
 	c.Flags().BoolVar(&o.noServices, "no-services", false, i18n.T("cli.setup.noservices"))
 	c.Flags().BoolVar(&o.noTray, "no-tray", false, i18n.T("cli.setup.notray"))
 	c.Flags().BoolVarP(&o.yes, "yes", "y", false, i18n.T("cli.setup.yes"))
+	c.Flags().BoolVar(&o.remove, "remove", false, i18n.T("cli.setup.remove"))
+	c.Flags().BoolVar(&o.purge, "purge", false, i18n.T("cli.setup.purge"))
 	return c
 }
 
@@ -146,6 +155,9 @@ func (a *App) runSetup(ctx context.Context, o setupOpts) error {
 	step := func(key string, args ...any) { fmt.Fprintln(a.Out, "\n▸ "+i18n.T(key, args...)) }
 
 	say("cli.setup.intro")
+	for _, n := range desktopNotes(os.Getenv("XDG_CURRENT_DESKTOP"), os.Getenv("XDG_SESSION_TYPE")) {
+		fmt.Fprintln(a.Out, n)
+	}
 
 	cfg, _ := agent.LoadConfig()
 	asked := o.server != "" || o.local
@@ -217,6 +229,9 @@ func (a *App) runSetup(ctx context.Context, o setupOpts) error {
 		switch {
 		case !setupHasWatcher():
 			say("cli.setup.tray_nowatcher")
+			if isGNOME(os.Getenv("XDG_CURRENT_DESKTOP")) {
+				say("cli.setup.tray_gnome")
+			}
 		case d.confirm(i18n.T("cli.setup.tray_ask")):
 			if _, err := setupTrayInstall(); err != nil {
 				return err
@@ -233,6 +248,22 @@ func (a *App) runSetup(ctx context.Context, o setupOpts) error {
 	say("cli.setup.next_panel")
 	return nil
 }
+
+// desktopNotes says up front what does not work on this desktop yet, so
+// nobody installs and then wonders. The look has only a Cinnamon backend so
+// far, the panel only an X11 one. An unknown desktop gets no note.
+func desktopNotes(desktop, session string) []string {
+	var notes []string
+	if desktop != "" && !strings.Contains(strings.ToLower(desktop), "cinnamon") {
+		notes = append(notes, i18n.T("cli.setup.desktop_other", desktop))
+	}
+	if strings.EqualFold(session, "wayland") {
+		notes = append(notes, i18n.T("cli.setup.desktop_wayland"))
+	}
+	return notes
+}
+
+func isGNOME(desktop string) bool { return strings.Contains(strings.ToLower(desktop), "gnome") }
 
 // setupRemote logs in to an existing server (another computer, Docker).
 func (a *App) setupRemote(ctx context.Context, d *dialog, o setupOpts) (agent.Config, error) {

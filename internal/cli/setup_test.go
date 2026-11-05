@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -114,5 +115,74 @@ func TestSetupRemote(t *testing.T) {
 	}
 	if _, err := runSetupWith(t, "n\n2\nnot-a-url\n"); /* n: drop the connection */ err == nil || !strings.Contains(err.Error(), "not a server address") {
 		t.Fatalf("bad url: %v", err)
+	}
+}
+
+func TestSetupRemove(t *testing.T) {
+	for _, v := range []string{"LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"} {
+		t.Setenv(v, "en_US.UTF-8")
+	}
+	dir := t.TempDir()
+	for _, v := range []string{"XDG_CONFIG_HOME", "XDG_STATE_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME"} {
+		t.Setenv(v, filepath.Join(dir, v))
+	}
+	t.Setenv("HATRACK_DATA", filepath.Join(dir, "server"))
+	for _, d := range dataDirs() {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var removed []string
+	oldUnit, oldTray := removeUnitFn, removeTray
+	removeUnitFn = func(name string) { removed = append(removed, name) }
+	removeTray = func() {}
+	t.Cleanup(func() { removeUnitFn, removeTray = oldUnit, oldTray })
+
+	run := func(input string, args ...string) string {
+		var out bytes.Buffer
+		a := &App{Out: &out, Err: &out, In: strings.NewReader(input)}
+		root := a.Root()
+		root.SetArgs(append([]string{"setup"}, args...))
+		if err := root.ExecuteContext(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		return out.String()
+	}
+
+	out := run("", "--remove")
+	if strings.Join(removed, ",") != "hatrack-agent.service,hatrack-server.service" {
+		t.Errorf("removed units %v", removed)
+	}
+	if !strings.Contains(out, "Your data stays") {
+		t.Errorf("output: %s", out)
+	}
+	for _, d := range dataDirs() {
+		if _, err := os.Stat(d); err != nil {
+			t.Fatalf("--remove deleted %s", d)
+		}
+	}
+
+	run("\n", "--remove", "--purge") // Enter means no
+	if _, err := os.Stat(defaultData()); err != nil {
+		t.Fatal("purge without a yes deleted the data")
+	}
+	run("y\n", "--remove", "--purge")
+	for _, d := range dataDirs() {
+		if _, err := os.Stat(d); err == nil {
+			t.Errorf("--purge kept %s", d)
+		}
+	}
+}
+
+func TestDesktopNotes(t *testing.T) {
+	t.Setenv("LANGUAGE", "en")
+	if n := desktopNotes("X-Cinnamon", "x11"); len(n) != 0 {
+		t.Errorf("Cinnamon on X11 needs no note: %v", n)
+	}
+	if n := desktopNotes("", ""); len(n) != 0 {
+		t.Errorf("an unknown desktop gets no note: %v", n)
+	}
+	if n := desktopNotes("ubuntu:GNOME", "wayland"); len(n) != 2 || !strings.Contains(n[0], "ubuntu:GNOME") {
+		t.Errorf("GNOME on Wayland: %v", n)
 	}
 }
