@@ -8,7 +8,7 @@ usable on its own:
 
 1. **Release artifacts:** tarball with `install.sh`, `.deb`, container image.
 2. **Updates:** `hat update`, self-restart after a new binary, version check.
-3. **Server in a container from `hat setup`.**
+3. **Server in a container:** `deploy/compose.yaml`, not a setup option.
 4. **README:** installation in a few lines, each with its reason.
 5. **Saying what works on which desktop.**
 
@@ -22,15 +22,11 @@ usable on its own:
   (`internal/cli/updatecmd.go`, `internal/release`); `hat setup --remove` and
   `--purge`; desktop notes in `hat setup`; `install.sh` (checked against an
   unpacked tarball without a terminal); README install section.
-- **Done, not run:** the release pipeline (`.goreleaser.yaml`,
-  `.github/workflows/release.yml`, `deploy/Dockerfile.release`,
-  `packaging/hatrack.desktop`). GoReleaser could not be downloaded in the
-  working session, so the configuration has only been parsed. The first real
-  test is a tag, e.g. `v0.6.0-rc1`, and must produce the file names that
-  `hat update` and `install.sh` expect.
-- **Open:** slice 3 (container option in `hat setup`, device tokens in the web
-  UI, moving data). Until then the README points to `deploy/compose.yaml` and
-  `hat setup --server`.
+- **Released as a pre-release:** `v0.6.0-rc1` (tarballs, `.deb`, image for
+  amd64 and arm64, checksums). The installer was checked against the real
+  files. The fix after it (pre-releases marked automatically, `:latest` only
+  for stable tags) is tested by the next tag.
+- **Not done on purpose:** a container option in `hat setup` (slice 3).
 
 ## 1. Release artifacts
 
@@ -78,24 +74,21 @@ the same version in every artifact and a `checksums.txt`:
   in `hat status`, the tray and the web UI with what to update. Needed
   because a container server is updated on its own (`compose pull`).
 
-## 3. Server in a container from `hat setup`
+## 3. Server in a container
 
-`hat setup` asks where the server runs. Today: here, or elsewhere. Then:
+`hat setup` keeps its two answers: the server runs here as a service
+(default), or elsewhere (address and token). A container is the "elsewhere":
+`deploy/compose.yaml` starts it, `docker compose exec hatrack /hat server
+device add <name>` prints a token, and `hat setup --server … --token …`
+connects. The README says so in four lines.
 
-1. **Here as a service** (default): as today.
-2. **Here in a container:** offered when `docker` or `podman` is found. Setup
-   writes `~/.config/hatrack/compose.yaml` (for Podman a Quadlet file, so
-   the container is a normal user service), starts it, waits for the server
-   and creates this computer's device token inside the container.
-3. **Elsewhere:** address and token, as today.
+Why no setup option: a third answer needs Docker/Podman detection, generated
+compose or Quadlet files and a token created inside the container. That is
+much code for a path few take, and it makes the one command that should stay
+short longer. Decision: [decisions.md](decisions.md) (2026-11-05).
 
-Also:
-
-- **Device tokens from the web UI** (Setup → Devices), so connecting a second
-  computer to a container server needs no `docker exec`.
-- **Moving the data** between a local and a container server: the data is one
-  directory (`~/.local/share/hatrack` or `/data`); `hat setup` offers to copy
-  it when the choice changes, and the README says how by hand.
+Possible later, and small: device tokens from the web UI (Setup → Devices), so
+the `docker compose exec` line is not needed.
 
 ## 4. README
 

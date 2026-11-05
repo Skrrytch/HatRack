@@ -6,6 +6,7 @@
 |---|---|
 | 2026-11-04 | Name **HatRack**; command `hat`, tray **HatTray**, server **HatRack Server**. |
 | 2026-11-05 | Release artifacts for end users: a `.tar.gz` per architecture (amd64, arm64) with an `install.sh` that installs into `~/.local/bin` without root, a `.deb`, and a container image of the server. All are built from one tag, with checksums. After installing, `hat setup` does the rest, as today. Agent and tray always run natively in the user's desktop session; only the server may run in a container. Not for now: rpm, AUR. Rejected: Flatpak and Snap (the sandbox blocks host gsettings, `gtk-launch`, user services and the tray), AppImage (no gain for a static binary). `scripts/update.sh` stays the developer path. Stated support: Cinnamon on X11; on other desktops the time log, `launch`, notifications and MQTT work, but the look does not change until they get backends. |
+| 2026-11-05 | `hat setup` stays as short as it is: it asks only where the server runs (here, or an address and token), no third answer for a container. The container server is the documented alternative (`deploy/compose.yaml`, then `hat setup --server`). Not planned: writing compose or Quadlet files from setup, moving data between a local and a container server (copy the data directory). Possible later and small: device tokens in the web UI, so no `docker compose exec` is needed. Done with MVP 6: `hat update`, self-restart of agent, server and tray after their binary was replaced, version check between agent and server in the hello. |
 | 2026-11-05 | When the user's session ends, the agent takes the hat off as "Stop" does (clock stops, neutral look returns). It acts on a stop signal only if `systemctl --user is-system-running` says `stopping`, so a restart for an update or `hat agent install` leaves the hat on. The event is sent at once, or queued if the server is down. The unit orders the agent after `dbus.socket` so the desktop is still reachable; units installed earlier need `hat agent install` again. Not covered: crash, power loss, lingering sessions. If the look does not come back on a real desktop, add the logind `PrepareForShutdown` signal with a delay lock. |
 | 2026-11-05 | The tray menu has no pause or resume; both are in the panel. The tray menu lists Einrichtung, Woche, Tag and Jetzt flat, in that order, above "Über HatRack". The tray does not know the browser's access: the Einrichtung link always shows, and the login page answers when no session exists. Access is per browser session (`auth.go`), not per device token. |
 | 2026-11-04 | Client/server split with an optional server; the core is a library so a standalone mode can follow without a rewrite. |
@@ -60,16 +61,6 @@
 | 2026-11-04 | Activities stay fixed categories; a free, optional **detail** names the work more precisely. The first detail of a running entry applies to all of it; a changed detail starts a new entry. Jira keys in details become links learned from issue URLs (as in Ruumble): only the URL shape counts, nothing is fetched, the oldest link per project wins, Setup can reset a project. |
 
 ## Open
-
-- **Updates outside `update.sh`:** `hat update` for tarball installs
-  (download, verify, swap, restart), and agent, server and tray restarting
-  themselves when their binary was replaced (needed after `apt upgrade`).
-  A version check between agent and server in the hello, since a container
-  server is updated separately.
-- **Server in a container from `hat setup`:** a third answer next to "here"
-  and "remote" that writes a compose file (or a Podman Quadlet) and creates
-  the device token. Also: device tokens from the web UI, and moving the data
-  between a local and a container server.
 
 - **Cinnamon `color_scheme`:** does Cinnamon evaluate a light/dark preference,
   or only the GTK theme? Test on the desktop early in MVP 1; if not, drop
