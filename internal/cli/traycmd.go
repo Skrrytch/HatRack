@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"hatrack/internal/i18n"
+	"hatrack/internal/reexec"
 	"hatrack/internal/tray"
 )
 
@@ -25,7 +27,7 @@ func (a *App) trayCmd() *cobra.Command {
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			tray.Version = Version
-			err := tray.Run(ctx, a.Socket)
+			err := reexec.Run(ctx, "tray", func(ctx context.Context) error { return tray.Run(ctx, a.Socket) })
 			if errors.Is(err, tray.ErrNoWatcher) {
 				return errors.New(i18n.T("err.no_watcher"))
 			}

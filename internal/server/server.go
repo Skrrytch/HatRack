@@ -23,6 +23,11 @@ import (
 // Version is reported to MCP clients; the command line sets it.
 var Version = "dev"
 
+// Protocol is the version of the API between agent and server. It changes
+// only when an agent and a server of different protocols cannot work
+// together; both send it in the hello, so a mismatch can be shown.
+const Protocol = 1
+
 type Server struct {
 	st  store.Store
 	reg *modules.Registry
@@ -424,6 +429,14 @@ func (s *Server) editConfig(ctx context.Context, dry bool, fn func(*core.Config)
 	return cfg, nil
 }
 
+// HelloResponse answers a device's hello.
+type HelloResponse struct {
+	Device     string    `json:"device"`
+	ServerTime time.Time `json:"server_time"`
+	Version    string    `json:"version"`
+	Protocol   int       `json:"protocol"`
+}
+
 func (s *Server) hello(w http.ResponseWriter, r *http.Request, dev store.Device) {
 	var in struct {
 		Capabilities json.RawMessage `json:"capabilities"`
@@ -439,7 +452,7 @@ func (s *Server) hello(w http.ResponseWriter, r *http.Request, dev store.Device)
 		serverError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"device": dev.Name, "server_time": s.Now().UTC()})
+	writeJSON(w, http.StatusOK, HelloResponse{Device: dev.Name, ServerTime: s.Now().UTC(), Version: Version, Protocol: Protocol})
 }
 
 func (s *Server) stream(w http.ResponseWriter, r *http.Request, dev store.Device) {

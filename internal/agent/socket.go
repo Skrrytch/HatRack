@@ -51,6 +51,11 @@ type StatusData struct {
 	Queued    int        `json:"queued"`
 	Rejected  int        `json:"rejected,omitempty"` // events the server refused, set aside
 	Changed   bool       `json:"changed"`            // false if the command was a no-op
+	// Version is the agent's, ServerVersion the server's; Mismatch is set when
+	// their protocols differ and one of them needs an update.
+	Version       string `json:"version,omitempty"`
+	ServerVersion string `json:"server_version,omitempty"`
+	Mismatch      bool   `json:"mismatch,omitempty"`
 }
 
 // HatInfo describes a hat for clients that show a menu.
@@ -228,7 +233,8 @@ func (a *Agent) snapshot() Snapshot {
 
 // status builds the answer for status and for changes. Caller holds a.mu.
 func (a *Agent) status(changed bool) Response {
-	d := StatusData{State: a.state, Connected: a.connected, Queued: a.db.QueueLen(), Changed: changed}
+	d := StatusData{State: a.state, Connected: a.connected, Queued: a.db.QueueLen(), Changed: changed,
+		Version: Version, ServerVersion: a.serverVersion, Mismatch: a.mismatch}
 	var kept []RejectedEvent
 	if found, _ := a.db.Get("rejected", &kept); found {
 		d.Rejected = len(kept)

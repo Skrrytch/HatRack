@@ -135,11 +135,13 @@ func (c *Client) Intervals(ctx context.Context, from, to time.Time) (server.Inte
 	return r, err
 }
 
-// Hello registers the device's capabilities.
-func (c *Client) Hello(ctx context.Context, caps any) error {
-	b, _ := json.Marshal(map[string]any{"capabilities": caps})
-	_, err := c.do(ctx, "POST", "/api/devices/hello", b, "application/json", nil)
-	return err
+// Hello registers the device's capabilities and tells the server which
+// version this agent is; the answer names the server's version.
+func (c *Client) Hello(ctx context.Context, caps any) (server.HelloResponse, error) {
+	b, _ := json.Marshal(map[string]any{"capabilities": caps, "version": Version, "protocol": server.Protocol})
+	var r server.HelloResponse
+	_, err := c.do(ctx, "POST", "/api/devices/hello", b, "application/json", &r)
+	return r, err
 }
 
 // Stream reads the SSE stream until it ends or ctx is cancelled.

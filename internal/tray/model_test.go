@@ -1,6 +1,7 @@
 package tray
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -40,13 +41,30 @@ func TestMenuWearing(t *testing.T) {
 	if find(m, "VENOM") != nil || find(m, "Private") != nil {
 		t.Fatal("the menu does not list hats")
 	}
-	if find(m, "Pause") == nil || find(m, "Resume") != nil {
-		t.Fatal("wearing: Pause, not Resume")
+	if find(m, "Pause") != nil || find(m, "Resume") != nil {
+		t.Fatal("wearing: no Pause or Resume, both live in the panel")
 	}
-	for _, l := range []string{"Open HatRack", "About HatRack", "Quit tray"} {
-		if find(m, l) == nil {
-			t.Fatalf("%s missing", l)
+	// the four pages sit flat in the menu, in this order, then About and Quit
+	var labels, links []string
+	for _, it := range m[2:] {
+		if it.Separator {
+			labels = append(labels, "|")
+			continue
 		}
+		labels = append(labels, it.Label)
+		if it.Action != nil && it.Action.Link != "" {
+			links = append(links, it.Action.Link)
+		}
+	}
+	if strings.Join(labels, ",") != "Setup,Week,Day,Now,|,About HatRack,|,Quit tray" {
+		t.Fatalf("menu order: %v", labels)
+	}
+	want := []string{"http://127.0.0.1:8421/setup", "http://127.0.0.1:8421/week", "http://127.0.0.1:8421/day", "http://127.0.0.1:8421/"}
+	if strings.Join(links, "|") != strings.Join(want, "|") {
+		t.Fatalf("links: %v", links)
+	}
+	if find(m, "Open HatRack") != nil {
+		t.Fatal("no Open HatRack submenu anymore")
 	}
 	if !find(m, "About HatRack").Action.About {
 		t.Fatal("about action")
@@ -56,8 +74,8 @@ func TestMenuWearing(t *testing.T) {
 func TestMenuPausedAndNone(t *testing.T) {
 	i18n.Set("en")
 	m := BuildMenu(snapshot(core.ModePaused, "venom", "review"), time.Now())
-	if r := find(m, "Resume"); r == nil || r.Action.Request.Cmd != "on" || r.Action.Request.Hat != "" {
-		t.Fatalf("resume: %+v", r)
+	if find(m, "Resume") != nil || find(m, "Pause") != nil {
+		t.Fatal("paused: no Resume or Pause in the menu, both live in the panel")
 	}
 	none := BuildMenu(snapshot(core.ModeNone, "", ""), time.Now())
 	if find(none, "Pause") != nil || find(none, "Resume") != nil {

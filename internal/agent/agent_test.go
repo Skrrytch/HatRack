@@ -537,3 +537,55 @@ func TestNeutralLookFollowsTheUser(t *testing.T) {
 	call(t, a, Request{Cmd: "off", Neutral: true})
 	eventually(t, "the user's own look comes back", func() bool { return value() == "mine" })
 }
+
+// TakeOff is what the agent does when the session ends: stop the clock, bring
+// the neutral look back and send the event before the process is gone.
+func TestTakeOffAtShutdown(t *testing.T) {
+	r := newRig(t)
+	r.importConfig()
+	a, look := r.agent("laptop")
+	r.start(a)
+	eventually(t, "connection", func() bool { a.mu.Lock(); defer a.mu.Unlock(); return a.connected && len(a.config.Hats) == 3 })
+
+	// without a hat there is nothing to do
+	if err := a.TakeOff(context.Background()); err != nil {
+		t.Fatalf("no hat: %v", err)
+	}
+	call(t, a, Request{Cmd: "on", Hat: "ve", HasActivity: true, Activity: "rev"})
+	if v, _ := look.snapshotLog(); v != "purple" {
+		t.Fatalf("look before: %s", v)
+	}
+	if err := a.TakeOff(context.Background()); err != nil {
+		t.Fatalf("take off: %v", err)
+	}
+	if v, _ := look.snapshotLog(); v != "neutral" {
+		t.Fatalf("neutral look not restored: %s", v)
+	}
+	if a.db.QueueLen() != 0 {
+		t.Fatalf("the event was not sent, %d queued", a.db.QueueLen())
+	}
+	st, _ := r.st.CurrentState(context.Background())
+	if st.Mode != core.ModePaused || !st.Neutral {
+		t.Fatalf("server state: %+v", st)
+	}
+	// a second call changes nothing
+	if err := a.TakeOff(context.Background()); err != nil {
+		t.Fatalf("again: %v", err)
+	}
+}
+
+func TestNoteServerVersion(t *testing.T) {
+	a := &Agent{}
+	a.noteServer(server.HelloResponse{Version: "0.5.0"}) // older server: no protocol
+	if a.mismatch || a.serverVersion != "0.5.0" {
+		t.Fatalf("server without protocol: mismatch=%v version=%q", a.mismatch, a.serverVersion)
+	}
+	a.noteServer(server.HelloResponse{Version: "9.0.0", Protocol: server.Protocol + 1})
+	if !a.mismatch {
+		t.Fatal("a different protocol must be reported")
+	}
+	a.noteServer(server.HelloResponse{Version: "0.6.0", Protocol: server.Protocol})
+	if a.mismatch {
+		t.Fatal("the same protocol fits")
+	}
+}

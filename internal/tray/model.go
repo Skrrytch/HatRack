@@ -4,6 +4,7 @@
 package tray
 
 import (
+	"strings"
 	"time"
 
 	"hatrack/internal/agent"
@@ -51,7 +52,6 @@ func req(r agent.Request) *Action { return &Action{Request: &r} }
 
 // BuildMenu turns a snapshot into the menu.
 func BuildMenu(s agent.Snapshot, now time.Time) []Item {
-	st := s.Status.State
 	menu := []Item{
 		{Label: agent.StatusLine(s.Status, now), Disabled: true},
 		{Separator: true},
@@ -59,14 +59,14 @@ func BuildMenu(s agent.Snapshot, now time.Time) []Item {
 	if !s.Status.Connected {
 		menu = append(menu[:1:1], Item{Label: i18n.T("tray.offline"), Disabled: true}, Item{Separator: true})
 	}
-	switch st.Mode {
-	case core.ModeWearing:
-		menu = append(menu, Item{Label: i18n.T("ui.pause"), Action: req(agent.Request{Cmd: "off"})})
-	case core.ModePaused:
-		menu = append(menu, Item{Label: i18n.T("ui.resume"), Action: req(agent.Request{Cmd: "on"})})
-	}
 	if s.Server != "" {
-		menu = append(menu, Item{Label: i18n.T("tray.open"), Action: &Action{Open: true}})
+		base := strings.TrimSuffix(s.Server, "/")
+		menu = append(menu,
+			Item{Label: i18n.T("web.nav.setup"), Action: &Action{Link: base + "/setup"}},
+			Item{Label: i18n.T("ui.nav.week"), Action: &Action{Link: base + "/week"}},
+			Item{Label: i18n.T("ui.nav.day"), Action: &Action{Link: base + "/day"}},
+			Item{Label: i18n.T("ui.nav.now"), Action: &Action{Link: base + "/"}},
+			Item{Separator: true})
 	}
 	menu = append(menu, Item{Label: i18n.T("tray.about"), Action: &Action{About: true}},
 		Item{Separator: true}, Item{Label: i18n.T("tray.quit"), Action: &Action{Quit: true}})

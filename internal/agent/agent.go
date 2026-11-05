@@ -17,6 +17,9 @@ import (
 )
 
 // Agent applies hats on this device and keeps the log in sync.
+// Version is this agent's version, sent to the server; the command line sets it.
+var Version = "dev"
+
 type Agent struct {
 	cfg    Config
 	db     *DB
@@ -32,7 +35,10 @@ type Agent struct {
 	applied   string // hat key whose look is applied, "" for neutral
 	connected bool
 	authFail  bool
-	neutral   map[string]json.RawMessage // module id -> neutral snapshot
+	// the server's version from the hello, and whether its protocol differs
+	serverVersion string
+	mismatch      bool
+	neutral       map[string]json.RawMessage // module id -> neutral snapshot
 	// minRev is the server's event revision after our last sent events; a
 	// state with a lower revision was sent before they arrived and is stale.
 	minRev int64
@@ -175,8 +181,10 @@ func (a *Agent) onConnect(ctx context.Context) {
 	a.authFail = false
 	a.mu.Unlock()
 	caps := a.host.Capabilities(ctx)
-	if err := a.client.Hello(ctx, caps); err != nil {
+	if hr, err := a.client.Hello(ctx, caps); err != nil {
 		log.Printf("hello: %v", err)
+	} else {
+		a.noteServer(hr)
 	}
 	a.refreshConfig(ctx)
 	a.kickFlush()
@@ -192,10 +200,23 @@ func (a *Agent) onConnect(ctx context.Context) {
 			cp.Choices = c
 			caps[id] = cp
 		}
-		if err := a.client.Hello(ctx, caps); err != nil && ctx.Err() == nil {
+		if _, err := a.client.Hello(ctx, caps); err != nil && ctx.Err() == nil {
 			log.Printf("hello with choices: %v", err)
 		}
 	}()
+}
+
+// noteServer remembers the server's version. A server older than the
+// version check sends no protocol; it is taken as compatible.
+func (a *Agent) noteServer(hr server.HelloResponse) {
+	mismatch := hr.Protocol != 0 && hr.Protocol != server.Protocol
+	a.mu.Lock()
+	a.serverVersion, a.mismatch = hr.Version, mismatch
+	a.mu.Unlock()
+	if mismatch {
+		log.Printf("agent %s (protocol %d) and server %s (protocol %d) do not fit together",
+			Version, server.Protocol, hr.Version, hr.Protocol)
+	}
 }
 
 func (a *Agent) refreshConfig(ctx context.Context) {
@@ -489,6 +510,23 @@ func (a *Agent) report(ctx context.Context, fails []modules.Failure) {
 	if len(fails) > 0 {
 		a.kickFlush()
 	}
+}
+
+// TakeOff takes the hat off for good, as the panel's Stop does: the clock
+// stops and the neutral look comes back. It is meant for the shutdown of the
+// session, so it then tries to send the event; if the server cannot be
+// reached it stays queued for the next start. Nothing to do without a hat.
+func (a *Agent) TakeOff(ctx context.Context) error {
+	a.mu.Lock()
+	none := a.state.Mode == core.ModeNone
+	a.mu.Unlock()
+	if none {
+		return nil
+	}
+	if r := a.Handle(ctx, Request{Cmd: "off", Neutral: true}); r.Error != "" {
+		return errors.New(r.Error)
+	}
+	return a.flush(ctx)
 }
 
 // RestoreAll gives the neutral look back to every module, for example when

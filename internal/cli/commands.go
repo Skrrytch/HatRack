@@ -44,6 +44,9 @@ func (a *App) printStatus(resp agent.Response, afterChange bool) {
 	if !d.Connected {
 		fmt.Fprintln(a.Err, i18n.T("cli.offline", d.Queued))
 	}
+	if d.Mismatch {
+		fmt.Fprintln(a.Err, i18n.T("cli.mismatch", d.Version, d.ServerVersion))
+	}
 	if d.Rejected > 0 && !afterChange {
 		fmt.Fprintln(a.Err, i18n.T("cli.rejected", d.Rejected))
 	}

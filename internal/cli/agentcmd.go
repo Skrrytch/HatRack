@@ -9,13 +9,16 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"hatrack/internal/agent"
 	"hatrack/internal/i18n"
 	"hatrack/internal/modules"
+	"hatrack/internal/reexec"
 )
 
 const unitName = "hatrack-agent.service"
@@ -37,6 +40,9 @@ func unitText(desc, exe string, args ...string) string {
 	}
 	return fmt.Sprintf(`[Unit]
 Description=%s
+# stopped before the session bus, so the desktop can still be reached when
+# the agent takes the hat off at shutdown
+After=dbus.socket
 
 [Service]
 ExecStart=%s
@@ -124,7 +130,7 @@ func (a *App) agentCmd() *cobra.Command {
 
 	run := &cobra.Command{
 		Use: "run", Short: i18n.T("cli.run.short"), Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error { return a.runAgent(cmd.Context()) },
+		RunE: func(cmd *cobra.Command, _ []string) error { return reexec.Run(cmd.Context(), "agent", a.runAgent) },
 	}
 
 	install := &cobra.Command{
@@ -183,6 +189,7 @@ func (a *App) newAgent() (*agent.Agent, *agent.DB, error) {
 }
 
 func (a *App) runAgent(parent context.Context) error {
+	agent.Version = Version
 	ag, db, err := a.newAgent()
 	if err != nil {
 		return err
@@ -194,12 +201,32 @@ func (a *App) runAgent(parent context.Context) error {
 	go func() { errc <- ag.Serve(ctx, a.Socket) }()
 	go ag.Run(ctx)
 	log.Printf("hatrack agent started (socket %s)", a.Socket)
+	var runErr error
 	select {
-	case err := <-errc:
-		return err
+	case runErr = <-errc:
 	case <-ctx.Done():
-		return nil
 	}
+	// A stop signal during the shutdown of the user's session takes the hat
+	// off. A plain restart (update, `hat agent install`) must not.
+	if ctx.Err() != nil && sessionEnding() {
+		tctx, cancel := context.WithTimeout(context.Background(), shutdownGrace)
+		defer cancel()
+		if err := ag.TakeOff(tctx); err != nil {
+			log.Printf("taking the hat off at shutdown: %v", err)
+		}
+	}
+	return runErr
+}
+
+// shutdownGrace is how long the agent may take to take the hat off while the
+// session ends.
+const shutdownGrace = 8 * time.Second
+
+// sessionEnding reports whether the user's systemd instance is shutting
+// down (shutdown, reboot or the last logout). Tests replace it.
+var sessionEnding = func() bool {
+	out, _ := exec.Command("systemctl", "--user", "is-system-running").Output()
+	return strings.TrimSpace(string(out)) == "stopping"
 }
 
 func (a *App) restoreNeutral(ctx context.Context) error {

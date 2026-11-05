@@ -112,7 +112,7 @@ func TestWrongArgumentsShowUsage(t *testing.T) {
 
 func TestUnitAndAutostartText(t *testing.T) {
 	u := unitText("HatRack agent", "/home/u/.local/bin/hat", "agent", "run")
-	for _, want := range []string{"Description=HatRack agent", `ExecStart="/home/u/.local/bin/hat" agent run`, "WantedBy=default.target", "Restart=on-failure"} {
+	for _, want := range []string{"Description=HatRack agent", `ExecStart="/home/u/.local/bin/hat" agent run`, "WantedBy=default.target", "Restart=on-failure", "After=dbus.socket"} {
 		if !strings.Contains(u, want) {
 			t.Errorf("unit lacks %q:\n%s", want, u)
 		}

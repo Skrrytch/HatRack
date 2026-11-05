@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -271,8 +272,12 @@ func TestSetupChoicesFromDevices(t *testing.T) {
 	e, b := setupBrowser(t)
 	caps := `{"capabilities":{"color_scheme":{"backend":"cinnamon","available":true,"choices":{"theme":[{"value":"Mint-Y-Dark"},{"value":"Adwaita"}]}},
 	  "wallpaper":{"backend":"cinnamon","available":true,"choices":{"image":[{"value":"/pics/a.jpg","label":"a.jpg","thumb":"data:image/jpeg;base64,AAAA"}]}}}}`
-	if r, _ := e.do("POST", "/api/devices/hello", caps); r.StatusCode != 200 {
+	r, body := e.do("POST", "/api/devices/hello", caps)
+	if r.StatusCode != 200 {
 		t.Fatalf("hello: %d", r.StatusCode)
+	}
+	if !strings.Contains(body, fmt.Sprintf(`"protocol":%d`, Protocol)) {
+		t.Errorf("hello answer lacks the protocol: %s", body)
 	}
 	_, out := b.do("GET", "/setup/hat?key=venom", nil)
 	for _, want := range []string{`list="f-color_scheme-theme-list"`, `<option value="Mint-Y-Dark">`, `class="gallery"`,
@@ -282,7 +287,7 @@ func TestSetupChoicesFromDevices(t *testing.T) {
 		}
 	}
 	// the picked path arrives through the text field; the radio is ignored
-	r, _ := b.do("POST", "/setup/hat", hatForm(map[string]string{"m/wallpaper/image": "/pics/a.jpg", "pick/m/wallpaper/image": "/pics/a.jpg"}))
+	r, _ = b.do("POST", "/setup/hat", hatForm(map[string]string{"m/wallpaper/image": "/pics/a.jpg", "pick/m/wallpaper/image": "/pics/a.jpg"}))
 	if r.StatusCode != 303 {
 		t.Fatalf("save: %d", r.StatusCode)
 	}

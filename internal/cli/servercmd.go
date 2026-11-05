@@ -19,6 +19,7 @@ import (
 
 	"hatrack/internal/i18n"
 	"hatrack/internal/modules"
+	"hatrack/internal/reexec"
 	"hatrack/internal/server"
 	"hatrack/internal/store"
 )
@@ -54,48 +55,60 @@ func (a *App) serverCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use: "server", Short: i18n.T("cli.server.short"), Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			st, err := openStore(data)
-			if err != nil {
-				return err
-			}
-			defer st.Close()
-			server.Version = Version
-			web := server.New(st, modules.Builtin(nil))
-			if tz != "" {
-				loc, err := time.LoadLocation(tz)
-				if err != nil {
-					return err
-				}
-				web.Loc = loc
-			}
-			srv := &http.Server{Addr: listen, Handler: web.Handler(), ReadHeaderTimeout: 10 * time.Second}
-			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
-			defer stop()
-			web.Start(ctx)
-			defer web.Close()
-			go func() {
-				<-ctx.Done()
-				sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				srv.Shutdown(sctx)
-			}()
-			log.Printf("hatrack server listening on http://%s (data: %s)", listen, data)
-			if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				return err
-			}
-			return nil
+			return reexec.Run(cmd.Context(), "server", func(ctx context.Context) error {
+				return a.runServer(ctx, listen, data, tz)
+			})
 		},
 	}
 	c.PersistentFlags().StringVar(&data, "data", defaultData(), i18n.T("cli.server.data"))
 	c.Flags().StringVar(&tz, "timezone", os.Getenv("HATRACK_TZ"), i18n.T("cli.server.tz"))
 	c.Flags().StringVar(&listen, "listen", defaultListen(), i18n.T("cli.server.listen"))
+	return a.serverSubcommands(c, &data)
+}
 
+// runServer runs the HatRack Server until ctx ends or a stop signal comes.
+func (a *App) runServer(parent context.Context, listen, data, tz string) error {
+	st, err := openStore(data)
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	server.Version = Version
+	web := server.New(st, modules.Builtin(nil))
+	if tz != "" {
+		loc, err := time.LoadLocation(tz)
+		if err != nil {
+			return err
+		}
+		web.Loc = loc
+	}
+	srv := &http.Server{Addr: listen, Handler: web.Handler(), ReadHeaderTimeout: 10 * time.Second}
+	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	web.Start(ctx)
+	defer web.Close()
+	go func() {
+		<-ctx.Done()
+		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		srv.Shutdown(sctx)
+	}()
+	log.Printf("hatrack server listening on http://%s (data: %s)", listen, data)
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
+}
+
+// serverSubcommands adds the device and password commands, which work on the
+// server's data directory directly.
+func (a *App) serverSubcommands(c *cobra.Command, dataFlag *string) *cobra.Command {
 	device := &cobra.Command{Use: "device", Short: i18n.T("cli.device.short")}
 	var canConfig bool
 	add := &cobra.Command{
 		Use: "add <name>", Short: i18n.T("cli.device.add"), Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			st, err := openStore(data)
+			st, err := openStore(*dataFlag)
 			if err != nil {
 				return err
 			}
@@ -118,7 +131,7 @@ func (a *App) serverCmd() *cobra.Command {
 	list := &cobra.Command{
 		Use: "list", Short: i18n.T("cli.device.list"), Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			st, err := openStore(data)
+			st, err := openStore(*dataFlag)
 			if err != nil {
 				return err
 			}
@@ -146,7 +159,7 @@ func (a *App) serverCmd() *cobra.Command {
 	backup := &cobra.Command{
 		Use: "backup <file>", Short: i18n.T("cli.backup.short"), Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			st, err := openStore(data)
+			st, err := openStore(*dataFlag)
 			if err != nil {
 				return err
 			}
@@ -166,7 +179,7 @@ func (a *App) serverCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := a.storePasswordIn(cmd.Context(), data, pw); err != nil {
+			if err := a.storePasswordIn(cmd.Context(), *dataFlag, pw); err != nil {
 				return err
 			}
 			fmt.Fprintln(a.Err, i18n.T("cli.password.done"))
