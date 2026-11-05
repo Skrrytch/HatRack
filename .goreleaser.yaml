@@ -91,3 +91,6 @@ release:
   github:
     owner: Skrrytch
     name: HatRack
+  # the README installs with this file, so it is a release asset of its own
+  extra_files:
+    - glob: scripts/install.sh
