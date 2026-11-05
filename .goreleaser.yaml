@@ -83,12 +83,11 @@ docker_manifests:
     image_templates:
       - "ghcr.io/skrrytch/hatrack:{{ .Version }}-amd64"
       - "ghcr.io/skrrytch/hatrack:{{ .Version }}-arm64"
-  - name_template: "ghcr.io/skrrytch/hatrack:latest"
-    image_templates:
-      - "ghcr.io/skrrytch/hatrack:{{ .Version }}-amd64"
-      - "ghcr.io/skrrytch/hatrack:{{ .Version }}-arm64"
 
+# Pre-releases (tags with "-", such as v0.6.0-rc1) are marked as such on GitHub
+# and do not move :latest; the workflow tags :latest for stable versions only.
 release:
+  prerelease: auto
   github:
     owner: Skrrytch
     name: HatRack

@@ -32,3 +32,8 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: tag latest (stable versions only)
+        if: ${{ !contains(github.ref_name, '-') }}
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          docker buildx imagetools create -t ghcr.io/skrrytch/hatrack:latest "ghcr.io/skrrytch/hatrack:$v"
