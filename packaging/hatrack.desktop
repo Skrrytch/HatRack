@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=HatRack
+Comment=Switch hats: look, apps and time log
+Exec=/usr/bin/hat tray show
+Icon=hatrack
+Terminal=false
+Categories=Utility;

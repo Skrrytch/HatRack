@@ -1,0 +1,18 @@
+# HatRack Server as a container. Start it with `docker compose up -d`.
+# Only this computer can reach it (127.0.0.1); other computers need a reverse
+# proxy with TLS in front, as a token travels with every request.
+# Secrets (the MQTT password, see docs/mvp-5.md) go into .env next to this file.
+services:
+  hatrack:
+    image: ghcr.io/skrrytch/hatrack:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8421:8421"
+    volumes:
+      - hatrack-data:/data
+    env_file:
+      - path: .env
+        required: false
+
+volumes:
+  hatrack-data:

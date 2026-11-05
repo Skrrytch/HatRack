@@ -1,0 +1,15 @@
+# Server image built by GoReleaser: the binary is already compiled and
+# placed in the build context (see .goreleaser.yaml). Local builds use
+# deploy/Dockerfile instead.
+FROM busybox:stable AS base
+RUN mkdir /data && chown 65532:65532 /data
+
+FROM scratch
+COPY hat /hat
+COPY --from=base --chown=65532:65532 /data /data
+USER 65532:65532
+ENV HATRACK_DATA=/data HATRACK_LISTEN=0.0.0.0:8421
+EXPOSE 8421
+VOLUME /data
+ENTRYPOINT ["/hat"]
+CMD ["server"]

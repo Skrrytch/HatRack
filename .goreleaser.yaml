@@ -1,0 +1,94 @@
+# Release build: `goreleaser release --clean` from a tag, normally run by
+# .github/workflows/release.yml. Produces the tarballs, the .deb packages,
+# checksums.txt and the server image (see deploy/Dockerfile).
+version: 2
+project_name: hatrack
+
+before:
+  hooks:
+    - go vet ./...
+    - go test ./...
+
+builds:
+  - id: hat
+    main: ./cmd/hat
+    binary: hat
+    env: [CGO_ENABLED=0]
+    goos: [linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - "-s -w -X hatrack/internal/cli.Version={{.Version}}"
+
+archives:
+  - id: tarball
+    ids: [hat]
+    name_template: "hatrack_linux_{{ .Arch }}"
+    formats: [tar.gz]
+    files:
+      - README.md
+      - LICENSE
+      - scripts/install.sh
+
+nfpms:
+  - id: deb
+    ids: [hat]
+    package_name: hatrack
+    file_name_template: "hatrack_{{ .Arch }}"
+    formats: [deb]
+    maintainer: Bert Speckels <skrrytch@speckels.net>
+    description: "Switch between work contexts (hats): look, apps and time log."
+    homepage: https://github.com/Skrrytch/HatRack
+    license: MIT
+    section: utils
+    priority: optional
+    contents:
+      - src: packaging/hatrack.desktop
+        dst: /usr/share/applications/hatrack.desktop
+      - src: internal/server/static/hatrack.svg
+        dst: /usr/share/icons/hicolor/scalable/apps/hatrack.svg
+      - src: README.md
+        dst: /usr/share/doc/hatrack/README.md
+      - src: LICENSE
+        dst: /usr/share/doc/hatrack/LICENSE
+    recommends:
+      - libglib2.0-bin
+      - xdg-utils
+    suggests:
+      - gnome-shell-extension-appindicator
+
+checksum:
+  name_template: checksums.txt
+
+dockers:
+  - id: server-amd64
+    ids: [hat]
+    goos: linux
+    goarch: amd64
+    dockerfile: deploy/Dockerfile.release
+    image_templates:
+      - "ghcr.io/skrrytch/hatrack:{{ .Version }}-amd64"
+    build_flag_templates: ["--platform=linux/amd64"]
+  - id: server-arm64
+    ids: [hat]
+    goos: linux
+    goarch: arm64
+    dockerfile: deploy/Dockerfile.release
+    image_templates:
+      - "ghcr.io/skrrytch/hatrack:{{ .Version }}-arm64"
+    build_flag_templates: ["--platform=linux/arm64"]
+
+docker_manifests:
+  - name_template: "ghcr.io/skrrytch/hatrack:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/skrrytch/hatrack:{{ .Version }}-amd64"
+      - "ghcr.io/skrrytch/hatrack:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/skrrytch/hatrack:latest"
+    image_templates:
+      - "ghcr.io/skrrytch/hatrack:{{ .Version }}-amd64"
+      - "ghcr.io/skrrytch/hatrack:{{ .Version }}-arm64"
+
+release:
+  github:
+    owner: Skrrytch
+    name: HatRack
