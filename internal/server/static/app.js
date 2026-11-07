@@ -40,6 +40,17 @@
     if (area) area.value = (area.value.replace(/\s+$/, "") + "\n" + t.value).replace(/^\n/, "");
     t.value = "";
   });
+  // "recently seen" apps: a chip appends its app to the ignore list
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-add]");
+    if (!b) return;
+    var area = document.getElementById("obs-ignore");
+    if (!area) return;
+    var app = b.dataset.add;
+    var lines = area.value.split("\n").map(function (l) { return l.trim().toLowerCase(); });
+    if (lines.indexOf(app.toLowerCase()) < 0) area.value = (area.value.replace(/\s+$/, "") + "\n" + app).replace(/^\n/, "");
+    b.remove();
+  });
   // picking a wallpaper from the gallery fills in its path
   document.addEventListener("change", function (e) {
     var t = e.target;

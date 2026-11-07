@@ -276,3 +276,24 @@ code { font-family: var(--mono); font-size: .9em; word-break: break-all; }
   .daybar .ico { display: none; }
   .namerow .colorpick { flex-basis: 100%; }
 }
+
+/* ---- detection (sensors) ---- */
+.sensors { margin-top: .9rem; }
+.sensors h3 { font-size: .95rem; margin: .2rem 0 .3rem; }
+.sensors table td { vertical-align: middle; }
+.sw { appearance: none; width: 2.2rem; height: 1.25rem; border-radius: 1rem; background: var(--line); position: relative; cursor: pointer; vertical-align: middle; margin: 0; }
+.sw::after { content: ""; position: absolute; top: .15rem; left: .15rem; width: .95rem; height: .95rem; border-radius: 50%; background: #fff; transition: .15s; }
+.sw:checked { background: #3a3; }
+.sw:checked::after { left: 1.1rem; }
+.sw:disabled { opacity: .4; cursor: default; }
+.sw:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 2px; }
+.privacy .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: .6rem 0; }
+.privacy label { display: block; font-size: .9rem; }
+.privacy textarea { height: 6.2rem; margin-top: .25rem; }
+.chips { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; margin-top: .3rem; }
+.chip { font-size: .78rem; border: 1px solid var(--line); border-radius: 1rem; padding: 0 .5rem; background: var(--bg); }
+.ret { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; margin: .4rem 0 .8rem; }
+.ret label { display: inline; }
+.ret input { width: 4.5rem; }
+.note { font-size: .85rem; color: var(--dim); border-left: 3px solid #3a3; padding-left: .6rem; margin: .4rem 0; }
+@media (max-width: 40rem) { .privacy .grid { grid-template-columns: 1fr; } }

@@ -89,6 +89,7 @@ type moduleForm struct {
 type hatEdit struct {
 	Key, Name, Color string
 	Work             bool // counts as working time
+	Observe          bool // observations are recorded under this hat
 	Resume           []option
 	Activities       []actRow
 	Archived         []string
@@ -728,7 +729,7 @@ func (s *Server) fillHat(v *view, cfg core.Config, h core.Hat) {
 	if color == "" {
 		color = pal.color(h.Key)
 	}
-	v.Hat = hatEdit{Key: h.Key, Name: h.Name, Color: color, Work: h.CountsAsWork(),
+	v.Hat = hatEdit{Key: h.Key, Name: h.Name, Color: color, Work: h.CountsAsWork(), Observe: h.Observes(),
 		Resume:   resumeOptions(v.Lang, h.ResumeActivity, false, cfg.Defaults.ResumeActivity),
 		Archived: h.ArchivedActivity,
 		Modules:  s.moduleForms(v.Lang, h.Modules, cfg.Modules, true, s.deviceChoices(context.Background()))}
@@ -757,6 +758,12 @@ func (s *Server) hatSave(w http.ResponseWriter, r *http.Request, acc access) {
 			h.WorkTime = &no
 		} else {
 			h.WorkTime = nil // the default
+		}
+		if r.PostFormValue("observe") == "" {
+			no := false
+			h.Observe = &no
+		} else {
+			h.Observe = nil // the default
 		}
 		h.ResumeActivity = r.PostFormValue("resume")
 		// activities as typed; an emptied field keeps its old name

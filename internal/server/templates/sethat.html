@@ -18,6 +18,7 @@
         <span class="row">{{template "swatches" (dict "Lang" $.Lang "Color" .Color)}}<input type="color" name="color" value="{{.Color}}" title="{{t $.Lang "web.setup.own_color"}}" aria-label="{{t $.Lang "web.setup.own_color"}}"></span></div>
     </div>
     <label class="inline"><input type="checkbox" name="work" value="1"{{if .Work}} checked{{end}}> {{t $.Lang "web.setup.work"}}</label>
+    <label class="inline"><input type="checkbox" name="observe" value="1"{{if .Observe}} checked{{end}}> {{t $.Lang "web.hat.observe"}} <span class="dim">{{t $.Lang "web.hat.observe_hint"}}</span></label>
     {{template "resumeradios" (dict "Lang" $.Lang "Opts" .Resume)}}
   </div>
 
