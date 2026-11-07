@@ -1,0 +1,50 @@
+{{define "content"}}
+{{with .Detection}}
+<nav class="crumbs"><a href="/setup">{{template "icon" "back"}} {{t $.Lang "web.nav.setup"}}</a> <span class="dim">/</span> <span>{{t $.Lang "web.sensor.title"}}</span></nav>
+<h1>{{t $.Lang "web.sensor.title"}}</h1>
+<p class="lead">{{t $.Lang "web.detection.lead"}}</p>
+<nav class="subtabs">{{range .Tabs}}<a href="/setup/detection?tab={{.ID}}"{{if .On}} class="on" aria-current="page"{{end}}>{{.Title}}</a>{{end}}</nav>
+
+{{if eq .Tab "sensors"}}
+<form method="post" action="/setup/detection?tab=sensors" class="card">
+  <input type="hidden" name="op" value="sensors">
+  <input type="hidden" name="devices" value="{{.DeviceIDs}}">
+  <input type="hidden" name="sensors" value="{{.SensorIDs}}">
+  <table class="matrix">
+    <tr><th>{{t $.Lang "web.detection.tab_sensors"}}</th>{{range .Devices}}<th>{{.Name}} <span class="dim small">{{if .Online}}{{t $.Lang "web.online"}}{{else}}{{t $.Lang "web.offline"}}{{end}}</span></th>{{end}}</tr>
+    {{range .Rows}}{{$id := .ID}}
+    <tr><td><strong>{{.Title}}</strong>{{if .Sub}}<span class="st">{{.Sub}}</span>{{end}}</td>
+      {{range .Cells}}<td class="cell"><input type="checkbox" class="sw" name="on.{{.Device}}.{{$id}}" value="1"{{if .On}} checked{{end}}{{if .Disabled}} disabled{{end}} aria-label="{{.Device}} {{$id}}">
+        {{if not .Reported}}<span class="dim">{{t $.Lang "web.detection.unknown"}}</span>
+        {{else if .OK}}<span class="okmark">✓</span> {{.Backend}}{{if .Reason}}<span class="st">{{.Reason}}</span>{{else if .Today}}<span class="st">{{.Today}}</span>{{end}}
+        {{else}}<span class="dim">{{t $.Lang "web.sensor.unavailable"}}</span>{{if .Reason}}<span class="st">{{.Reason}}</span>{{end}}{{end}}</td>{{end}}
+    </tr>
+    {{end}}
+  </table>
+  <p class="dim small row" style="margin:.6rem 0 0">{{t $.Lang "web.detection.matrix_hint"}} <button class="small">{{t $.Lang "web.setup.save"}}</button></p>
+</form>
+{{end}}
+
+{{if eq .Tab "privacy"}}
+{{with .Observe}}
+<form method="post" action="/setup/detection?tab=privacy" class="card privacy">
+  <input type="hidden" name="op" value="observe">
+  <p class="note">{{t $.Lang "web.observe.note"}}</p>
+  <div class="grid">
+    <div>
+      <label for="obs-ignore">{{t $.Lang "web.observe.ignore"}} <span class="dim small">{{t $.Lang "web.observe.ignore_hint"}}</span></label>
+      <textarea id="obs-ignore" name="ignore">{{.Ignore}}</textarea>
+      {{if .Recent}}<span class="chips"><span class="dim small">{{t $.Lang "web.observe.recent"}}</span>{{range .Recent}}<button type="button" class="chip" data-add="{{.}}">+ {{.}}</button>{{end}}</span>{{end}}
+    </div>
+    <div>
+      <label for="obs-redact">{{t $.Lang "web.observe.redact"}} <span class="dim small">{{t $.Lang "web.observe.redact_hint"}}</span></label>
+      <textarea id="obs-redact" name="redact">{{.Redact}}</textarea>
+    </div>
+  </div>
+  <div class="ret"><label for="obs-ret">{{t $.Lang "web.observe.retention"}}</label><input type="number" id="obs-ret" name="retention" min="1" max="365" value="{{.Retention}}"><span>{{t $.Lang "web.observe.days"}}</span><span class="dim small">{{t $.Lang "web.observe.retention_hint"}}</span></div>
+  <button class="primary">{{t $.Lang "web.setup.save"}}</button>
+</form>
+{{end}}
+{{end}}
+{{end}}
+{{end}}

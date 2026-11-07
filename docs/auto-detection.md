@@ -263,9 +263,20 @@ Following the three layers (default → hat → device):
 | device | sensors on or off (`window`, `media`, `notify`; `idle` on by default), in `observe.devices` |
 | all devices | `observe.ignore` and `observe.redact` app lists, `observe.retention_days` (default 28) |
 
-Setup gets a page "Erkennung" per device and a rule list on each hat's page
-with a **rule test**: the last day's spans, which rule each one matches, and
-what a new rule would match before it is saved.
+Setup gets its own page **"Erkennung"** with tabs, so the settings do not
+pile up on other pages; each later ticket adds a tab instead of a block:
+
+| Tab | From | Holds |
+|---|---|---|
+| Sensoren | #6 | one table, sensors × devices: switch, backend, today's numbers |
+| Datenschutz | #6 | `ignore` and `redact` lists, retention |
+| Abwesenheit | #2 | `idle.*` thresholds, the return question |
+| Rückfragen | #3 | `prompt.*`, end of day |
+| Regeln | #8 | all rules at a glance and the **rule test**: the last day's spans, which rule each one matches, and what a new rule would match before it is saved |
+
+The setup overview shows one summary line for it; the Devices page one line
+per device. The rules themselves stay on the hat's page (a folded section like
+the module settings), next to the hat's `observe` checkbox.
 
 ## Stages
 

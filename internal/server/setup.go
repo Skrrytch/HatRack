@@ -42,6 +42,7 @@ type setupView struct {
 	NextColor string // a colour no hat uses yet, for the next new hat
 	Tickets   []ticketLink
 	Devices   []deviceRow
+	Detection string // one-line summary of the detection settings
 	Import    importView
 }
 
@@ -622,6 +623,7 @@ func (s *Server) fillSetup(v *view, cfg core.Config) {
 		sort.Slice(v.Setup.Tickets, func(i, j int) bool { return v.Setup.Tickets[i].Project < v.Setup.Tickets[j].Project })
 	}
 	if devs, err := s.st.Devices(context.Background()); err == nil {
+		v.Setup.Detection = detectionOverview(v.Lang, cfg.Observe, devs)
 		loc := s.Loc
 		for _, d := range devs {
 			row := deviceRow{Name: d.Name}

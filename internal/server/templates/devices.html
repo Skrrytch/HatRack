@@ -35,17 +35,7 @@
       {{range .Modules}}<tr><td>{{.Title}}</td><td>{{if .OK}}<span class="okmark">✓</span> {{.Backend}}{{else}}<span class="dim">{{t $.Lang "web.dev.unavailable"}}</span>{{end}}</td><td class="dim small">{{.Choices}}</td></tr>{{end}}
     </table>
     {{else}}<p class="dim small">{{t $.Lang "web.dev.nocaps"}}</p>{{end}}
-    {{if .Sensors}}
-    <form method="post" action="/setup/devices" class="sensors">
-      <input type="hidden" name="op" value="sensors"><input type="hidden" name="id" value="{{.ID}}">
-      <input type="hidden" name="sensors" value="{{.SensorIDs}}">
-      <h3>{{t $.Lang "web.sensor.title"}}</h3>
-      <table class="mods">
-        {{range .Sensors}}<tr><td><input type="checkbox" class="sw" name="on.{{.ID}}" value="1"{{if .On}} checked{{end}}{{if .Disabled}} disabled{{end}} aria-label="{{.Title}}"></td><td>{{.Title}}</td><td>{{if .OK}}<span class="okmark">✓</span> {{.Backend}}{{else}}<span class="dim">{{t $.Lang "web.sensor.unavailable"}}</span>{{end}}</td><td class="dim small">{{if .Note}}{{.Note}}{{else}}{{.Today}}{{end}}</td></tr>{{end}}
-      </table>
-      <p class="dim small row" style="margin:.4rem 0 0">{{t $.Lang "web.sensor.hint"}} <button class="small">{{t $.Lang "web.setup.save"}}</button></p>
-    </form>
-    {{end}}
+    <p class="devline"><span>{{t $.Lang "web.detection.devline" .Detection}}</span><a href="/setup/detection">{{t $.Lang "web.detection.settings"}}</a></p>
     {{if .Errors}}
     <details class="errs"><summary>{{t $.Lang "web.dev.errors" (len .Errors)}}</summary>
       <ul>{{range .Errors}}<li><span class="ivtime">{{.When}}</span> {{.Text}}</li>{{end}}</ul>
@@ -54,27 +44,6 @@
   </div>
 {{end}}
 </div>
-
-{{with .Observe}}
-<h1>{{t $.Lang "web.observe.title"}}</h1>
-<form method="post" action="/setup/devices" class="card privacy">
-  <input type="hidden" name="op" value="observe">
-  <p class="note">{{t $.Lang "web.observe.note"}}</p>
-  <div class="grid">
-    <div>
-      <label for="obs-ignore">{{t $.Lang "web.observe.ignore"}} <span class="dim small">{{t $.Lang "web.observe.ignore_hint"}}</span></label>
-      <textarea id="obs-ignore" name="ignore">{{.Ignore}}</textarea>
-      {{if .Recent}}<span class="chips"><span class="dim small">{{t $.Lang "web.observe.recent"}}</span>{{range .Recent}}<button type="button" class="chip" data-add="{{.}}">+ {{.}}</button>{{end}}</span>{{end}}
-    </div>
-    <div>
-      <label for="obs-redact">{{t $.Lang "web.observe.redact"}} <span class="dim small">{{t $.Lang "web.observe.redact_hint"}}</span></label>
-      <textarea id="obs-redact" name="redact">{{.Redact}}</textarea>
-    </div>
-  </div>
-  <div class="ret"><label for="obs-ret">{{t $.Lang "web.observe.retention"}}</label><input type="number" id="obs-ret" name="retention" min="1" max="365" value="{{.Retention}}"><span>{{t $.Lang "web.observe.days"}}</span><span class="dim small">{{t $.Lang "web.observe.retention_hint"}}</span></div>
-  <button class="primary">{{t $.Lang "web.setup.save"}}</button>
-</form>
-{{end}}
 
 <h1>{{t $.Lang "web.dev.add"}}</h1>
 <form method="post" action="/setup/devices" class="card newhat">

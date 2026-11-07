@@ -278,9 +278,16 @@ code { font-family: var(--mono); font-size: .9em; word-break: break-all; }
 }
 
 /* ---- detection (sensors) ---- */
-.sensors { margin-top: .9rem; }
-.sensors h3 { font-size: .95rem; margin: .2rem 0 .3rem; }
-.sensors table td { vertical-align: middle; }
+.lead { color: var(--dim); margin: .2rem 0 1rem; }
+.subtabs { display: flex; gap: .2rem; margin: .2rem 0 1.2rem; border-bottom: 1px solid var(--line); }
+.subtabs a { padding: .45rem .9rem; color: var(--dim); font-weight: 600; text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.subtabs a.on { color: var(--ink); border-bottom-color: var(--accent); }
+table.matrix { width: 100%; border-collapse: collapse; }
+table.matrix th { font-weight: 600; font-size: .85rem; text-align: left; padding: .35rem .5rem; border-bottom: 1px solid var(--line); }
+table.matrix td { padding: .5rem; border-bottom: 1px dashed var(--perf); vertical-align: middle; }
+table.matrix td.cell { white-space: nowrap; }
+table.matrix .st { display: block; font-size: .78rem; color: var(--dim); margin-top: .15rem; }
+.devline { font-size: .88rem; margin: .5rem 0 0; display: flex; gap: .6rem; align-items: center; }
 .sw { appearance: none; width: 2.2rem; height: 1.25rem; border-radius: 1rem; background: var(--line); position: relative; cursor: pointer; vertical-align: middle; margin: 0; }
 .sw::after { content: ""; position: absolute; top: .15rem; left: .15rem; width: .95rem; height: .95rem; border-radius: 50%; background: #fff; transition: .15s; }
 .sw:checked { background: #3a3; }

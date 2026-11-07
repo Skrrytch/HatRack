@@ -53,7 +53,7 @@ var pageFuncs = template.FuncMap{
 var pages = map[string]*template.Template{}
 
 func init() {
-	for _, p := range []string{"login", "now", "day", "week", "setup", "sethat", "setdefaults", "devices", "ai"} {
+	for _, p := range []string{"login", "now", "day", "week", "setup", "sethat", "setdefaults", "devices", "detection", "ai"} {
 		pages[p] = template.Must(template.New("layout").Funcs(pageFuncs).
 			ParseFS(webFS, "templates/layout.html", "templates/"+p+".html", "templates/forms.html"))
 	}
@@ -77,15 +77,16 @@ type view struct {
 	Path     string
 	Langs    []langLink // the language switch, for the page shown
 
-	Login    loginView
-	Now      nowView
-	Day      dayView
-	Week     weekView
-	Setup    setupView
-	Hat      hatEdit
-	Defaults defaultsEdit
-	Devices  devicesView
-	AI       aiView
+	Login     loginView
+	Now       nowView
+	Day       dayView
+	Week      weekView
+	Setup     setupView
+	Hat       hatEdit
+	Defaults  defaultsEdit
+	Devices   devicesView
+	Detection detectionView
+	AI        aiView
 }
 
 type loginView struct {
