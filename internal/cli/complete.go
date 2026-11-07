@@ -59,3 +59,35 @@ func (a *App) completeDo(_ *cobra.Command, args []string, _ string) ([]string, c
 	}
 	return nil, cobra.ShellCompDirectiveNoFileComp
 }
+
+// completeAway offers the answers and hat keys, then "do", then the hat's
+// activities.
+func (a *App) completeAway(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
+	snap, ok := a.snapshot()
+	if !ok {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	switch len(args) {
+	case 0:
+		out := append([]string{}, awayAnswers...)
+		for _, h := range snap.Hats {
+			out = append(out, h.Key)
+		}
+		return out, cobra.ShellCompDirectiveNoFileComp
+	case 1:
+		for _, h := range snap.Hats {
+			if strings.EqualFold(h.Key, args[0]) {
+				return []string{"do"}, cobra.ShellCompDirectiveNoFileComp
+			}
+		}
+	case 2:
+		if strings.EqualFold(args[1], "do") {
+			for _, h := range snap.Hats {
+				if strings.EqualFold(h.Key, args[0]) {
+					return h.Activities, cobra.ShellCompDirectiveNoFileComp
+				}
+			}
+		}
+	}
+	return nil, cobra.ShellCompDirectiveNoFileComp
+}

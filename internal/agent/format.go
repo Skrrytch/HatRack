@@ -30,3 +30,16 @@ func StatusLine(d StatusData, now time.Time) string {
 	}
 	return i18n.T("cli.nohat")
 }
+
+// AwayLine renders the open question of an absence as one line, or "" if
+// there is none.
+func AwayLine(q *AwayQuestion) string {
+	if q == nil {
+		return ""
+	}
+	key := "away.status_pause"
+	if q.Booked == AwayWork {
+		key = "away.status_work"
+	}
+	return i18n.T(key, clock(q.From), clock(q.To))
+}

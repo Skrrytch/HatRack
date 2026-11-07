@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -41,6 +42,9 @@ func decode[T any](r agent.Response) T {
 func (a *App) printStatus(resp agent.Response, afterChange bool) {
 	d := decode[agent.StatusData](resp)
 	fmt.Fprintln(a.Out, agent.StatusLine(d, time.Now()))
+	if line := agent.AwayLine(d.Away); line != "" {
+		fmt.Fprintln(a.Out, line)
+	}
 	if !d.Connected {
 		fmt.Fprintln(a.Err, i18n.T("cli.offline", d.Queued))
 	}
@@ -129,6 +133,47 @@ func (a *App) onCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&at, "at", "", i18n.T("cli.at"))
 	return cmd
+}
+
+// awayAnswers are the words of "hat away" that are not a hat.
+var awayAnswers = []string{agent.AwayKeep, agent.AwayPause, agent.AwayWork}
+
+func (a *App) awayCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:               i18n.T("cli.away.use"),
+		Short:             i18n.T("cli.away.short"),
+		Long:              i18n.T("cli.away.long"),
+		Args:              cobra.MinimumNArgs(1),
+		ValidArgsFunction: a.completeAway,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			req := agent.Request{Cmd: "away"}
+			word := strings.ToLower(args[0])
+			if slices.Contains(awayAnswers, word) {
+				if len(args) > 1 {
+					return errors.New(i18n.T("err.away_usage"))
+				}
+				req.Answer = word
+			} else {
+				// like "hat on": a hat, then "do <activity>", then a detail
+				req.Answer, req.Hat = agent.AwayOther, args[0]
+				rest := args[1:]
+				if len(rest) > 0 && strings.EqualFold(rest[0], "do") {
+					if len(rest) < 2 {
+						return errors.New(i18n.T("err.away_usage"))
+					}
+					req.Activity, req.Detail = activityAndDetail(rest[1:])
+				} else {
+					req.Detail = strings.TrimSpace(strings.Join(rest, " "))
+				}
+			}
+			resp, err := a.call(req)
+			if err != nil {
+				return err
+			}
+			a.printStatus(resp, true)
+			return nil
+		},
+	}
 }
 
 func (a *App) askResume(last string) string {

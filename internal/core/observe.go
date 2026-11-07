@@ -45,6 +45,62 @@ type Observe struct {
 	Redact []string `yaml:"redact,omitempty" json:"redact,omitempty"`
 	// Devices switches sensors on or off per device.
 	Devices map[string]map[string]bool `yaml:"devices,omitempty" json:"devices,omitempty"`
+	// Idle sets when an absence stops the clock and when it is asked about.
+	Idle Idle `yaml:"idle,omitempty" json:"idle,omitzero"`
+}
+
+// Idle are the absence settings, in minutes; 0 selects the default.
+type Idle struct {
+	After     int   `yaml:"after,omitempty" json:"after,omitempty"`           // minutes without input = away; default 5
+	AskAfter  int   `yaml:"ask_after,omitempty" json:"ask_after,omitempty"`   // default 10
+	StopAfter int   `yaml:"stop_after,omitempty" json:"stop_after,omitempty"` // default 15
+	Ask       *bool `yaml:"ask,omitempty" json:"ask,omitempty"`               // default true
+}
+
+// Defaults of the absence settings, in minutes, and their upper limit.
+const (
+	DefaultIdleAfter     = 5
+	DefaultIdleAskAfter  = 10
+	DefaultIdleStopAfter = 15
+	MaxIdleMinutes       = 1440
+)
+
+func idleMinutes(v, def int) time.Duration {
+	if v == 0 {
+		v = def
+	}
+	return time.Duration(v) * time.Minute
+}
+
+// AfterD is the inactivity after which the user counts as away.
+func (i Idle) AfterD() time.Duration { return idleMinutes(i.After, DefaultIdleAfter) }
+
+// AskAfterD is the absence from which the return is asked about.
+func (i Idle) AskAfterD() time.Duration { return idleMinutes(i.AskAfter, DefaultIdleAskAfter) }
+
+// StopAfterD is the absence after which the clock is stopped.
+func (i Idle) StopAfterD() time.Duration { return idleMinutes(i.StopAfter, DefaultIdleStopAfter) }
+
+// Asks reports whether a return is asked about (default yes).
+func (i Idle) Asks() bool { return i.Ask == nil || *i.Ask }
+
+// Validate checks the ranges and that After is not later than the others.
+func (i Idle) Validate() error {
+	for _, v := range []struct {
+		name string
+		n    int
+	}{{"after", i.After}, {"ask_after", i.AskAfter}, {"stop_after", i.StopAfter}} {
+		if v.n < 0 || v.n > MaxIdleMinutes {
+			return fmt.Errorf("config: observe.idle.%s %d: want 0 or 1 to %d", v.name, v.n, MaxIdleMinutes)
+		}
+	}
+	if i.AfterD() > i.AskAfterD() {
+		return fmt.Errorf("config: observe.idle.after must not be later than ask_after")
+	}
+	if i.AfterD() > i.StopAfterD() {
+		return fmt.Errorf("config: observe.idle.after must not be later than stop_after")
+	}
+	return nil
 }
 
 var sensorRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
@@ -101,6 +157,9 @@ func (o Observe) Validate() error {
 				return fmt.Errorf("config: observe.%s: empty entry", l.name)
 			}
 		}
+	}
+	if err := o.Idle.Validate(); err != nil {
+		return err
 	}
 	// sorted, so the first error reported is always the same
 	devs := slices.Sorted(maps.Keys(o.Devices))

@@ -66,7 +66,7 @@ func (a *App) Root() *cobra.Command {
 	}
 	root.SetOut(a.Out)
 	root.SetErr(a.Err)
-	root.AddCommand(a.statusCmd(), a.onCmd(), a.doCmd(), a.detailCmd(), a.offCmd(), a.logCmd(), a.configCmd(), a.agentCmd(), a.serverCmd(), a.trayCmd(), a.panelCmd(), a.setupCmd(), a.updateCmd())
+	root.AddCommand(a.statusCmd(), a.onCmd(), a.doCmd(), a.awayCmd(), a.detailCmd(), a.offCmd(), a.logCmd(), a.configCmd(), a.agentCmd(), a.serverCmd(), a.trayCmd(), a.panelCmd(), a.setupCmd(), a.updateCmd())
 	localize(root)
 	friendlyUsage(root)
 	return root

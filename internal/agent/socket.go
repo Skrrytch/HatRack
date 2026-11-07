@@ -32,6 +32,7 @@ type Request struct {
 	Data        string `json:"data,omitempty"` // YAML for config_import
 	DryRun      bool   `json:"dry_run,omitempty"`
 	Replace     bool   `json:"replace,omitempty"`
+	Away        string `json:"away,omitempty"` // id of the question, for away
 }
 
 // Response is the answer: one line of JSON.
@@ -56,6 +57,8 @@ type StatusData struct {
 	Version       string `json:"version,omitempty"`
 	ServerVersion string `json:"server_version,omitempty"`
 	Mismatch      bool   `json:"mismatch,omitempty"`
+	// Away is the open question after a return from an absence.
+	Away *AwayQuestion `json:"away,omitempty"`
 }
 
 // HatInfo describes a hat for clients that show a menu.
@@ -131,6 +134,10 @@ func errText(err error) string {
 		return i18n.T("err.future")
 	case errors.Is(err, core.ErrBeforeEntry):
 		return i18n.T("err.before_entry")
+	case errors.Is(err, errNoQuestion):
+		return i18n.T("err.away.none")
+	case errors.Is(err, errAwayGone):
+		return i18n.T("err.away.gone")
 	case errors.Is(err, ErrUnauthorized):
 		return i18n.T("err.unauthorized")
 	}
@@ -168,6 +175,8 @@ func (a *Agent) Handle(ctx context.Context, req Request) Response {
 		return ok(InfoData{Hat: ri.Hat.Key, Name: ri.Hat.DisplayName(), Mode: ri.Mode, Last: ri.Last})
 	case "on", "do", "off", "detail":
 		return a.change(ctx, req, in)
+	case "away":
+		return a.answerAway(ctx, req)
 	case "log":
 		return a.log(ctx, req)
 	case "config_export":
@@ -234,7 +243,7 @@ func (a *Agent) snapshot() Snapshot {
 // status builds the answer for status and for changes. Caller holds a.mu.
 func (a *Agent) status(changed bool) Response {
 	d := StatusData{State: a.state, Connected: a.connected, Queued: a.db.QueueLen(), Changed: changed,
-		Version: Version, ServerVersion: a.serverVersion, Mismatch: a.mismatch}
+		Version: Version, ServerVersion: a.serverVersion, Mismatch: a.mismatch, Away: a.away.Question()}
 	var kept []RejectedEvent
 	if found, _ := a.db.Get("rejected", &kept); found {
 		d.Rejected = len(kept)

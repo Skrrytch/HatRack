@@ -29,10 +29,12 @@ const (
 // Locks, in the order they may be taken:
 //
 //	Agent.mu -> runMu -> runner.emitMu -> Recorder.mu
+//	Agent.mu -> awayMu
 //
 // Sensor runners, the observation flusher and the recorder's sink never take
 // Agent.mu. The device name has its own lock (devMu), and so has the hello
-// state (helloMu); neither is held while taking another lock.
+// state (helloMu); neither is held while taking another lock. The idle runner
+// hands its states to awayLoop through a channel (idleCh), never blocking.
 
 // runner is one running sensor.
 type runner struct {
@@ -226,11 +228,22 @@ func wait(ctx context.Context, d time.Duration) bool {
 // runSensor runs one sensor until ctx ends.
 func (a *Agent) runSensor(ctx context.Context, s sensors.Sensor, r *runner) {
 	defer close(r.done)
-	emit := func(at time.Time, attrs core.Attrs) {
+	emitRec := func(at time.Time, attrs core.Attrs) {
 		r.emitMu.Lock()
 		defer r.emitMu.Unlock()
 		if !r.stopped {
 			a.rec.Emit(s.ID, at, attrs)
+		}
+	}
+	emit := emitRec
+	if s.ID == sensors.IdleSensor {
+		emit = func(at time.Time, attrs core.Attrs) {
+			r.emitMu.Lock()
+			defer r.emitMu.Unlock()
+			if !r.stopped {
+				a.rec.Emit(s.ID, at, attrs)
+				a.pushIdle(idleMsg{at, attrs})
+			}
 		}
 	}
 	for ctx.Err() == nil {
@@ -248,7 +261,7 @@ func (a *Agent) runSensor(ctx context.Context, s sensors.Sensor, r *runner) {
 			return
 		}
 		log.Printf("sensor %s (%s): %v", s.ID, b.Name(), err)
-		emit(a.Now(), nil) // no news from a dead sensor: close its span
+		emitRec(a.Now(), nil) // no news from a dead sensor: close its span
 		if !wait(ctx, sensorRetry) {
 			return
 		}

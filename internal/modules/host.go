@@ -138,6 +138,21 @@ func (h *Host) Notify(ctx context.Context, summary, body string) error {
 	return n.Notify(ctx, summary, body)
 }
 
+// NotifyActions shows a message with buttons through the notify module and
+// returns the key of the pressed one ("" if none). ErrNoBackend when the
+// module or its backend cannot do it.
+func (h *Host) NotifyActions(ctx context.Context, summary, body string, actions []Action) (string, error) {
+	m, ok := h.Reg.Get("notify")
+	if !ok {
+		return "", ErrNoBackend
+	}
+	n, ok := m.(ActionNotifier)
+	if !ok {
+		return "", ErrNoBackend
+	}
+	return n.NotifyActions(ctx, summary, body, actions)
+}
+
 // ExternalDir returns the directory for personal modules.
 func ExternalDir() string {
 	base := os.Getenv("XDG_CONFIG_HOME")

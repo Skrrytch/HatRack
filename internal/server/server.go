@@ -56,6 +56,7 @@ func New(st store.Store, reg *modules.Registry) *Server {
 	s.mux.HandleFunc("PUT /api/config", s.api(s.putConfig))
 	s.mux.HandleFunc("GET /api/stream", s.api(s.stream))
 	s.mux.HandleFunc("POST /api/devices/hello", s.api(s.hello))
+	s.mux.HandleFunc("GET /api/presence", s.api(s.getPresence))
 	s.mux.HandleFunc("GET /{$}", s.page(false, s.nowPage))
 	s.mux.HandleFunc("GET /day", s.page(false, s.dayPage))
 	s.mux.HandleFunc("GET /week", s.page(false, s.weekPage))

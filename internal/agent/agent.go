@@ -62,6 +62,11 @@ type Agent struct {
 	runMu   sync.Mutex // guards runners and their status
 	runners map[string]*runner
 
+	// Absence, see away.go and awayloop.go. away has its own lock (awayMu,
+	// taken after mu); idleCh carries the idle sensor's states to awayLoop.
+	away   *awayTracker
+	idleCh chan idleMsg
+
 	helloMu      sync.Mutex // guards baseCaps and lastHello
 	baseCaps     map[string]modules.Capability
 	lastHello    time.Time
@@ -107,6 +112,13 @@ func New(cfg Config, db *DB, reg *modules.Registry) *Agent {
 		state:  core.NewState(), last: map[string]string{}, config: core.NewConfig(),
 		neutral: map[string]json.RawMessage{}, kick: make(chan struct{}, 1),
 		obsKick: make(chan struct{}, 1),
+		away:    newAwayTracker(awayScale()),
+		idleCh:  make(chan idleMsg, idleChCap),
+	}
+	a.away.persist = func(s awayState) {
+		if err := a.db.Put("away", s); err != nil {
+			log.Printf("cache away: %v", err)
+		}
 	}
 	a.rec = sensors.NewRecorder(time.Minute, a.enqueueObs)
 	return a
@@ -130,6 +142,11 @@ func (a *Agent) Load() error {
 	if a.neutral == nil {
 		a.neutral = map[string]json.RawMessage{}
 	}
+	var away awayState
+	if _, err := a.db.Get("away", &away); err != nil {
+		return fmt.Errorf("cache away: %w", err)
+	}
+	a.away.restore(away)
 	var dev string
 	if _, err := a.db.Get("server_device", &dev); err != nil {
 		return fmt.Errorf("cache server_device: %w", err)
@@ -165,6 +182,7 @@ func (a *Agent) Run(ctx context.Context) {
 	if a.sensors != nil {
 		go a.checkpointLoop(ctx)
 		go a.obsFlushLoop(ctx)
+		go a.awayLoop(ctx)
 	}
 	a.streamLoop(ctx)
 	if a.sensors != nil {
@@ -427,15 +445,23 @@ func (a *Agent) flush(ctx context.Context) error {
 // submit records an event: it is queued, folded into the local state and
 // applied right away, with or without a server.
 func (a *Agent) submit(ctx context.Context, ev core.Event) error {
-	if err := a.db.Enqueue(ev); err != nil {
-		return err
-	}
-	if (ev.Type == core.EvSwitch || ev.Type == core.EvActivity) && ev.Activity != "" && ev.Hat != "" {
-		if !ev.TS.Before(a.state.LastTS) {
-			a.last[ev.Hat] = ev.Activity
+	return a.submitAll(ctx, ev)
+}
+
+// submitAll records events in order and applies the look once, at the end:
+// a backdated off and switch that cancel each other do not run any hooks.
+func (a *Agent) submitAll(ctx context.Context, evs ...core.Event) error {
+	for _, ev := range evs {
+		if err := a.db.Enqueue(ev); err != nil {
+			return err
 		}
+		if (ev.Type == core.EvSwitch || ev.Type == core.EvActivity) && ev.Activity != "" && ev.Hat != "" {
+			if !ev.TS.Before(a.state.LastTS) {
+				a.last[ev.Hat] = ev.Activity
+			}
+		}
+		a.state = a.state.Apply(ev)
 	}
-	a.state = a.state.Apply(ev)
 	a.reconcile(ctx)
 	a.save()
 	a.kickFlush()

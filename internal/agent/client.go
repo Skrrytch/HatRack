@@ -106,6 +106,13 @@ func (c *Client) PostObservations(ctx context.Context, obs []core.Observation) (
 	return out.Stored, out.Skipped, err
 }
 
+// Presence asks which other devices are in use.
+func (c *Client) Presence(ctx context.Context) ([]server.PresenceDevice, error) {
+	var r server.PresenceResponse
+	_, err := c.do(ctx, "GET", "/api/presence", nil, "", &r)
+	return r.Devices, err
+}
+
 // State fetches the current state.
 func (c *Client) State(ctx context.Context) (server.StateResponse, error) {
 	var s server.StateResponse
