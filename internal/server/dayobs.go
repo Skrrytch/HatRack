@@ -267,7 +267,7 @@ func buildObs(day, from, to time.Time, obs []core.Observation, iv []core.Interva
 				b = &block{start: o.Start, end: o.End, key: key, app: app, private: private, titles: map[string]time.Duration{}}
 				blocks = append(blocks, b)
 			}
-			if t := o.Attrs["title"]; t != "" && !private {
+			if t := core.NormalizeTitle(o.Attrs["title"]); t != "" && !private {
 				if _, ok := b.titles[t]; !ok {
 					b.order = append(b.order, t)
 				}

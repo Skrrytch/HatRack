@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -223,4 +224,32 @@ func (o Observation) Validate(now time.Time) error {
 		}
 	}
 	return nil
+}
+
+// titleCounter matches an unread counter in front of a title: "(3) ", "[12] ".
+var titleCounter = regexp.MustCompile(`^(\(\d+\)|\[\d+\])\s*`)
+
+// titleNoise reports runes that carry status, not meaning, at the edges of
+// a window title: pictographic symbols (spinners, dots, emoji), their
+// modifiers, and the usual "unsaved" or bullet marks. Math symbols stay,
+// so "C++" keeps its pluses.
+func titleNoise(r rune) bool {
+	return unicode.IsSpace(r) || unicode.In(r, unicode.So, unicode.Sk, unicode.Mn, unicode.Cf) ||
+		strings.ContainsRune("*•·", r)
+}
+
+// NormalizeTitle removes what changes in a window title without changing
+// its meaning, so "◑ Task" and "✳ Task" are the same title: symbols and
+// marks at both ends, a leading unread counter, and repeated spaces.
+// Changes inside the title (timers, percentages) stay.
+func NormalizeTitle(s string) string {
+	for {
+		t := strings.TrimFunc(s, titleNoise)
+		t = titleCounter.ReplaceAllString(t, "")
+		if t == s {
+			break
+		}
+		s = t
+	}
+	return strings.Join(strings.Fields(s), " ")
 }

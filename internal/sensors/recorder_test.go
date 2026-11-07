@@ -501,3 +501,25 @@ func TestRecorderCase15ConcurrentCalls(t *testing.T) {
 	wg.Wait()
 	r.Close(recBase.Add(time.Hour))
 }
+
+// Case 16: a title that only changes its status symbol or unread counter
+// stays one span, stored without the noise; a title of noise only is dropped.
+func TestRecorderCase16TitleNoise(t *testing.T) {
+	r, s := newRecWith(laptopPolicy())
+	r.Emit("window", recBase, winAttrs("Gnome-terminal", "◑ Task"))
+	r.Emit("window", recBase.Add(10*time.Second), winAttrs("Gnome-terminal", "✳ Task"))
+	r.Emit("window", recBase.Add(20*time.Second), winAttrs("Gnome-terminal", "⠂  Task "))
+	r.Emit("window", recBase.Add(30*time.Second), winAttrs("Firefox", "(3) Mail"))
+	r.Emit("window", recBase.Add(40*time.Second), winAttrs("Firefox", "(4) Mail"))
+	r.Emit("window", recBase.Add(50*time.Second), winAttrs("Firefox", "◐"))
+	r.Close(recBase.Add(60 * time.Second))
+
+	got := s.ofSensor("window")
+	if len(got) != 3 {
+		t.Fatalf("got %d spans, want 3: %v", len(got), got)
+	}
+	checkAttrs(t, "terminal", got[0].Attrs, winAttrs("Gnome-terminal", "Task"))
+	checkTime(t, "terminal end", got[0].End, recBase.Add(30*time.Second))
+	checkAttrs(t, "mail", got[1].Attrs, winAttrs("Firefox", "Mail"))
+	checkAttrs(t, "noise only", got[2].Attrs, core.Attrs{"app": "Firefox"})
+}

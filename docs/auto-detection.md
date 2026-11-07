@@ -102,6 +102,11 @@ observations(id, device_id, sensor, start, end, attrs_json, rev)
   notify : {rule, value}                      (e.g. value "Sprint Planning")
 ```
 
+Titles are normalized before they are compared and stored: status symbols
+and marks at both ends (spinners, dots, emoji, `*`), a leading unread counter
+like `(3)` and repeated spaces go, so a title whose status icon changes stays
+one span. Changes inside a title (timers, percentages) stay.
+
 - The agent coalesces: a new span starts only when the attributes change. A
   workday is a few hundred to about two thousand spans.
 - **Before anything leaves the device** the privacy settings apply:

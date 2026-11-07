@@ -79,6 +79,17 @@ func TestObsTopTitles(t *testing.T) {
 	}
 }
 
+// Titles stored before NormalizeTitle existed are merged in the tooltip.
+func TestObsTitleNoiseMerged(t *testing.T) {
+	v := build([]core.Observation{
+		win("a", "Terminal", "◑ Task", at(9, 0), at(9, 10)),
+		win("a", "Terminal", "✳ Task", at(9, 10), at(9, 25)),
+	}, false)
+	if b := v.Rows[0].Blocks[0]; !strings.Contains(b.Title, "– Task (25m)") || strings.Contains(b.Title, "✳") {
+		t.Fatalf("noise not merged: %q", b.Title)
+	}
+}
+
 func TestObsIdleOverTotals(t *testing.T) {
 	v := build([]core.Observation{
 		win("a", "Firefox", "x", at(9, 0), at(11, 0)),

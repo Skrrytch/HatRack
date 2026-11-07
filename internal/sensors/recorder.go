@@ -171,6 +171,13 @@ func (r *Recorder) effective(sensor string, s *state) core.Attrs {
 	if r.policy.Redacted(app) {
 		delete(a, "title")
 	}
+	if t, ok := a["title"]; ok {
+		if t = core.NormalizeTitle(t); t == "" {
+			delete(a, "title")
+		} else {
+			a["title"] = t
+		}
+	}
 	for k, v := range a {
 		a[k] = cutRunes(v, MaxValueRunes)
 	}
