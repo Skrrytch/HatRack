@@ -22,9 +22,9 @@
 
 {{template "band" (dict "TL" .TL "Lang" $.Lang)}}
 {{with .Obs}}
-<section class="obs">
+<section class="obs" data-hint="{{t $.Lang "web.obs.click"}}" data-addlabel="{{t $.Lang "web.obs.add"}}">
   <div class="obshead"><strong>{{t $.Lang "web.obs.title"}}</strong> <span class="dim small">· {{t $.Lang "web.obs.note"}}</span></div>
-  <div class="obsrows">{{range .Rows}}<div class="obsrow">{{if $.Day.Obs.ShowDevice}}<span class="obsdev">{{.Device}}</span>{{end}}<div class="obsband">{{range .Blocks}}{{if .Start}}<button type="button" data-start="{{.Start}}" data-end="{{.End}}"{{else}}<i{{end}}{{if .Away}} class="away"{{else if .Private}} class="priv"{{end}} title="{{.Title}}" style="left:{{printf "%.3f" .Left}}%;width:{{printf "%.3f" .Width}}%;{{if .Color}}--c:{{.Color}}{{end}}">{{if .Label}}<em>{{.Label}}</em>{{end}}{{if .Start}}</button>{{else}}</i>{{end}}{{end}}</div></div>{{end}}</div>
+  <div class="obsrows">{{range .Rows}}<div class="obsrow">{{if $.Day.Obs.ShowDevice}}<span class="obsdev">{{.Device}}</span>{{end}}<div class="obsband">{{range .Blocks}}{{if .Start}}<button type="button" data-start="{{.Start}}" data-end="{{.End}}" data-what="{{.What}}"{{else}}<i{{end}}{{if .Away}} class="away"{{else if .Private}} class="priv"{{end}} data-tip="{{.Title}}" aria-label="{{.Title}}" style="left:{{printf "%.3f" .Left}}%;width:{{printf "%.3f" .Width}}%;{{if .Color}}--c:{{.Color}}{{end}}">{{if .Label}}<em>{{.Label}}</em>{{end}}{{if .Start}}</button>{{else}}</i>{{end}}{{end}}</div></div>{{end}}</div>
   <p class="obslegend small">{{range .Legend}}<span class="obskey"><span class="dot" style="--c:{{.Color}}"></span>{{.Name}} <span class="dim">{{.Duration}}</span></span> {{end}}{{with .Private}}<span class="obskey"><span class="dot" style="--c:{{.Color}}"></span>{{.Name}} <span class="dim">{{.Duration}}</span></span> {{end}}{{with .Away}}<span class="obskey"><span class="awaykey"></span>{{.Name}} <span class="dim">{{.Duration}}</span></span>{{end}}</p>
 </section>
 {{end}}
@@ -83,6 +83,8 @@
     <label class="grow">{{t $.Lang "web.detail"}}<input type="text" name="detail" placeholder="{{t $.Lang "web.detail.placeholder"}}"></label>
     <button class="primary">{{t $.Lang "web.setup.add"}}</button>
   </form>
+  <p class="overnote small" hidden data-prefix="{{t $.Lang "web.day.replaces"}}"></p>
+  <script type="application/json" id="booked">{{.Booked}}</script>
   <p class="dim small">{{if .IsToday}}{{t $.Lang "web.day.add_note_today"}}{{else}}{{t $.Lang "web.day.add_note"}}{{end}}</p>
 </details>
 {{end}}

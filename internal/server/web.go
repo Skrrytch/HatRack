@@ -245,13 +245,22 @@ type dayView struct {
 	Date       string
 	Prev, Next string
 	TL         timelineView
-	Obs        *obsView // the band "Observed"; nil if there is nothing
+	Obs        *obsView      // the band "Observed"; nil if there is nothing
+	Booked     []bookedRange // for the add form's "replaces" note
 	Rows       []rowView
 	Totals     []totalView
 	Sum        string
 	Choices    []choiceGroup
 	Done       string // id of the correction just made, for undo
 	IsToday    bool
+}
+
+// bookedRange is a booked entry in minutes of the day, for the add form's
+// note on what it replaces (app.js).
+type bookedRange struct {
+	S int    `json:"s"`
+	E int    `json:"e"`
+	T string `json:"t"`
 }
 
 type tick struct {
@@ -831,7 +840,7 @@ func (s *Server) dayPage(w http.ResponseWriter, r *http.Request, acc access) {
 	sort.SliceStable(win, func(a, b int) bool { return win[a].Start.Before(win[b].Start) })
 	from, to, _, _, _ := dayWindow(day, cfg.Work(), win)
 	d.TL = s.layout(day, from, to, cfg, iv, lang)
-	d.Obs = buildObs(day, from, to, obs, lang, acc == fullAccess)
+	d.Obs = buildObs(day, from, to, obs, iv, lang, acc == fullAccess)
 	links, _ := s.st.TicketLinks(r.Context())
 	d.Date = dateStr(day)
 	d.IsToday = v.Live
@@ -865,6 +874,12 @@ func (s *Server) dayPage(w http.ResponseWriter, r *http.Request, acc access) {
 			row.EndIn = i.End.In(loc).Format("15:04")
 		}
 		d.Rows = append(d.Rows, row)
+		label := row.Hat
+		if i.Activity != "" {
+			label += " · " + i.Activity
+		}
+		d.Booked = append(d.Booked, bookedRange{S: int(clockOf(day, i.Start.In(loc)) / time.Minute),
+			E: int(clockOf(day, i.End.In(loc)) / time.Minute), T: label})
 	}
 	d.Totals = s.totalViews(tot, nil, pal, nm, lang, links, cfg)
 	d.Sum = core.FormatDuration(sumOf(tot, cfg))

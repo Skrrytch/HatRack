@@ -29,7 +29,8 @@ type obsBlock struct {
 	Left, Width float64
 	Color       string
 	Label       string // the app; shown inside the block if there is room
-	Title       string // tooltip
+	Title       string // info lines, shown on hover or tap
+	What        string // hat|activity booked then (or just before), preselected in the add form
 	Private     bool
 	Away        bool
 	Start, End  string // HH:MM for the add form; empty: not clickable
@@ -163,9 +164,28 @@ func obsOverlap(u []obsSpan, a, b time.Time) time.Duration {
 	return d
 }
 
+// obsWhat is the hat and activity booked at t, or else the last one that
+// ended before it (a gap is most often filled with what ran before), or "".
+func obsWhat(iv []core.Interval, t time.Time) string {
+	prev := ""
+	for _, i := range iv {
+		if fleeting(i) {
+			continue
+		}
+		if !i.Start.After(t) && (i.Open || i.End.After(t)) {
+			return i.Hat + "|" + i.Activity
+		}
+		if !i.End.After(t) {
+			prev = i.Hat + "|" + i.Activity
+		}
+	}
+	return prev
+}
+
 // buildObs lays out the clipped observations of one day on the band from
-// `from` to `to`. It returns nil if there is nothing to show.
-func buildObs(day, from, to time.Time, obs []core.Observation, lang string, canWrite bool) *obsView {
+// `from` to `to`; iv are the booked intervals of the day. It returns nil if
+// there is nothing to show.
+func buildObs(day, from, to time.Time, obs []core.Observation, iv []core.Interval, lang string, canWrite bool) *obsView {
 	if len(obs) == 0 {
 		return nil
 	}
@@ -271,7 +291,7 @@ func buildObs(day, from, to time.Time, obs []core.Observation, lang string, canW
 			}
 			if canWrite {
 				ob.Start, ob.End = obsClock(day, b.start, b.end)
-				lines = append(lines, i18n.In(lang, "web.obs.click"))
+				ob.What = obsWhat(iv, b.start.Add(b.end.Sub(b.start)/2))
 			}
 			ob.Title = strings.Join(lines, "\n")
 			row.Blocks = append(row.Blocks, ob)

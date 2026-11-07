@@ -29,7 +29,7 @@ func idleSpan(dev, kind string, a, b time.Time) core.Observation {
 
 func build(obs []core.Observation, write bool) *obsView {
 	obs = obsClip(obsDay, obsDay.AddDate(0, 0, 1), obs)
-	return buildObs(obsDay, at(8, 0), at(20, 0), obs, "en", write)
+	return buildObs(obsDay, at(8, 0), at(20, 0), obs, nil, "en", write)
 }
 
 func TestObsMerge(t *testing.T) {
@@ -54,7 +54,7 @@ func TestObsMerge(t *testing.T) {
 		t.Fatalf("merged range: %s-%s", ff.Start, ff.End)
 	}
 	// titles by time: Docs (40m) before Jira (10m)
-	want := "09:00–09:50 · 50m\nFirefox\n– Docs (40m)\n– Jira (10m)\nClick to add an entry"
+	want := "09:00–09:50 · 50m\nFirefox\n– Docs (40m)\n– Jira (10m)"
 	if ff.Title != want {
 		t.Fatalf("tooltip:\n%s", ff.Title)
 	}
@@ -117,7 +117,7 @@ func TestObsOthersAndPrivate(t *testing.T) {
 		t.Fatalf("private: %+v", v.Private)
 	}
 	p := v.Rows[0].Blocks[10]
-	if !p.Private || p.Label != "" || p.Title != "11:00–11:05 · 5m\nprivate\nClick to add an entry" {
+	if !p.Private || p.Label != "" || p.Title != "11:00–11:05 · 5m\nprivate" {
 		t.Fatalf("private block: %+v", p)
 	}
 }
@@ -170,8 +170,12 @@ func TestDayPageObserved(t *testing.T) {
 	if strings.Contains(out, "obsdev") {
 		t.Error("one device: no device label")
 	}
+	// the add form knows the booked entries for its "replaces" note
+	if !strings.Contains(out, `<script type="application/json" id="booked">[{"s":`) || !strings.Contains(out, `data-prefix="Replaces: %s"`) {
+		t.Error("booked ranges or replaces note missing")
+	}
 	// the private block names neither app nor title
-	i := strings.Index(out, `title="19:40–19:45`)
+	i := strings.Index(out, `data-tip="19:40–19:45`)
 	if i < 0 {
 		t.Fatal("private block missing")
 	}
@@ -214,5 +218,31 @@ func TestObsColorMap(t *testing.T) {
 	}
 	if len(seen) != 8 || m["i"] == "" {
 		t.Fatalf("colours: %v", m)
+	}
+}
+
+func TestObsWhat(t *testing.T) {
+	iv := []core.Interval{
+		{Hat: "venom", Activity: "dev", Start: at(9, 0), End: at(10, 0)},
+		{Hat: "intern", Start: at(10, 0), End: at(10, 0).Add(30 * time.Second)}, // fleeting: ignored
+		{Hat: "intern", Activity: "mail", Start: at(11, 0), End: at(12, 0), Open: true},
+	}
+	for _, c := range []struct {
+		t    time.Time
+		want string
+	}{
+		{at(8, 0), ""},             // nothing before
+		{at(9, 30), "venom|dev"},   // booked then
+		{at(10, 30), "venom|dev"},  // in a gap: what ran before
+		{at(13, 0), "intern|mail"}, // the open entry goes on
+	} {
+		if got := obsWhat(iv, c.t); got != c.want {
+			t.Errorf("%s: %q, want %q", c.t.Format("15:04"), got, c.want)
+		}
+	}
+	// a block gets the hat booked at its middle
+	v := buildObs(obsDay, at(8, 0), at(20, 0), []core.Observation{win("a", "Code", "x", at(9, 50), at(10, 20))}, iv, "en", true)
+	if w := v.Rows[0].Blocks[0].What; w != "venom|dev" {
+		t.Fatalf("block what: %q", w)
 	}
 }

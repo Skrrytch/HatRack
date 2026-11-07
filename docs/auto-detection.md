@@ -249,8 +249,12 @@ observations are kept.
 one on the same time axis, one row per device. Window spans of one app merge
 into a block (gap under a minute); the tooltip lists the three titles with
 the most time. Idle spans are drawn over the windows and subtracted from the
-per-app totals in the legend. Clicking a block prefills the add form with its
-times. Nothing in it changes the log.
+per-app totals in the legend. Hovering (or tapping, on touch) a block shows
+its info; clicking it (or "Add entry" in the info) prefills the add form with
+its times and the hat booked then, or the one before in a gap. The add form
+names the booked entries a new one would replace. Blocks stay at least 4 px
+wide; short blocks get a closer look in the review of MVP 9. Nothing in the
+band changes the log.
 
 ### 8. MCP
 
