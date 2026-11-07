@@ -46,5 +46,20 @@
 </form>
 {{end}}
 {{end}}
+
+{{if eq .Tab "idle"}}
+{{with .Idle}}
+<form method="post" action="/setup/detection?tab=idle" class="card idle">
+  <input type="hidden" name="op" value="idle">
+  <p class="note">{{t $.Lang "web.idle.note"}}</p>
+  <div class="row2"><label for="idle-after">{{t $.Lang "web.idle.after"}}</label><span class="nowrap"><input type="number" id="idle-after" name="after" min="1" max="1440" value="{{.After}}"> {{t $.Lang "web.idle.min"}}</span><span class="dim small">{{t $.Lang "web.idle.after_hint"}}</span></div>
+  <div class="row2"><label for="idle-ask">{{t $.Lang "web.idle.ask_after"}}</label><span class="nowrap"><input type="number" id="idle-ask" name="ask_after" min="1" max="1440" value="{{.AskAfter}}"> {{t $.Lang "web.idle.min"}}</span><span class="dim small">{{t $.Lang "web.idle.ask_after_hint"}}</span></div>
+  <div class="row2"><label for="idle-stop">{{t $.Lang "web.idle.stop_after"}}</label><span class="nowrap"><input type="number" id="idle-stop" name="stop_after" min="1" max="1440" value="{{.StopAfter}}"> {{t $.Lang "web.idle.min"}}</span><span class="dim small">{{t $.Lang "web.idle.stop_after_hint"}}</span></div>
+  <label class="inline askbox"><input type="checkbox" name="ask" value="1"{{if .Ask}} checked{{end}}> {{t $.Lang "web.idle.ask"}} <span class="dim">{{t $.Lang "web.idle.ask_hint"}}</span></label>
+  <div class="ex">{{t $.Lang "web.idle.example"}}</div>
+  <button class="primary">{{t $.Lang "web.setup.save"}}</button>
+</form>
+{{end}}
+{{end}}
 {{end}}
 {{end}}

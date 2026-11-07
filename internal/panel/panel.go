@@ -26,9 +26,12 @@ const (
 
 // Options of one panel run.
 type Options struct {
-	Snapshot   func() agent.Snapshot // current data, called once per screen
-	Where      Where
-	About      bool // start with the about screen
+	Snapshot func() agent.Snapshot // current data, called once per screen
+	Where    Where
+	About    bool // start with the about screen
+	// Away is the open question after an absence: the panel opens in return
+	// mode and its actions answer it.
+	Away       *agent.AwayQuestion
 	Version    string
 	ProjectURL string
 }
@@ -51,6 +54,7 @@ type screen struct {
 	hover  int
 	focus  int
 	edit   Edit // the detail field being typed into
+	away   *agent.AwayQuestion
 }
 
 func (s *screen) rebuild() {
@@ -64,8 +68,16 @@ func (s *screen) rebuild() {
 		if s.edit.Hat == "" {
 			s.edit.Sel = -1
 		}
-		s.l = BuildEdit(s.snap, s.filter, s.edit, s.scale, time.Now())
-		s.focus = s.l.FirstFocus()
+		if s.away != nil {
+			s.l = BuildReturn(s.snap, *s.away, s.filter, s.edit, s.scale, time.Now())
+			s.focus = s.l.chip(0) // the booked answer
+			if s.filter != "" {
+				s.focus = s.l.FirstFocus()
+			}
+		} else {
+			s.l = BuildEdit(s.snap, s.filter, s.edit, s.scale, time.Now())
+			s.focus = s.l.FirstFocus()
+		}
 		if s.edit.Hat != "" {
 			s.focus = s.l.Field(s.edit.Hat)
 		}
@@ -196,6 +208,11 @@ func (s *screen) key(name string, r rune) (act Action, done bool) {
 	case name == "" && r > ' ' && focused != nil && focused.Kind == KindInput:
 		s.startEdit(focused.Hat, string(r))
 		return Action{}, false
+	}
+	if s.away != nil && !s.about {
+		if act, done, ok := s.awayKey(name); ok {
+			return act, done
+		}
 	}
 	switch name {
 	case "escape":

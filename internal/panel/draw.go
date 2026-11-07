@@ -225,6 +225,8 @@ func drawHit(img *image.RGBA, h Hit, hover, focus bool, scale float64) {
 		}
 		label := fit(h.Label, false, m.chipPx, h.R.W-m.chipPad*4/3-aw)
 		drawText(img, Text{X: h.R.X + m.chipPad*2/3, Y: ty, S: label, Px: m.chipPx, Color: cFG})
+	case KindChip:
+		drawChip(img, h, hover, focus, m)
 	case KindTool:
 		bg := cChip
 		if hover || focus {

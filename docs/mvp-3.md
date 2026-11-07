@@ -5,7 +5,7 @@ block is MVP 3; the rest is the outlook and gets re-sorted after MVP 2.
 
 ## MVP 3
 
-1. **Idle detection:** moved to MVP 7 of the
+1. **Idle detection:** done in MVP 7 of the
    [epic: automatic detection](auto-detection.md) (#2). Absence is booked
    with `off` and corrections instead of new event types.
 2. **Export to the time recording system** (Kimai or the system used at work),

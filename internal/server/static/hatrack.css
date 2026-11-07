@@ -303,4 +303,11 @@ table.matrix .st { display: block; font-size: .78rem; color: var(--dim); margin-
 .ret label { display: inline; }
 .ret input { width: 4.5rem; }
 .note { font-size: .85rem; color: var(--dim); border-left: 3px solid #3a3; padding-left: .6rem; margin: .4rem 0; }
+.idle .row2 { display: grid; grid-template-columns: 16rem 8rem 1fr; gap: .6rem 1rem; align-items: center; margin: .3rem 0; }
+.idle .row2 label { display: inline; font-size: .9rem; }
+.idle .nowrap { white-space: nowrap; }
+.idle input[type=number] { width: 5rem; }
+.idle .askbox { display: flex; margin: .6rem 0; }
+.idle .ex { border-left: 3px solid var(--line); padding-left: .8rem; margin: 1rem 0 .8rem; font-size: .9rem; color: var(--dim); }
+@media (max-width: 40rem) { .idle .row2 { grid-template-columns: 1fr; gap: .2rem; } }
 @media (max-width: 40rem) { .privacy .grid { grid-template-columns: 1fr; } }

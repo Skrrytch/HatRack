@@ -47,7 +47,7 @@ func runX11(ctx context.Context, o Options) (Action, error) {
 		return Action{}, err
 	}
 
-	s := &screen{o: o, snap: o.Snapshot(), about: o.About, scale: xw.scale()}
+	s := &screen{o: o, snap: o.Snapshot(), about: o.About, away: o.Away, scale: xw.scale()}
 	s.rebuild()
 
 	px, py := xw.pointer()

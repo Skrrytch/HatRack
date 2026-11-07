@@ -105,3 +105,40 @@ func TestIconColor(t *testing.T) {
 		t.Fatal("icon colour")
 	}
 }
+
+func TestReturnToShow(t *testing.T) {
+	snap := func(id string) agent.Snapshot {
+		s := snapshot(core.ModeWearing, "venom", "review")
+		if id != "" {
+			s.Status.Away = &agent.AwayQuestion{ID: id}
+		}
+		return s
+	}
+	shown := ""
+	step := func(s agent.Snapshot, open bool) bool {
+		var o bool
+		shown, o = returnToShow(shown, s, open)
+		return o
+	}
+	if step(snap(""), false) {
+		t.Fatal("no question, no panel")
+	}
+	if !step(snap("a"), false) {
+		t.Fatal("a new question opens the panel")
+	}
+	if step(snap("a"), false) {
+		t.Fatal("never twice for the same id")
+	}
+	if step(snap("b"), true) {
+		t.Fatal("not while a panel is open")
+	}
+	if !step(snap("b"), false) {
+		t.Fatal("an unshown question opens once the panel is closed")
+	}
+	if step(snap(""), false) || step(snap("b"), false) {
+		t.Fatal("answered and gone, or the same again: nothing")
+	}
+	if !step(snap("c"), false) {
+		t.Fatal("the next question opens again")
+	}
+}

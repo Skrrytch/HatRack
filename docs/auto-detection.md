@@ -183,19 +183,26 @@ so it works offline.
 ### 5. Idle and return
 
 Idle is the base of everything else: idle time is subtracted before any
-score is computed.
+score is computed. Built in #2:
 
-- `idle.after` (default 5 min) marks inactivity; a lock counts at once.
-- Locked or inactive longer than `idle.stop_after` (default 15 min): the
-  agent stops the clock backdated to the start of the absence (`off` with
-  `--at`), so a computer locked overnight is not a working night.
-- **Return:** for an absence longer than `idle.ask_after` (default 10 min)
-  the panel asks, with the keyboard: "Weg 14:02–14:47 (45 min). Pause ·
-  Weiter als VENOM · Meeting · anderes …". Each answer becomes exactly one
-  correction (or nothing for "pause" when the clock was already stopped),
-  then the hat resumes. Without the panel (Wayland for now) a notification
-  with actions does the same; an unanswered absence stays a gap and shows up
-  in the review.
+- The `idle` sensor reports inactivity from 60 s on, backdated to its start,
+  and a lock at once (backends `x11` for Cinnamon, `mutter`, `kde`, `logind`).
+  The agent counts it as an absence after `observe.idle.after` (5 min); a
+  suspend counts too (a gap in the agent's own ticks).
+- After `stop_after` (15 min) the agent stops the clock backdated to the start
+  (`off`), so a computer locked overnight is no working night, but only if no
+  other computer is in use: it asks `GET /api/presence` (online, idle sensor
+  known, away). An online computer whose absence is unknown blocks the stop;
+  an unreachable server does not.
+- **Nothing blocks:** on return the hat runs again by itself and the absence
+  stands as a pause; between `ask_after` and `stop_after` the clock ran on.
+  Then the tray opens the panel with the question ("Pause" / "War Arbeit" /
+  pick a hat or activity); without a tray a notification with a button, and
+  `hat away keep|pause|work|<hat>` on the command line.
+- Answers book plain backdated `off`/`switch` events, never corrections
+  (devices may not send them); the live state ignores older events, so the
+  current hat is never disturbed. An answer is refused once another event
+  came after the return.
 
 ### 6. Reconstruction (core, afterwards)
 
@@ -258,10 +265,10 @@ Following the three layers (default → hat → device):
 
 | Where | Setting |
 |---|---|
-| defaults | `rules` (ignore rules), `idle.*`, `prompt.*`, `reconstruct.block`, `reconstruct.noise` |
+| defaults | `rules` (ignore rules), `prompt.*`, `reconstruct.block`, `reconstruct.noise` |
 | hat | `rules`, `observe: true \| false` |
 | device | sensors on or off (`window`, `media`, `notify`; `idle` on by default), in `observe.devices` |
-| all devices | `observe.ignore` and `observe.redact` app lists, `observe.retention_days` (default 28) |
+| all devices | `observe.ignore` and `observe.redact` app lists, `observe.retention_days` (default 28), `observe.idle` (`after` 5, `ask_after` 10, `stop_after` 15 min, `ask`) |
 
 Setup gets its own page **"Erkennung"** with tabs, so the settings do not
 pile up on other pages; each later ticket adds a tab instead of a block:

@@ -25,6 +25,7 @@ import (
 var detTabs = []struct{ ID, Key string }{
 	{"sensors", "web.detection.tab_sensors"},
 	{"privacy", "web.detection.tab_privacy"},
+	{"idle", "web.detection.tab_idle"},
 }
 
 type detTab struct {
@@ -40,6 +41,7 @@ type detectionView struct {
 	DeviceIDs string      // the columns, comma-separated
 	SensorIDs string      // the rows, comma-separated
 	Observe   observeView
+	Idle      idleView
 }
 
 type detDevice struct {
@@ -67,6 +69,12 @@ type observeView struct {
 	Ignore, Redact string   // one app per line
 	Recent         []string // apps seen lately, not yet listed
 	Retention      int      // days
+}
+
+// idleView is the absence tab: the effective values in minutes.
+type idleView struct {
+	After, AskAfter, StopAfter int
+	Ask                        bool
 }
 
 // capsOf returns the capabilities a device has reported, nil if none.
@@ -180,6 +188,14 @@ func (s *Server) detectionPage(w http.ResponseWriter, r *http.Request, acc acces
 			Retention: int(cfg.Observe.Retention() / (24 * time.Hour)),
 			Recent:    s.recentApps(ctx, cfg.Observe, now),
 		}
+	case "idle":
+		i := cfg.Observe.Idle
+		d.Idle = idleView{
+			After:     int(i.AfterD() / time.Minute),
+			AskAfter:  int(i.AskAfterD() / time.Minute),
+			StopAfter: int(i.StopAfterD() / time.Minute),
+			Ask:       i.Asks(),
+		}
 	}
 	if err != nil {
 		serverError(w, err)
@@ -242,6 +258,9 @@ func (s *Server) detectionAction(w http.ResponseWriter, r *http.Request, acc acc
 	case "observe":
 		tab = "privacy"
 		s.observeSave(w, r, tab, fail)
+	case "idle":
+		tab = "idle"
+		s.idleSave(w, r, tab, fail)
 	default:
 		tab = "sensors"
 		fail("unknown action")
@@ -357,6 +376,43 @@ func (s *Server) observeSave(w http.ResponseWriter, r *http.Request, tab string,
 		c.Observe.Ignore = splitLines(r.PostFormValue("ignore"))
 		c.Observe.Redact = splitLines(r.PostFormValue("redact"))
 		c.Observe.RetentionDays = days
+		return nil
+	})
+	if err != nil {
+		s.configFailed(w, r, err, fail)
+		return
+	}
+	http.Redirect(w, r, "/setup/detection?tab="+tab, http.StatusSeeOther)
+}
+
+// idleSave stores the absence settings. Values equal to the default are
+// stored as 0, a checked "ask" as nil, so the config stays minimal.
+func (s *Server) idleSave(w http.ResponseWriter, r *http.Request, tab string, fail func(string)) {
+	lang := s.langOf(r)
+	var mins [3]int
+	for i, name := range []string{"after", "ask_after", "stop_after"} {
+		n, err := strconv.Atoi(strings.TrimSpace(r.PostFormValue(name)))
+		if err != nil || n < 1 || n > core.MaxIdleMinutes {
+			fail(i18n.In(lang, "web.idle.bad_minutes", strconv.Itoa(core.MaxIdleMinutes)))
+			return
+		}
+		mins[i] = n
+	}
+	if mins[0] > mins[1] || mins[0] > mins[2] {
+		fail(i18n.In(lang, "web.idle.bad_order")) // say it in words, not as a config error
+		return
+	}
+	for i, def := range []int{core.DefaultIdleAfter, core.DefaultIdleAskAfter, core.DefaultIdleStopAfter} {
+		if mins[i] == def {
+			mins[i] = 0 // the default
+		}
+	}
+	var ask *bool
+	if r.PostFormValue("ask") == "" {
+		ask = new(bool) // false; checked is the default, stored as nil
+	}
+	_, err := s.editConfig(r.Context(), false, func(c *core.Config) error {
+		c.Observe.Idle = core.Idle{After: mins[0], AskAfter: mins[1], StopAfter: mins[2], Ask: ask}
 		return nil
 	})
 	if err != nil {

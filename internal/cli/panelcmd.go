@@ -38,7 +38,7 @@ func (a *App) panelCmd() *cobra.Command {
 				where = panel.AtPointer
 			}
 			act, err := panel.Run(context.Background(), panel.Options{
-				Snapshot: func() agent.Snapshot { return snap }, Where: where,
+				Snapshot: func() agent.Snapshot { return snap }, Where: where, Away: snap.Status.Away,
 				Version: Version, ProjectURL: tray.ProjectURL,
 			})
 			if errors.Is(err, panel.ErrNoDisplay) && snap.Server != "" {

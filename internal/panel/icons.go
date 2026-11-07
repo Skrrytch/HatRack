@@ -30,6 +30,10 @@ var iconShapes = map[string]shape{
 		return u >= .22 && u <= .86 && math.Abs(v-.5) <= (.86-u)*(.40/.64)
 	},
 	// stop, like on a tape recorder: a filled square
+	// a check mark: two strokes
+	"check": func(u, v float64) bool {
+		return segDist(u, v, .12, .55, .40, .82) <= .09 || segDist(u, v, .40, .82, .90, .20) <= .09
+	},
 	"stop": rectS(.20, .20, .80, .80),
 	// external link: a box open at the top right and an arrow leaving it
 	"open": func(u, v float64) bool {

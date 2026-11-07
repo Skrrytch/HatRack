@@ -298,3 +298,69 @@ func TestHatObserve(t *testing.T) {
 		t.Error("renders checked")
 	}
 }
+
+func TestIdleTab(t *testing.T) {
+	e, b := setupBrowser(t)
+	_, out := b.do("GET", "/setup/detection?tab=idle", nil)
+	for _, want := range []string{
+		`<a href="/setup/detection?tab=idle" class="on"`,
+		`name="after" min="1" max="1440" value="5"`,
+		`name="ask_after" min="1" max="1440" value="10"`,
+		`name="stop_after" min="1" max="1440" value="15"`,
+		`name="ask" value="1" checked`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("idle tab lacks %q", want)
+		}
+	}
+	if strings.Contains(out, `class="matrix"`) || strings.Contains(out, "<textarea") {
+		t.Errorf("idle tab shows other tabs")
+	}
+
+	post := func(after, ask, stop, checked string) *url.URL {
+		v := url.Values{"op": {"idle"}, "after": {after}, "ask_after": {ask}, "stop_after": {stop}}
+		if checked != "" {
+			v.Set("ask", checked)
+		}
+		r, _ := b.do("POST", "/setup/detection", v)
+		u, _ := url.Parse(r.Header.Get("Location"))
+		return u
+	}
+	// the defaults store nothing
+	if u := post("5", "10", "15", "1"); u.Query().Get("e") != "" || u.Query().Get("tab") != "idle" {
+		t.Fatalf("defaults: %s", u)
+	}
+	if i := config(t, e).Observe.Idle; i != (core.Idle{}) {
+		t.Fatalf("defaults stored: %+v", i)
+	}
+	// own values, "ask" off
+	if u := post("3", "8", "20", ""); u.Query().Get("e") != "" {
+		t.Fatalf("error: %s", u.Query().Get("e"))
+	}
+	i := config(t, e).Observe.Idle
+	if i.After != 3 || i.AskAfter != 8 || i.StopAfter != 20 || i.Ask == nil || *i.Ask {
+		t.Fatalf("stored: %+v", i)
+	}
+	_, out = b.do("GET", "/setup/detection?tab=idle", nil)
+	if !strings.Contains(out, `name="after" min="1" max="1440" value="3"`) || strings.Contains(out, `name="ask" value="1" checked`) {
+		t.Errorf("form is prefilled:\n%s", out)
+	}
+	// errors leave the config alone
+	for _, c := range [][3]string{{"0", "8", "20"}, {"3", "2000", "20"}, {"3", "8", "x"}, {"", "8", "20"}} {
+		u := post(c[0], c[1], c[2], "1")
+		// the text comes from web.idle.bad_minutes (the key itself until the catalogs have it)
+		if e := u.Query().Get("e"); !strings.Contains(e, "bad_minutes") && !strings.Contains(e, "1440") {
+			t.Errorf("%v: %q", c, u.Query().Get("e"))
+		}
+	}
+	u := post("9", "8", "20", "1")
+	if u.Query().Get("e") == "" || !strings.Contains(u.Query().Get("e"), "after") {
+		t.Errorf("after > ask_after: %q", u.Query().Get("e"))
+	}
+	if u := post("9", "10", "5", "1"); u.Query().Get("e") == "" {
+		t.Errorf("after > stop_after accepted")
+	}
+	if got := config(t, e).Observe.Idle; got.After != 3 || got.AskAfter != 8 || got.StopAfter != 20 || got.Ask == nil || *got.Ask {
+		t.Errorf("config changed by errors: %+v", got)
+	}
+}

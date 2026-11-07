@@ -72,3 +72,15 @@ func BuildMenu(s agent.Snapshot, now time.Time) []Item {
 		Item{Separator: true}, Item{Label: i18n.T("tray.quit"), Action: &Action{Quit: true}})
 	return menu
 }
+
+// returnToShow decides whether a snapshot opens the panel in return mode: it
+// carries a question that was not shown before and no panel is open. It
+// returns the id to remember as shown. A question that arrives while a panel
+// is open stays unshown, the next snapshot after the panel closed opens it.
+func returnToShow(shown string, s agent.Snapshot, panelOpen bool) (id string, open bool) {
+	q := s.Status.Away
+	if q == nil || q.ID == "" || q.ID == shown || panelOpen {
+		return shown, false
+	}
+	return q.ID, true
+}

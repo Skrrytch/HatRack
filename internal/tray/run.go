@@ -104,6 +104,7 @@ type app struct {
 	tip  string
 
 	panelOpen bool
+	shownAway string // id of the last question shown in return mode
 }
 
 // Version and ProjectURL are shown in the about screen.
@@ -125,7 +126,10 @@ func PanelRemote(atPointer bool) bool {
 
 // showPanel opens the panel unless one is open already. It runs in its own
 // goroutine and performs the chosen action afterwards.
-func (a *app) showPanel(where panel.Where, about bool) {
+func (a *app) showPanel(where panel.Where, about bool) { a.openPanel(where, about, nil) }
+
+// openPanel is showPanel with a question to answer (return mode) or nil.
+func (a *app) openPanel(where panel.Where, about bool, away *agent.AwayQuestion) {
 	a.mu.Lock()
 	if a.panelOpen {
 		a.mu.Unlock()
@@ -137,7 +141,7 @@ func (a *app) showPanel(where panel.Where, about bool) {
 		defer func() { a.mu.Lock(); a.panelOpen = false; a.mu.Unlock() }()
 		act, err := panel.Run(context.Background(), panel.Options{
 			Snapshot: func() agent.Snapshot { a.mu.Lock(); defer a.mu.Unlock(); return a.snap },
-			Where:    where, About: about, Version: Version, ProjectURL: ProjectURL,
+			Where:    where, About: about, Away: away, Version: Version, ProjectURL: ProjectURL,
 		})
 		if err != nil {
 			log.Printf("panel: %v", err)
@@ -275,8 +279,13 @@ func (a *app) watchLoop(ctx context.Context) {
 		err := agent.Watch(ctx, a.sock, func(s agent.Snapshot) {
 			a.mu.Lock()
 			a.snap, a.have = s, true
+			id, open := returnToShow(a.shownAway, s, a.panelOpen)
+			a.shownAway = id
 			a.mu.Unlock()
 			a.refresh(false)
+			if open {
+				a.openPanel(panel.Centered, false, s.Status.Away)
+			}
 		})
 		if ctx.Err() != nil {
 			return

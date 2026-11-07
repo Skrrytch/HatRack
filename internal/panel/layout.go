@@ -47,6 +47,7 @@ const (
 	KindDetail  // a recent detail of the worn activity
 	KindInput   // the detail field at the bottom of a hat card
 	KindSuggest // a suggestion below the field being edited
+	KindChip    // an answer of the return question (Current: the booked one)
 )
 
 // Hit is a clickable area.
@@ -219,6 +220,17 @@ func Build(snap agent.Snapshot, typed string, scale float64, now time.Time) Layo
 
 // BuildEdit is Build with the focus in a hat's detail field.
 func BuildEdit(snap agent.Snapshot, typed string, ed Edit, scale float64, now time.Time) Layout {
+	return build(snap, nil, typed, ed, scale, now)
+}
+
+// BuildReturn lays out the return mode: the question after an absence
+// instead of the status header, the hat cards below as the answer "other",
+// no toolbar.
+func BuildReturn(snap agent.Snapshot, q agent.AwayQuestion, typed string, ed Edit, scale float64, now time.Time) Layout {
+	return build(snap, &q, typed, ed, scale, now)
+}
+
+func build(snap agent.Snapshot, q *agent.AwayQuestion, typed string, ed Edit, scale float64, now time.Time) Layout {
 	m := newMetrics(scale)
 	st := snap.Status.State
 	query, detail := splitQuery(snap, typed)
@@ -232,33 +244,48 @@ func BuildEdit(snap agent.Snapshot, typed string, ed Edit, scale float64, now ti
 	W := max(m.pad*2+cols*m.cardW+(cols-1)*m.gap, int(460*scale+.5))
 	l := Layout{W: W, Scale: scale, Filter: query, Detail: detail, Default: i18n.T("panel.hint.default")}
 
-	// header: colour dot, status line
-	hdrColor := rgba("#8a8f98")
-	if st.Mode == core.ModeWearing {
-		for _, h := range snap.Hats {
-			if h.Key == st.Hat && h.Color != "" {
-				hdrColor = rgba(h.Color)
+	top := m.headerH // the cards may not float above this line
+	var hdrBG color.RGBA
+	hdrH, y := m.headerH, m.headerH
+	if q != nil {
+		hdrH, y = returnBand(&l, m, *q, W)
+		top, hdrBG = y, cBar
+	} else {
+		// header: colour dot, status line
+		hdrColor := rgba("#8a8f98")
+		if st.Mode == core.ModeWearing {
+			for _, h := range snap.Hats {
+				if h.Key == st.Hat && h.Color != "" {
+					hdrColor = rgba(h.Color)
+				}
+			}
+			if snap.Status.Color != "" {
+				hdrColor = rgba(snap.Status.Color)
 			}
 		}
-		if snap.Status.Color != "" {
-			hdrColor = rgba(snap.Status.Color)
+		tint := 0.35
+		if st.Mode != core.ModeWearing {
+			tint = 0.18 // grey while paused or without a hat
 		}
+		hdrBG = mixc(cBG, hdrColor, tint)
+		dot := m.s6() * 5 / 3
+		ringW := max(int(1.5*scale+.5), 1)
+		// a subtle light ring keeps the dot visible on the tinted header
+		l.Boxes = append(l.Boxes,
+			Box{R: Rect{m.pad - ringW, (m.headerH-dot)/2 - ringW, dot + 2*ringW, dot + 2*ringW}, Radius: dot/2 + ringW, Color: mixc(hdrBG, cFG, .55)},
+			Box{R: Rect{m.pad, (m.headerH - dot) / 2, dot, dot}, Radius: dot / 2, Color: hdrColor})
+		line := agent.StatusLine(snap.Status, now)
+		l.Texts = append(l.Texts, Text{X: m.pad + dot + m.gap, Y: (m.headerH - m.txPx) / 2, S: fit(line, true, m.txPx, W-2*m.pad-dot-m.gap), Bold: true, Px: m.txPx, Color: cFG})
+		l.Boxes = append(l.Boxes, Box{R: Rect{0, y - 1, W, 1}, Color: cBorder})
 	}
-	tint := 0.35
-	if st.Mode != core.ModeWearing {
-		tint = 0.18 // grey while paused or without a hat
+
+	// what a detail typed into a hat's field does
+	detailAct := func(h agent.HatInfo, d string) Action {
+		if q != nil {
+			return awayOther(*q, h.Key, "", d)
+		}
+		return detailAction(h, st, d)
 	}
-	hdrBG := mixc(cBG, hdrColor, tint)
-	dot := m.s6() * 5 / 3
-	ringW := max(int(1.5*scale+.5), 1)
-	// a subtle light ring keeps the dot visible on the tinted header
-	l.Boxes = append(l.Boxes,
-		Box{R: Rect{m.pad - ringW, (m.headerH-dot)/2 - ringW, dot + 2*ringW, dot + 2*ringW}, Radius: dot/2 + ringW, Color: mixc(hdrBG, cFG, .55)},
-		Box{R: Rect{m.pad, (m.headerH - dot) / 2, dot, dot}, Radius: dot / 2, Color: hdrColor})
-	line := agent.StatusLine(snap.Status, now)
-	l.Texts = append(l.Texts, Text{X: m.pad + dot + m.gap, Y: (m.headerH - m.txPx) / 2, S: fit(line, true, m.txPx, W-2*m.pad-dot-m.gap), Bold: true, Px: m.txPx, Color: cFG})
-	y := m.headerH
-	l.Boxes = append(l.Boxes, Box{R: Rect{0, y - 1, W, 1}, Color: cBorder})
 
 	// hat cards in a grid
 	var editHat agent.HatInfo
@@ -281,7 +308,7 @@ func BuildEdit(snap agent.Snapshot, typed string, ed Edit, scale float64, now ti
 		rowH := 0
 		for i, h := range rowHats {
 			chipRows[i] = flow(h.Activities, m, m.cardW-2*m.chipPad)
-			if dets := cardDetails(h, st); len(dets) > 0 && detail == "" {
+			if dets := cardDetails(h, st); len(dets) > 0 && detail == "" && q == nil {
 				detRows[i] = flow(dets, m, m.cardW-2*m.chipPad)
 			}
 			heights[i] = m.titleH + (len(chipRows[i])+len(detRows[i]))*(m.chipH+m.chipGap) + m.inputH + m.chipPad/2
@@ -289,7 +316,7 @@ func BuildEdit(snap agent.Snapshot, typed string, ed Edit, scale float64, now ti
 		}
 		for i, h := range rowHats {
 			x := m.pad + i*(m.cardW+m.gap)
-			current := st.Mode != core.ModeNone && st.Hat == h.Key
+			current := q == nil && st.Mode != core.ModeNone && st.Hat == h.Key
 			col := rgba(h.Color)
 			if h.Color == "" {
 				col = rgba("#4e79a7")
@@ -302,6 +329,9 @@ func BuildEdit(snap agent.Snapshot, typed string, ed Edit, scale float64, now ti
 				Action: Action{Request: &agent.Request{Cmd: "on", Hat: h.Key, Detail: detail}}}
 			if st.Mode == core.ModePaused && st.Hat == h.Key {
 				titleHit.Action = Action{Request: &agent.Request{Cmd: "on"}}
+			}
+			if q != nil {
+				titleHit.Hint, titleHit.Action = "", awayOther(*q, h.Key, "", detail)
 			}
 			l.Hits = append(l.Hits, titleHit)
 			// chips
@@ -316,9 +346,13 @@ func BuildEdit(snap agent.Snapshot, typed string, ed Edit, scale float64, now ti
 					if current && st.Mode == core.ModeWearing {
 						hint = i18n.T("panel.hint.act_here", a)
 					}
-					l.Hits = append(l.Hits, Hit{R: Rect{cx, cy, w, m.chipH}, Kind: KindActivity, Label: a, Color: col, Current: cur, Hat: h.Key,
+					hit := Hit{R: Rect{cx, cy, w, m.chipH}, Kind: KindActivity, Label: a, Color: col, Current: cur, Hat: h.Key,
 						Match: query != "" && prefix(a, query) && !prefix(h.Name, query), Hint: withDetail(hint, detail),
-						Action: Action{Request: &agent.Request{Cmd: "on", Hat: h.Key, Activity: a, HasActivity: true, Detail: detail}}})
+						Action: Action{Request: &agent.Request{Cmd: "on", Hat: h.Key, Activity: a, HasActivity: true, Detail: detail}}}
+					if q != nil {
+						hit.Current, hit.Hint, hit.Action = false, "", awayOther(*q, h.Key, a, detail)
+					}
+					l.Hits = append(l.Hits, hit)
 					cx += w + m.chipGap
 				}
 				cy += m.chipH + m.chipGap
@@ -347,7 +381,7 @@ func BuildEdit(snap agent.Snapshot, typed string, ed Edit, scale float64, now ti
 				field.Label, field.Editing, field.Hint = ed.Text, true, i18n.T("panel.hint.editing")
 				editHat, editField = h, field.R
 				if v := strings.TrimSpace(ed.Text); v != "" {
-					l.Commit = detailAction(h, st, v)
+					l.Commit = detailAct(h, v)
 				}
 			}
 			l.Hits = append(l.Hits, field)
@@ -371,7 +405,7 @@ func BuildEdit(snap agent.Snapshot, typed string, ed Edit, scale float64, now ti
 			limit := y + m.toolH // the hint line stays visible
 			switch {
 			case oy+h <= limit:
-			case editField.Y-inset-h >= m.headerH:
+			case editField.Y-inset-h >= top:
 				oy = editField.Y - inset - h
 			default:
 				y += oy + h - limit
@@ -380,31 +414,33 @@ func BuildEdit(snap agent.Snapshot, typed string, ed Edit, scale float64, now ti
 		}
 	}
 
-	// toolbar
+	// toolbar; the return mode has none
 	footY := y
-	l.Boxes = append(l.Boxes, Box{R: Rect{0, y, W, 1}, Color: cBorder})
-	ty := y + (m.toolH-m.toolBtnH)/2
-	tx := m.pad
-	tool := func(label, icon, hint string, a Action) {
-		l.Hits = append(l.Hits, Hit{R: Rect{tx, ty, m.toolW, m.toolBtnH}, Kind: KindTool, Label: label, Icon: icon, Hint: hint, Action: a, Color: cFG})
-		tx += m.toolW + m.chipGap
-	}
-	switch st.Mode {
-	case core.ModeWearing:
-		tool(i18n.T("ui.pause"), "pause", i18n.T("panel.hint.pause"), Action{Request: &agent.Request{Cmd: "off"}})
-		tool(i18n.T("panel.takeoff"), "stop", i18n.T("panel.hint.takeoff"), Action{Request: &agent.Request{Cmd: "off", Neutral: true}})
-	case core.ModePaused:
-		tool(i18n.T("ui.resume"), "play", i18n.T("panel.hint.resume_tool"), Action{Request: &agent.Request{Cmd: "on"}})
-		if !st.Neutral {
-			tool(i18n.T("panel.takeoff"), "stop", i18n.T("panel.hint.takeoff"), Action{Request: &agent.Request{Cmd: "off", Neutral: true}})
+	if q == nil {
+		l.Boxes = append(l.Boxes, Box{R: Rect{0, y, W, 1}, Color: cBorder})
+		ty := y + (m.toolH-m.toolBtnH)/2
+		tx := m.pad
+		tool := func(label, icon, hint string, a Action) {
+			l.Hits = append(l.Hits, Hit{R: Rect{tx, ty, m.toolW, m.toolBtnH}, Kind: KindTool, Label: label, Icon: icon, Hint: hint, Action: a, Color: cFG})
+			tx += m.toolW + m.chipGap
 		}
+		switch st.Mode {
+		case core.ModeWearing:
+			tool(i18n.T("ui.pause"), "pause", i18n.T("panel.hint.pause"), Action{Request: &agent.Request{Cmd: "off"}})
+			tool(i18n.T("panel.takeoff"), "stop", i18n.T("panel.hint.takeoff"), Action{Request: &agent.Request{Cmd: "off", Neutral: true}})
+		case core.ModePaused:
+			tool(i18n.T("ui.resume"), "play", i18n.T("panel.hint.resume_tool"), Action{Request: &agent.Request{Cmd: "on"}})
+			if !st.Neutral {
+				tool(i18n.T("panel.takeoff"), "stop", i18n.T("panel.hint.takeoff"), Action{Request: &agent.Request{Cmd: "off", Neutral: true}})
+			}
+		}
+		// the web UI sits at the right edge; About lives in the tray's right-click menu
+		if snap.Server != "" {
+			l.Hits = append(l.Hits, Hit{R: Rect{W - m.pad - m.toolW, ty, m.toolW, m.toolBtnH}, Kind: KindTool, Label: i18n.T("tray.open"), Icon: "open",
+				Hint: i18n.T("panel.hint.open"), Action: Action{Open: true}, Color: cFG})
+		}
+		y += m.toolH
 	}
-	// the web UI sits at the right edge; About lives in the tray's right-click menu
-	if snap.Server != "" {
-		l.Hits = append(l.Hits, Hit{R: Rect{W - m.pad - m.toolW, ty, m.toolW, m.toolBtnH}, Kind: KindTool, Label: i18n.T("tray.open"), Icon: "open",
-			Hint: i18n.T("panel.hint.open"), Action: Action{Open: true}, Color: cFG})
-	}
-	y += m.toolH
 
 	// hint line
 	l.Boxes = append(l.Boxes, Box{R: Rect{0, y, W, 1}, Color: cBorder})
@@ -412,7 +448,7 @@ func BuildEdit(snap agent.Snapshot, typed string, ed Edit, scale float64, now ti
 	l.H = y
 	// the header is tinted with the hat colour, the footer a neutral band;
 	// the dark middle with lighter cards is where the choice happens
-	l.Boxes = append([]Box{{R: Rect{0, 0, W, m.headerH - 1}, Color: hdrBG}, {R: Rect{0, footY, W, y - footY}, Color: cBar}}, l.Boxes...)
+	l.Boxes = append([]Box{{R: Rect{0, 0, W, hdrH - 1}, Color: hdrBG}, {R: Rect{0, footY, W, y - footY}, Color: cBar}}, l.Boxes...)
 
 	if len(sugg) > 0 {
 		inset := m.s6() / 2
@@ -427,9 +463,12 @@ func BuildEdit(snap agent.Snapshot, typed string, ed Edit, scale float64, now ti
 			if !worn {
 				hint = withDetail(hatHint(editHat, st), d.Detail)
 			}
+			if q != nil {
+				hint = ""
+			}
 			l.Hits = append(l.Hits, Hit{R: Rect{over.X + inset, over.Y + inset + k*m.sugH, over.W - 2*inset, m.sugH},
 				Kind: KindSuggest, Label: d.Detail, Sub: d.Activity, Color: col, Hat: editHat.Key, Over: true,
-				Selected: k == ed.Sel, Hint: hint, Action: detailAction(editHat, st, d.Detail)})
+				Selected: k == ed.Sel, Hint: hint, Action: detailAct(editHat, d.Detail)})
 		}
 	}
 	return l
