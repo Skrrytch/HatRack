@@ -75,9 +75,9 @@ never logs keystrokes, takes screenshots or reads content.
 
 ### 1. Sensors (agent)
 
-A sensor is a new kind of agent module: it has backends with `detect()` like
-every module, but instead of `enter`/`leave` hooks it emits observations
-while the agent runs. The device reports which sensors work, as it reports
+A sensor is a type of its own next to modules (`internal/sensors`): it has
+backends with `detect()` like every module, but instead of `enter`/`leave`
+hooks it emits observations while the agent runs. The device reports which sensors work, as it reports
 its other capabilities today.
 
 | Sensor | Observes | Backends (first ones in bold) |
@@ -104,7 +104,7 @@ observations(id, device_id, sensor, start, end, attrs_json, rev)
 
 - The agent coalesces: a new span starts only when the attributes change. A
   workday is a few hundred to about two thousand spans.
-- **Before anything leaves the device** the device's privacy settings apply:
+- **Before anything leaves the device** the privacy settings apply:
   `ignore` apps are dropped (only "something private" with its length
   remains), `redact` apps keep only the app name, and while a hat with
   `observe: false` is worn only `idle` is recorded.
@@ -260,8 +260,8 @@ Following the three layers (default → hat → device):
 |---|---|
 | defaults | `rules` (ignore rules), `idle.*`, `prompt.*`, `reconstruct.block`, `reconstruct.noise` |
 | hat | `rules`, `observe: true \| false` |
-| device | sensors on or off (`window`, `media`, `notify`; `idle` on by default), `ignore` and `redact` app lists |
-| server | `observations.retention` (days, default 28) |
+| device | sensors on or off (`window`, `media`, `notify`; `idle` on by default), in `observe.devices` |
+| all devices | `observe.ignore` and `observe.redact` app lists, `observe.retention_days` (default 28) |
 
 Setup gets a page "Erkennung" per device and a rule list on each hat's page
 with a **rule test**: the last day's spans, which rule each one matches, and
