@@ -829,18 +829,13 @@ func (s *Server) dayPage(w http.ResponseWriter, r *http.Request, acc access) {
 	d := &v.Day
 	d.Title = dayLabel(lang, day, true)
 	d.Prev, d.Next = "/day?date="+dateStr(day.AddDate(0, 0, -1)), "/day?date="+dateStr(next)
-	// the observed band shares the time axis with the booked one
+	d.TL = s.timeline(day, cfg, iv, lang)
 	obs, err := s.st.ObservationsBetween(r.Context(), day, next, "", "")
 	if err != nil {
 		serverError(w, err)
 		return
 	}
-	obs = obsClip(day, next, obs)
-	win := append(append([]core.Interval(nil), iv...), obsIntervals(obs)...)
-	sort.SliceStable(win, func(a, b int) bool { return win[a].Start.Before(win[b].Start) })
-	from, to, _, _, _ := dayWindow(day, cfg.Work(), win)
-	d.TL = s.layout(day, from, to, cfg, iv, lang)
-	d.Obs = buildObs(day, from, to, obs, iv, lang, acc == fullAccess)
+	d.Obs = buildObs(day, obsClip(day, next, obs), iv, pal, nm, lang, acc == fullAccess)
 	links, _ := s.st.TicketLinks(r.Context())
 	d.Date = dateStr(day)
 	d.IsToday = v.Live

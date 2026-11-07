@@ -51,12 +51,12 @@
     if (lines.indexOf(app.toLowerCase()) < 0) area.value = (area.value.replace(/\s+$/, "") + "\n" + app).replace(/^\n/, "");
     b.remove();
   });
-  // the "Observed" band: its info shows on hover (mouse, keyboard) or tap
-  // (touch); a click, or "Add entry" in the info on touch, prefills the add
-  // form with the block's time and the hat booked then
-  var tip = null, touch = false, booked = null;
+  // the "Observed" band: a block's info shows on hover or keyboard focus;
+  // a click or tap opens a slim add form right under its hour, prefilled
+  // with the block's time and the hat booked then
+  var tip = null, touch = false, booked = null, ins = null, insBlock = null;
   function hideTip() { if (tip) { tip.remove(); tip = null; } }
-  function showTip(b, withButton) {
+  function showTip(b) {
     hideTip();
     var sec = b.closest(".obs");
     tip = document.createElement("div");
@@ -67,19 +67,10 @@
       if (i === 0) d.className = "t";
       tip.appendChild(d);
     });
-    if (b.dataset.start) {
-      var x;
-      if (withButton) {
-        x = document.createElement("button");
-        x.type = "button";
-        x.className = "primary";
-        x.textContent = sec.dataset.addlabel;
-        x.addEventListener("click", function () { hideTip(); prefill(b); });
-      } else {
-        x = document.createElement("div");
-        x.className = "dim";
-        x.textContent = sec.dataset.hint;
-      }
+    if (b.dataset.start && !ins) {
+      var x = document.createElement("div");
+      x.className = "dim";
+      x.textContent = sec.dataset.hint;
       tip.appendChild(x);
     }
     sec.appendChild(tip);
@@ -92,12 +83,13 @@
     return m ? +m[1] * 60 + +m[2] : null;
   }
   function hm(m) { return ("0" + Math.floor(m / 60)).slice(-2) + ":" + ("0" + m % 60).slice(-2); }
-  // the note under the add form: which booked entries the new one replaces
+  // the note under an add form: which booked entries the new one replaces
   function updateNote(form) {
-    var d = form.closest("details.card.add"), note = d && d.querySelector(".overnote");
-    if (!note) return;
+    var note = form.parentNode.querySelector(".overnote");
+    if (!note || !note.dataset.prefix) return;
     if (booked === null) {
-      try { booked = JSON.parse(document.getElementById("booked").textContent) || []; } catch (e) { booked = []; }
+      var j = document.getElementById("booked");
+      try { booked = JSON.parse(j ? j.textContent : "[]") || []; } catch (e) { booked = []; }
     }
     var s = mins(form.elements.start.value), e = form.elements.end.value ? mins(form.elements.end.value) : 1440, out = [];
     if (s !== null && e !== null && e > s) {
@@ -109,11 +101,30 @@
     note.hidden = !out.length;
     note.textContent = out.length ? note.dataset.prefix.replace("%s", out.join(", ")) : "";
   }
-  function prefill(b) {
-    var d = document.querySelector("details.card.add");
-    if (!d) return;
-    d.open = true;
-    var f = d.querySelector("form");
+  function closeIns() {
+    if (ins) { ins.remove(); ins = null; }
+    if (insBlock) { insBlock.classList.remove("sel"); insBlock = null; }
+  }
+  function openIns(b) {
+    var tpl = document.getElementById("obsform");
+    if (!tpl) return;
+    closeIns();
+    hideTip();
+    ins = tpl.content.firstElementChild.cloneNode(true);
+    insBlock = b;
+    b.classList.add("sel");
+    // info: app, time, the main title
+    var lines = (b.dataset.tip || "").split("\n"), info = ins.querySelector(".obsinfo");
+    var strong = document.createElement("strong");
+    strong.textContent = lines[1] || "";
+    var rest = document.createElement("span");
+    rest.className = "dim";
+    rest.textContent = " · " + lines[0] + (lines[2] && lines[2].charAt(0) === "–" ? " · " + lines[2].replace(/^–\s*/, "") : "");
+    info.appendChild(strong);
+    info.appendChild(rest);
+    var hr = b.closest(".obshr");
+    hr.parentNode.insertBefore(ins, hr.nextSibling);
+    var f = ins.querySelector("form");
     f.elements.start.value = b.dataset.start;
     f.elements.end.value = b.dataset.end;
     var what = f.elements.what;
@@ -121,25 +132,28 @@
       for (var i = 0; i < what.options.length; i++) if (what.options[i].value === b.dataset.what) what.value = b.dataset.what;
     }
     updateNote(f);
-    d.scrollIntoView({ block: "center", behavior: "smooth" });
+    var r = b.getBoundingClientRect(), ir = ins.getBoundingClientRect();
+    ins.style.setProperty("--caret", Math.max(8, Math.min(r.left + r.width / 2 - ir.left, ir.width - 16)) + "px");
+    ins.scrollIntoView({ block: "nearest", behavior: "smooth" });
     if (what) what.focus({ preventScroll: true });
   }
   function blockOf(e) { return e.target.closest && e.target.closest(".obsband [data-tip]"); }
   document.addEventListener("pointerdown", function (e) { touch = e.pointerType === "touch" || e.pointerType === "pen"; }, true);
-  document.addEventListener("mouseover", function (e) { var b = blockOf(e); if (b && !touch) showTip(b, false); });
+  document.addEventListener("mouseover", function (e) { var b = blockOf(e); if (b && !touch) showTip(b); });
   document.addEventListener("mouseout", function (e) {
     var b = blockOf(e);
     if (b && !touch && !(e.relatedTarget && b.contains(e.relatedTarget))) hideTip();
   });
-  document.addEventListener("focusin", function (e) { var b = blockOf(e); if (b) showTip(b, false); });
+  document.addEventListener("focusin", function (e) { var b = blockOf(e); if (b && b !== insBlock) showTip(b); });
   document.addEventListener("focusout", function (e) { if (blockOf(e)) hideTip(); });
   document.addEventListener("click", function (e) {
-    if (tip && tip.contains(e.target)) return;
+    if (e.target.closest && e.target.closest("[data-close]")) { closeIns(); return; }
     var b = blockOf(e);
     if (!b) { hideTip(); return; }
-    if (touch) { showTip(b, true); return; }
-    if (b.dataset.start) { hideTip(); prefill(b); }
+    if (b.dataset.start) openIns(b);
+    else if (touch) showTip(b); // an absence: info only
   });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && ins) closeIns(); });
   document.addEventListener("input", function (e) {
     var t = e.target;
     if (t.form && (t.name === "start" || t.name === "end")) updateNote(t.form);

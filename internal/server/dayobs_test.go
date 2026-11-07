@@ -29,7 +29,7 @@ func idleSpan(dev, kind string, a, b time.Time) core.Observation {
 
 func build(obs []core.Observation, write bool) *obsView {
 	obs = obsClip(obsDay, obsDay.AddDate(0, 0, 1), obs)
-	return buildObs(obsDay, at(8, 0), at(20, 0), obs, nil, "en", write)
+	return buildObs(obsDay, obs, nil, nil, nil, "en", write)
 }
 
 func TestObsMerge(t *testing.T) {
@@ -43,13 +43,13 @@ func TestObsMerge(t *testing.T) {
 		win("a", "Code", "y.go", at(10, 8), at(10, 9)), // gap of 1 minute: no merge
 	}, true)
 	var labels []string
-	for _, b := range v.Rows[0].Blocks {
+	for _, b := range v.rows[0].Blocks {
 		labels = append(labels, b.Label)
 	}
 	if got := strings.Join(labels, ","); got != "Firefox,Code,Code,Code" {
 		t.Fatalf("blocks: %s", got)
 	}
-	ff := v.Rows[0].Blocks[0]
+	ff := v.rows[0].Blocks[0]
 	if ff.Start != "09:00" || ff.End != "09:50" {
 		t.Fatalf("merged range: %s-%s", ff.Start, ff.End)
 	}
@@ -70,7 +70,7 @@ func TestObsTopTitles(t *testing.T) {
 		win("a", "Firefox", "three", at(9, 25), at(9, 40)),
 		win("a", "Firefox", "four", at(9, 40), at(9, 50)),
 	}, false)
-	b := v.Rows[0].Blocks[0]
+	b := v.rows[0].Blocks[0]
 	if b.Start != "" || strings.Contains(b.Title, "Click") {
 		t.Fatal("read-only: not clickable")
 	}
@@ -85,7 +85,7 @@ func TestObsTitleNoiseMerged(t *testing.T) {
 		win("a", "Terminal", "◑ Task", at(9, 0), at(9, 10)),
 		win("a", "Terminal", "✳ Task", at(9, 10), at(9, 25)),
 	}, false)
-	if b := v.Rows[0].Blocks[0]; !strings.Contains(b.Title, "– Task (25m)") || strings.Contains(b.Title, "✳") {
+	if b := v.rows[0].Blocks[0]; !strings.Contains(b.Title, "– Task (25m)") || strings.Contains(b.Title, "✳") {
 		t.Fatalf("noise not merged: %q", b.Title)
 	}
 }
@@ -97,12 +97,12 @@ func TestObsIdleOverTotals(t *testing.T) {
 		win("b", "Firefox", "x", at(9, 0), at(9, 30)), // another device: not subtracted
 		win("a", "Code", "", at(12, 0), at(12, 20)),
 	}, true)
-	if !v.ShowDevice || v.Rows[0].Device != "a" || v.Rows[1].Device != "b" {
+	if !v.ShowDevice || v.rows[0].Device != "a" || v.rows[1].Device != "b" {
 		t.Fatal("device rows")
 	}
-	blocks := v.Rows[0].Blocks
+	blocks := v.rows[0].Blocks
 	last := blocks[len(blocks)-1]
-	if !last.Away || last.Start != "" || last.Title != "10:00–10:45 · 45m\naway (locked)" {
+	if !last.Away || last.Start != "" || last.Title != "10:00–10:45 · 45m · a\naway (locked)" {
 		t.Fatalf("away block last, not clickable: %+v", last)
 	}
 	// Firefox: 120 - 45 + 30 = 105 min; Code 20 min
@@ -127,7 +127,7 @@ func TestObsOthersAndPrivate(t *testing.T) {
 	if v.Private == nil || v.Private.Duration != "5m" {
 		t.Fatalf("private: %+v", v.Private)
 	}
-	p := v.Rows[0].Blocks[10]
+	p := v.rows[0].Blocks[10]
 	if !p.Private || p.Label != "" || p.Title != "11:00–11:05 · 5m\nprivate" {
 		t.Fatalf("private block: %+v", p)
 	}
@@ -173,13 +173,16 @@ func TestDayPageObserved(t *testing.T) {
 		{ID: "3", Sensor: "idle", Start: at(19, 45), End: at(19, 50), Attrs: core.Attrs{"kind": "inactive"}},
 	})
 	_, out = b.do("GET", "/day?date=2026-11-04", nil)
-	for _, want := range []string{"obsband", "Observed", `<span style="left:100.000%">20</span>`, `data-start="19:30"`, `data-end="19:40"`, "Firefox", "away (inactive)"} {
+	for _, want := range []string{"obsband", "Observed", `class="obshl">19<`, `id="obsform"`, `data-start="19:30"`, `data-end="19:40"`, "Firefox", "away (inactive)"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("page lacks %q", want)
 		}
 	}
 	if strings.Contains(out, "obsdev") {
 		t.Error("one device: no device label")
+	}
+	if strings.Contains(out, `class="obshl">18<`) || strings.Contains(out, `class="obshl">09<`) {
+		t.Error("only hours with activity get a row")
 	}
 	// the add form knows the booked entries for its "replaces" note
 	if !strings.Contains(out, `<script type="application/json" id="booked">[{"s":`) || !strings.Contains(out, `data-prefix="Replaces: %s"`) {
@@ -198,8 +201,15 @@ func TestDayPageObserved(t *testing.T) {
 		{ID: "4", Sensor: "window", Start: at(9, 0), End: at(9, 10), Attrs: core.Attrs{"app": "Code"}},
 	})
 	_, out = b.do("GET", "/day?date=2026-11-04", nil)
+	if strings.Contains(out, "obsdev") || !strings.Contains(out, "09:00–09:10 · 10m · desktop") {
+		t.Error("two devices in different hours: no labels, the device is in the info")
+	}
+	e.st.PutObservations(ctx, "desktop", []core.Observation{
+		{ID: "5", Sensor: "window", Start: at(19, 0), End: at(19, 35), Attrs: core.Attrs{"app": "Code"}},
+	})
+	_, out = b.do("GET", "/day?date=2026-11-04", nil)
 	if !strings.Contains(out, `class="obsdev">desktop<`) || !strings.Contains(out, `class="obsdev">laptop<`) {
-		t.Error("two devices: labels")
+		t.Error("two devices in one hour: labels")
 	}
 	var many []core.Observation
 	for i := 0; i < 9; i++ {
@@ -252,8 +262,45 @@ func TestObsWhat(t *testing.T) {
 		}
 	}
 	// a block gets the hat booked at its middle
-	v := buildObs(obsDay, at(8, 0), at(20, 0), []core.Observation{win("a", "Code", "x", at(9, 50), at(10, 20))}, iv, "en", true)
-	if w := v.Rows[0].Blocks[0].What; w != "venom|dev" {
+	v := buildObs(obsDay, []core.Observation{win("a", "Code", "x", at(9, 50), at(10, 20))}, iv, nil, nil, "en", true)
+	if w := v.rows[0].Blocks[0].What; w != "venom|dev" {
 		t.Fatalf("block what: %q", w)
+	}
+}
+
+// The band has a row per hour in use; a block reaching into two hours is
+// drawn in both and keeps its whole time; booked entries are a line per hour.
+func TestObsHours(t *testing.T) {
+	iv := []core.Interval{{Hat: "venom", Activity: "dev", Start: at(9, 30), End: at(10, 15)}}
+	obs := obsClip(obsDay, obsDay.AddDate(0, 0, 1), []core.Observation{
+		win("a", "Code", "x", at(9, 45), at(10, 15)),
+		idleSpan("a", "locked", at(10, 15), at(13, 30)), // 11 and 12 only away: no row
+		win("a", "Firefox", "y", at(13, 30), at(13, 45)),
+	})
+	v := buildObs(obsDay, obs, iv, palette{"venom": "#7a1fa2"}, map[string]string{"venom": "VENOM"}, "en", true)
+	var labels []string
+	for _, h := range v.Hours {
+		labels = append(labels, h.Label+"/"+h.Skip)
+	}
+	if got := strings.Join(labels, " "); got != "09/ 10/ 13/11–13" {
+		t.Fatalf("hours: %s", got)
+	}
+	nine, ten := v.Hours[0], v.Hours[1]
+	b9, b10 := nine.Lines[0].Blocks[0], ten.Lines[0].Blocks[0]
+	if b9.Left != 75 || b9.Width != 25 || b10.Left != 0 || b10.Width != 25 {
+		t.Fatalf("cut: 9 %v+%v, 10 %v+%v", b9.Left, b9.Width, b10.Left, b10.Width)
+	}
+	if b9.Start != "09:45" || b10.Start != "09:45" || b10.End != "10:15" || b9.Title != b10.Title || b9.What != "venom|dev" {
+		t.Fatalf("whole block in both hours: %+v / %+v", b9, b10)
+	}
+	if a := ten.Lines[0].Blocks[1]; !a.Away || a.Left != 25 || a.Width != 75 {
+		t.Fatalf("away in an hour in use: %+v", a)
+	}
+	if len(nine.Booked) != 1 || nine.Booked[0].Left != 50 || nine.Booked[0].Width != 50 ||
+		nine.Booked[0].Color != "#7a1fa2" || nine.Booked[0].Title != "VENOM · dev 09:30–10:15" {
+		t.Fatalf("booked in 9: %+v", nine.Booked)
+	}
+	if len(v.Hours[2].Booked) != 0 {
+		t.Fatal("nothing booked at 13")
 	}
 }

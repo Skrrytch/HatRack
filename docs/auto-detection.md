@@ -250,16 +250,19 @@ observations are kept.
 - **End of day:** one prompt for what is still open, together with the daily
   summary planned in [MVP 3](mvp-3.md).
 
-**Exists now (#7):** the Day view has a band "Observed" below the logged
-one on the same time axis, one row per device. Window spans of one app merge
-into a block (gap under a minute); the tooltip lists the three titles with
-the most time. Idle spans are drawn over the windows and subtracted from the
-per-app totals in the legend. Hovering (or tapping, on touch) a block shows
-its info; clicking it (or "Add entry" in the info) prefills the add form with
-its times and the hat booked then, or the one before in a gap. The add form
-names the booked entries a new one would replace. Blocks stay at least 4 px
-wide; short blocks get a closer look in the review of MVP 9. Nothing in the
-band changes the log.
+**Exists now (#7):** the Day view ends with a section "Observed": one row
+per hour in which a computer was in use (hours with only absence are left
+out, a dashed line names the skipped hours). Window spans of one app merge
+into a block (gap under a minute); a block reaching into the next hour is
+drawn in both and keeps its whole time. Under each hour a thin line in the
+hat colour shows what was booked, so the two can be compared right there.
+Idle spans are drawn over the windows and subtracted from the per-app totals
+in the legend. Hovering a block shows its info (the three titles with the
+most time); clicking or tapping it opens a slim add form right under its
+hour, prefilled with its times and the hat booked then (or the one before in
+a gap), naming the booked entries the new one would replace. Device names
+appear only in hours with more than one device. Nothing in the band changes
+the log.
 
 ### 8. MCP
 

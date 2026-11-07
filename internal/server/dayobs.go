@@ -26,20 +26,44 @@ const (
 )
 
 type obsBlock struct {
-	Left, Width float64
+	Left, Width float64 // within its hour, in percent
 	Color       string
 	Label       string // the app; shown inside the block if there is room
 	Title       string // info lines, shown on hover or tap
 	What        string // hat|activity booked then (or just before), preselected in the add form
 	Private     bool
 	Away        bool
-	Start, End  string // HH:MM for the add form; empty: not clickable
+	Start, End  string // HH:MM of the whole block for the add form; empty: not clickable
 	app         string // lower-case app, for the colour
+	start, end  time.Time
 }
 
+// obsRow is what one device did during the day, as whole blocks.
 type obsRow struct {
 	Device string
 	Blocks []obsBlock // windows first, then absences on top
+}
+
+// obsLine is one device's part of an hour.
+type obsLine struct {
+	Device string
+	Blocks []obsBlock
+}
+
+// obsBooked is a booked entry's part of an hour, drawn as a thin line.
+type obsBooked struct {
+	Left, Width float64
+	Color       string
+	Title       string
+}
+
+// obsHour is one row of the band: an hour with something in it.
+type obsHour struct {
+	Label  string // "09"
+	Many   bool   // more than one device in this hour: lines get their device name
+	Skip   string // hours left out before this one, "12–13"; "" if none
+	Lines  []obsLine
+	Booked []obsBooked
 }
 
 type obsKey struct {
@@ -47,11 +71,12 @@ type obsKey struct {
 }
 
 type obsView struct {
-	Rows       []obsRow
+	Hours      []obsHour
 	ShowDevice bool
 	Legend     []obsKey // apps, then others
 	Private    *obsKey
 	Away       *obsKey
+	rows       []obsRow // per device, whole blocks (Left/Width unset)
 }
 
 func later(a, b time.Time) time.Time {
@@ -79,15 +104,6 @@ func obsClip(day, next time.Time, obs []core.Observation) []core.Observation {
 		if o.Start.Before(o.End) {
 			out = append(out, o)
 		}
-	}
-	return out
-}
-
-// obsIntervals are the observations as intervals, for dayWindow.
-func obsIntervals(obs []core.Observation) []core.Interval {
-	out := make([]core.Interval, len(obs))
-	for i, o := range obs {
-		out[i] = core.Interval{Start: o.Start, End: o.End}
 	}
 	return out
 }
@@ -182,16 +198,15 @@ func obsWhat(iv []core.Interval, t time.Time) string {
 	return prev
 }
 
-// buildObs lays out the clipped observations of one day on the band from
-// `from` to `to`; iv are the booked intervals of the day. It returns nil if
-// there is nothing to show.
-func buildObs(day, from, to time.Time, obs []core.Observation, iv []core.Interval, lang string, canWrite bool) *obsView {
+// buildObs lays out the clipped observations of one day as one row per hour
+// in which a computer was in use; iv are the booked intervals of the day,
+// shown as a thin line under each hour. It returns nil if there is nothing
+// to show.
+func buildObs(day time.Time, obs []core.Observation, iv []core.Interval, pal palette, nm map[string]string, lang string, canWrite bool) *obsView {
 	if len(obs) == 0 {
 		return nil
 	}
 	loc := day.Location()
-	span := float64(to.Sub(from))
-	pct := func(t time.Time) float64 { return min(max(float64(t.Sub(from))/span*100, 0), 100) }
 	hm := func(t time.Time) string { return t.In(loc).Format("15:04") }
 	timeLine := func(a, b time.Time) string {
 		return fmt.Sprintf("%s–%s · %s", hm(a), hm(b), obsMinutes(b.Sub(a)))
@@ -212,6 +227,12 @@ func buildObs(day, from, to time.Time, obs []core.Observation, iv []core.Interva
 	appName := map[string]string{}
 	var privTime, awayTime time.Duration
 	var anyPriv bool
+	var used [24]bool // hours in which some computer was in use
+
+	hourOf := func(h int) (time.Time, time.Time) {
+		return time.Date(day.Year(), day.Month(), day.Day(), h, 0, 0, 0, loc),
+			time.Date(day.Year(), day.Month(), day.Day(), h+1, 0, 0, 0, loc)
+	}
 
 	for _, dev := range devs {
 		list := byDev[dev]
@@ -250,6 +271,12 @@ func buildObs(day, from, to time.Time, obs []core.Observation, iv []core.Interva
 				key, app = "\x00private", ""
 			}
 			rest := o.End.Sub(o.Start) - obsOverlap(away, o.Start, o.End)
+			for h := 0; h < 24; h++ {
+				hs, he := hourOf(h)
+				if lo, hi := later(o.Start, hs), earlier(o.End, he); lo.Before(hi) && hi.Sub(lo) > obsOverlap(away, lo, hi) {
+					used[h] = true
+				}
+			}
 			if private {
 				privTime += rest
 				anyPriv = true
@@ -275,7 +302,7 @@ func buildObs(day, from, to time.Time, obs []core.Observation, iv []core.Interva
 			}
 		}
 		for _, b := range blocks {
-			ob := obsBlock{Left: pct(b.start), Width: float64(b.end.Sub(b.start)) / span * 100, Private: b.private}
+			ob := obsBlock{start: b.start, end: b.end, Private: b.private}
 			lines := []string{timeLine(b.start, b.end)}
 			if b.private {
 				lines = append(lines, i18n.In(lang, "web.obs.private"))
@@ -293,11 +320,18 @@ func buildObs(day, from, to time.Time, obs []core.Observation, iv []core.Interva
 				ob.Start, ob.End = obsClock(day, b.start, b.end)
 				ob.What = obsWhat(iv, b.start.Add(b.end.Sub(b.start)/2))
 			}
+			if len(devs) > 1 {
+				lines[0] += " · " + dev
+			}
 			ob.Title = strings.Join(lines, "\n")
 			row.Blocks = append(row.Blocks, ob)
 		}
 
 		// absences go last, so they are drawn over the windows
+		devNote := ""
+		if len(devs) > 1 {
+			devNote = " · " + dev
+		}
 		for _, o := range list {
 			if o.Sensor != "idle" {
 				continue
@@ -306,10 +340,10 @@ func buildObs(day, from, to time.Time, obs []core.Observation, iv []core.Interva
 			if o.Attrs["kind"] == "locked" {
 				kind = "web.obs.locked"
 			}
-			row.Blocks = append(row.Blocks, obsBlock{Left: pct(o.Start), Width: float64(o.End.Sub(o.Start)) / span * 100, Away: true,
-				Title: timeLine(o.Start, o.End) + "\n" + i18n.In(lang, "web.obs.away") + " (" + i18n.In(lang, kind) + ")"})
+			row.Blocks = append(row.Blocks, obsBlock{start: o.Start, end: o.End, Away: true,
+				Title: timeLine(o.Start, o.End) + devNote + "\n" + i18n.In(lang, "web.obs.away") + " (" + i18n.In(lang, kind) + ")"})
 		}
-		v.Rows = append(v.Rows, row)
+		v.rows = append(v.rows, row)
 	}
 	keys := make([]string, 0, len(appTime))
 	for k, d := range appTime {
@@ -324,7 +358,7 @@ func buildObs(day, from, to time.Time, obs []core.Observation, iv []core.Interva
 		return keys[a] < keys[b]
 	})
 	color := obsColorMap(keys)
-	for _, r := range v.Rows {
+	for _, r := range v.rows {
 		for i := range r.Blocks {
 			if b := &r.Blocks[i]; b.app != "" {
 				b.Color = color[b.app]
@@ -334,6 +368,7 @@ func buildObs(day, from, to time.Time, obs []core.Observation, iv []core.Interva
 			}
 		}
 	}
+	v.Hours = obsHours(day, v.rows, used, iv, pal, nm)
 	var others time.Duration
 	for i, k := range keys {
 		if i < obsLegendApps {
@@ -352,4 +387,61 @@ func buildObs(day, from, to time.Time, obs []core.Observation, iv []core.Interva
 		v.Away = &obsKey{Name: i18n.In(lang, "web.obs.away"), Duration: core.FormatDuration(awayTime)}
 	}
 	return v
+}
+
+// obsHours cuts the blocks of every device into the hours marked as used,
+// with the booked entries of each hour. A block keeps its whole time, info
+// and add-form values in every hour it reaches into.
+func obsHours(day time.Time, rows []obsRow, used [24]bool, iv []core.Interval, pal palette, nm map[string]string) []obsHour {
+	loc := day.Location()
+	var out []obsHour
+	last := -1
+	for h := 0; h < 24; h++ {
+		if !used[h] {
+			continue
+		}
+		hs := time.Date(day.Year(), day.Month(), day.Day(), h, 0, 0, 0, loc)
+		he := time.Date(day.Year(), day.Month(), day.Day(), h+1, 0, 0, 0, loc)
+		span := float64(he.Sub(hs))
+		place := func(a, b time.Time) (float64, float64, bool) {
+			lo, hi := later(a, hs), earlier(b, he)
+			if !lo.Before(hi) {
+				return 0, 0, false
+			}
+			return float64(lo.Sub(hs)) / span * 100, float64(hi.Sub(lo)) / span * 100, true
+		}
+		hr := obsHour{Label: fmt.Sprintf("%02d", h)}
+		if last >= 0 && h > last+1 {
+			hr.Skip = fmt.Sprintf("%02d–%02d", last+1, h)
+		}
+		last = h
+		for _, r := range rows {
+			line := obsLine{Device: r.Device}
+			for _, b := range r.Blocks {
+				if l, w, ok := place(b.start, b.end); ok {
+					b.Left, b.Width = l, w
+					line.Blocks = append(line.Blocks, b)
+				}
+			}
+			if len(line.Blocks) > 0 {
+				hr.Lines = append(hr.Lines, line)
+			}
+		}
+		hr.Many = len(hr.Lines) > 1
+		for _, i := range iv {
+			if fleeting(i) {
+				continue
+			}
+			if l, w, ok := place(i.Start, i.End); ok {
+				t := nameOf(nm, i.Hat)
+				if i.Activity != "" {
+					t += " · " + i.Activity
+				}
+				t += " " + i.Start.In(loc).Format("15:04") + "–" + i.End.In(loc).Format("15:04")
+				hr.Booked = append(hr.Booked, obsBooked{Left: l, Width: w, Color: pal.color(i.Hat), Title: t})
+			}
+		}
+		out = append(out, hr)
+	}
+	return out
 }

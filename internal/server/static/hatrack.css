@@ -312,23 +312,47 @@ table.matrix .st { display: block; font-size: .78rem; color: var(--dim); margin-
 @media (max-width: 40rem) { .idle .row2 { grid-template-columns: 1fr; gap: .2rem; } }
 @media (max-width: 40rem) { .privacy .grid { grid-template-columns: 1fr; } }
 
-/* Day view: what the computer observed (apps in focus, absences) */
-.obs { margin: .6rem 0 1rem; position: relative; }
+/* Day view: what the computer observed (apps in focus, absences), one row per hour */
+.obs { position: relative; padding: .9rem 1.1rem .6rem; }
 .obsnote { margin: -.3rem 0 .5rem; }
-.obsrow { margin: .1rem 0 .3rem; }
-.obsdev { display: block; font: .68rem var(--mono); color: var(--dim); margin-bottom: .1rem; }
-.obsband { position: relative; height: 1.15rem; background: var(--soft); border-radius: .35rem; overflow: hidden; }
-.obsband i, .obsband button { position: absolute; top: 0; bottom: 0; margin: 0; padding: 0; border: 0; border-radius: 0; background: var(--c); color: inherit;
-  opacity: .85; border-right: 1px solid var(--card); overflow: hidden; container-type: inline-size; }
+.obsscale, .obshr, .obsskip { display: grid; grid-template-columns: 2.2rem 1fr; }
+.obsscale { font: 11px var(--mono); color: var(--dim); margin-bottom: .25rem; }
+.obsscale div { position: relative; height: 1.2em; }
+.obsscale b { position: absolute; font-weight: 400; }
+.obshr { align-items: start; margin: 0 0 6px; }
+.obshl { font: 12px/16px var(--mono); color: var(--dim); }
+.obstrack { position: relative; background: linear-gradient(90deg, transparent calc(25% - .5px), var(--line) 0 calc(25% + .5px),
+  transparent 0 calc(50% - .5px), var(--line) 0 calc(50% + .5px), transparent 0 calc(75% - .5px), var(--line) 0 calc(75% + .5px), transparent 0); }
+.obsdev { display: block; font: .68rem var(--mono); color: var(--dim); margin: .1rem 0; }
+.obsband { position: relative; height: 16px; background: var(--soft); border-radius: 4px; }
+.obsband + .obsdev { margin-top: .25rem; }
+.obsband i, .obsband button { position: absolute; top: 0; bottom: 0; min-width: 3px; margin: 0; padding: 0; border: 0; border-radius: 3px;
+  background: var(--c); color: inherit; box-shadow: inset -1px 0 0 var(--card); overflow: hidden; container-type: inline-size; }
 .obsband button { cursor: pointer; }
 .obsband i { cursor: default; }
-.obsband button:hover, .obsband button:focus-visible { opacity: 1; outline: 2px solid var(--ink); outline-offset: -2px; z-index: 1; }
-.obsband em { font: 600 .66rem system-ui; font-style: normal; color: #fff; position: absolute; left: .3rem; top: 50%; transform: translateY(-50%); white-space: nowrap; }
-@container (max-width: 2.4rem) { .obsband em { display: none; } }
-.obsband .priv { background: repeating-linear-gradient(90deg, #9aa0a6 0 2px, transparent 2px 4px); opacity: .6; }
-.obsband .away, .awaykey { background: repeating-linear-gradient(135deg, var(--perf) 0 3px, transparent 3px 7px); opacity: 1; }
-.obsband .away { z-index: 2; pointer-events: auto; }
+.obsband button:hover, .obsband button:focus-visible, .obsband .sel { filter: brightness(1.1); outline: 2px solid var(--ink); outline-offset: 1px; z-index: 1; }
+.obsband em { font: 600 10.5px/16px system-ui, sans-serif; font-style: normal; color: #fff; position: absolute; left: 5px; top: 0; white-space: nowrap; }
+@container (max-width: 3.4rem) { .obsband em { display: none; } }
+.obsband .priv { background: repeating-linear-gradient(135deg, var(--c) 0 3px, color-mix(in srgb, var(--c) 65%, var(--card)) 3px 6px); }
+.obsband .away, .awaykey { background: repeating-linear-gradient(135deg, var(--perf) 0 3px, transparent 3px 7px); }
+.obsband .away { z-index: 2; box-shadow: none; }
 .awaykey { display: inline-block; width: 1.1rem; height: .7rem; border-radius: .2rem; vertical-align: middle; margin-right: .3rem; }
+.obsbk { position: relative; height: 3px; margin-top: 2px; }
+.obsbk i { position: absolute; top: 0; bottom: 0; background: var(--c); border-radius: 2px; }
+@media (prefers-color-scheme: dark) { .obsbk i { filter: brightness(1.45) saturate(.9); } }
+.bookedkey { display: inline-block; width: 14px; height: 3px; border-radius: 2px; background: var(--dim); vertical-align: middle; margin-right: .3rem; }
+.obsskip { margin: -1px 0 5px; font: 10px var(--mono); color: var(--dim); }
+.obsskip span { grid-column: 2; border-top: 1px dashed var(--line); padding-top: 1px; }
+.obsins { position: relative; margin: 2px 0 10px 2.2rem; padding: .55rem .8rem .5rem; background: var(--bg); border: 1px solid var(--line); border-radius: .7rem; }
+.obsins::before { content: ""; position: absolute; top: -6px; left: calc(var(--caret, 2rem) - 5px); width: 10px; height: 10px; background: var(--bg);
+  border-left: 1px solid var(--line); border-top: 1px solid var(--line); transform: rotate(45deg); }
+.obsinfo { font-size: .85rem; margin-bottom: .35rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.obsform { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.obsform input, .obsform select { width: auto; padding: .2rem .45rem; font-size: .9rem; background: var(--card); }
+.obsform .primary { padding: .25rem .8rem; font-size: .9rem; }
+.obsform .link { border: 0; background: none; color: var(--dim); font-size: .85rem; }
+.obsins .overnote { margin: .35rem 0 0; }
+@media (max-width: 600px) { .obs { padding: .8rem .7rem .5rem; } .obsins { margin-left: 0; } }
 .obslegend { margin: .4rem 0 0; display: flex; flex-wrap: wrap; gap: .3rem .9rem; }
 
 /* Setup → AI access: what a token may read */
@@ -336,7 +360,6 @@ table.matrix .st { display: block; font-size: .78rem; color: var(--dim); margin-
 .scope.obs { background: #fdebd8; color: #9a5a12; }
 .obschk { display: flex; align-items: center; gap: .35rem; white-space: nowrap; }
 @media (prefers-color-scheme: dark) { .scope.obs { background: #4a3419; color: #f0b873; } }
-.obsband button, .obsband i { min-width: 4px; } /* short blocks stay visible and hittable */
 .obstip { position: absolute; z-index: 5; max-width: min(28rem, 100%); background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow);
   border-radius: .5rem; padding: .4rem .6rem; font-size: .78rem; line-height: 1.35; overflow-wrap: anywhere; }
 .obstip .t { font-weight: 600; }
