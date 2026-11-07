@@ -48,6 +48,7 @@ func New(st store.Store, reg *modules.Registry) *Server {
 		limiter: &loginLimiter{Delay: defaultDelay}}
 	s.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "ok\n") })
 	s.mux.HandleFunc("POST /api/events", s.api(s.postEvents))
+	s.mux.HandleFunc("POST /api/observations", s.api(s.postObservations))
 	s.mux.HandleFunc("GET /api/events", s.api(s.getEvents))
 	s.mux.HandleFunc("GET /api/state", s.api(s.getState))
 	s.mux.HandleFunc("GET /api/intervals", s.api(s.getIntervals))

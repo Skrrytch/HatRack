@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Attrs are the attributes of an observation, e.g. app, title, state.
@@ -111,6 +112,55 @@ func (o Observe) Validate() error {
 			if !sensorRe.MatchString(s) {
 				return fmt.Errorf("config: observe.devices.%s: sensor %q: use lower case letters, digits and '_'", dev, s)
 			}
+		}
+	}
+	return nil
+}
+
+// Observation limits.
+const (
+	MaxObservationBatch  = 500
+	MaxObservationSpan   = 24 * time.Hour
+	MaxObservationAttrs  = 16
+	MaxAttrValue         = 2048 // bytes
+	ObservationClockSkew = 10 * time.Minute
+)
+
+var (
+	obsIDRe      = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+	obsAttrKeyRe = regexp.MustCompile(`^[a-z_]{1,32}$`)
+)
+
+// Validate checks one span against the limits; now is the receiver's clock.
+func (o Observation) Validate(now time.Time) error {
+	if !obsIDRe.MatchString(o.ID) {
+		return fmt.Errorf("observation %q: id is not a UUID", o.ID)
+	}
+	if !sensorRe.MatchString(o.Sensor) {
+		return fmt.Errorf("observation %s: sensor %q: use lower case letters, digits and '_'", o.ID, o.Sensor)
+	}
+	if o.End.Before(o.Start) {
+		return fmt.Errorf("observation %s: end is before start", o.ID)
+	}
+	if o.End.Sub(o.Start) > MaxObservationSpan {
+		return fmt.Errorf("observation %s: span longer than %s", o.ID, MaxObservationSpan)
+	}
+	if o.End.After(now.Add(ObservationClockSkew)) {
+		return fmt.Errorf("observation %s: end is in the future", o.ID)
+	}
+	if len(o.Attrs) > MaxObservationAttrs {
+		return fmt.Errorf("observation %s: more than %d attrs", o.ID, MaxObservationAttrs)
+	}
+	for _, k := range slices.Sorted(maps.Keys(o.Attrs)) {
+		if !obsAttrKeyRe.MatchString(k) {
+			return fmt.Errorf("observation %s: attr key %q: use 1 to 32 lower case letters and '_'", o.ID, k)
+		}
+		v := o.Attrs[k]
+		if len(v) > MaxAttrValue {
+			return fmt.Errorf("observation %s: attr %q longer than %d bytes", o.ID, k, MaxAttrValue)
+		}
+		if !utf8.ValidString(v) {
+			return fmt.Errorf("observation %s: attr %q is not valid UTF-8", o.ID, k)
 		}
 	}
 	return nil
