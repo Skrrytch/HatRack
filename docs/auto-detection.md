@@ -109,8 +109,8 @@ observations(id, device_id, sensor, start, end, attrs_json, rev)
   remains), `redact` apps keep only the app name, and while a hat with
   `observe: false` is worn only `idle` is recorded.
 - Spans go to the server in batches (`POST /api/observations`) through the
-  existing offline queue. The server keeps them for `retention` days
-  (default 28; titles are sensitive, and four weeks cover any review) and
+  existing offline queue. The server keeps them for `observe.retention_days`
+  days (default 28; titles are sensitive, and four weeks cover any review) and
   then deletes them.
 - Observations are not events: no corrections, no `rev` games, no export
   with the configuration.

@@ -85,6 +85,7 @@ activities(id, hat_id, name, sort, archived, rev, updated_at)
 module_settings(module, hat_id?, device_id?, json, rev, updated_at)
 devices(id, name, token_hash, capabilities_json, last_seen)
 events(id uuid, ts, device_id, type, hat_id, activity_id, note, payload_json)
+observations(id uuid, device, sensor, start, end, attrs_json)
 ```
 
 - Event types: `switch`, `activity`, `detail`, `off`, `correction`,
@@ -99,6 +100,10 @@ events(id uuid, ts, device_id, type, hat_id, activity_id, note, payload_json)
 - UUIDs and device timestamps make queued events and a later
   standalone → server migration safe. `rev`/`updated_at` on master data prepare
   for syncing.
+- Observations are spans of one sensor (idle, active window …) with constant
+  attributes, stored apart from the event log and kept `observe.retention_days`
+  (default 28), then deleted. They never change the log or the totals. See
+  [automatic detection](auto-detection.md).
 
 ## Server
 
@@ -112,7 +117,8 @@ events(id uuid, ts, device_id, type, hat_id, activity_id, note, payload_json)
 
 **Views:** Now (current hat, activity, duration, devices online) · Day
 (timeline, editable) · Week (totals per hat and activity, CSV export) · Setup
-(hats, activities, module settings) · Devices (capabilities, last seen, errors).
+(hats, activities, module settings) · Setup → Erkennung (sensors per device,
+privacy lists, retention) · Devices (capabilities, last seen, errors).
 
 **MCP tools:** read `get_current`, `list_hats`, `list_activities`,
 `query_time(from, to, group_by)`, `list_events`; write `switch`, `add_note`,
@@ -121,7 +127,8 @@ events(id uuid, ts, device_id, type, hat_id, activity_id, note, payload_json)
 ## Client
 
 - **`hat agent`:** `systemd --user` service. Installation is copying one
-  binary. Holds the SSE connection, runs modules, queues offline events.
+  binary. Holds the SSE connection, runs modules and the enabled sensors,
+  queues offline events and, separately, their observations.
 - **`hat`:** `on`, `do`, `off`, `status`, `log`, `config`. Talks to the agent
   over a Unix socket.
 - **HatTray (`hat tray`):** StatusNotifierItem over D-Bus (`fyne.io/systray`,
