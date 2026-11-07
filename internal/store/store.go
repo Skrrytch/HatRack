@@ -14,7 +14,8 @@ import (
 // ErrNotFound is returned when a device or record does not exist.
 var ErrNotFound = errors.New("not found")
 
-// MCPToken lets an AI assistant use /mcp. Scopes: "read" for now.
+// MCPToken lets an AI assistant use /mcp. Scopes: "read" (always) and
+// "observe" (may read observations: app and window title); set at creation.
 type MCPToken struct {
 	ID       string
 	Name     string

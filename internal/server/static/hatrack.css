@@ -311,3 +311,28 @@ table.matrix .st { display: block; font-size: .78rem; color: var(--dim); margin-
 .idle .ex { border-left: 3px solid var(--line); padding-left: .8rem; margin: 1rem 0 .8rem; font-size: .9rem; color: var(--dim); }
 @media (max-width: 40rem) { .idle .row2 { grid-template-columns: 1fr; gap: .2rem; } }
 @media (max-width: 40rem) { .privacy .grid { grid-template-columns: 1fr; } }
+
+/* Day view: what the computer observed (apps in focus, absences) */
+.obs { margin: .6rem 0 1rem; }
+.obshead { margin-bottom: .3rem; }
+.obsrow { margin: .1rem 0 .3rem; }
+.obsdev { display: block; font: .68rem var(--mono); color: var(--dim); margin-bottom: .1rem; }
+.obsband { position: relative; height: 1.15rem; background: var(--soft); border-radius: .35rem; overflow: hidden; }
+.obsband i, .obsband button { position: absolute; top: 0; bottom: 0; margin: 0; padding: 0; border: 0; border-radius: 0; background: var(--c); color: inherit;
+  opacity: .85; border-right: 1px solid var(--card); overflow: hidden; container-type: inline-size; }
+.obsband button { cursor: pointer; }
+.obsband i { cursor: default; }
+.obsband button:hover, .obsband button:focus-visible { opacity: 1; outline: 2px solid var(--ink); outline-offset: -2px; z-index: 1; }
+.obsband em { font: 600 .66rem system-ui; font-style: normal; color: #fff; position: absolute; left: .3rem; top: 50%; transform: translateY(-50%); white-space: nowrap; }
+@container (max-width: 2.4rem) { .obsband em { display: none; } }
+.obsband .priv { background: repeating-linear-gradient(90deg, #9aa0a6 0 2px, transparent 2px 4px); opacity: .6; }
+.obsband .away, .awaykey { background: repeating-linear-gradient(135deg, var(--perf) 0 3px, transparent 3px 7px); opacity: 1; }
+.obsband .away { z-index: 2; pointer-events: auto; }
+.awaykey { display: inline-block; width: 1.1rem; height: .7rem; border-radius: .2rem; vertical-align: middle; margin-right: .3rem; }
+.obslegend { margin: .4rem 0 0; display: flex; flex-wrap: wrap; gap: .3rem .9rem; }
+
+/* Setup → AI access: what a token may read */
+.scope { display: inline-block; font-size: .75rem; font-weight: 600; padding: .05rem .45rem; border-radius: 1rem; background: var(--soft); color: var(--dim); }
+.scope.obs { background: #fdebd8; color: #9a5a12; }
+.obschk { display: flex; align-items: center; gap: .35rem; white-space: nowrap; }
+@media (prefers-color-scheme: dark) { .scope.obs { background: #4a3419; color: #f0b873; } }

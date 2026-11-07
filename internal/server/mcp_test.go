@@ -82,7 +82,7 @@ func TestMCPAuth(t *testing.T) {
 			t.Errorf("%s is not marked read-only", tl.Name)
 		}
 	}
-	if strings.Join(names, ",") != "get_config,get_current,list_entries,list_hats,query_time" {
+	if strings.Join(names, ",") != "get_config,get_current,list_entries,list_hats,list_observations,query_time" {
 		t.Fatalf("tools: %v", names)
 	}
 	// the MCP token opens nothing else
@@ -310,5 +310,85 @@ func TestMCPDetails(t *testing.T) {
 	call(t, cs, "get_current", nil, &cur)
 	if cur.Detail != "PR 482" {
 		t.Fatalf("current: %+v", cur)
+	}
+}
+
+func TestMCPListObservations(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	e.st.PutObservations(ctx, "laptop", []core.Observation{
+		{ID: "1", Sensor: "window", Start: e.now.Add(-60 * time.Minute), End: e.now.Add(-30 * time.Minute), Attrs: core.Attrs{"app": "Firefox", "title": "Jira"}},
+		{ID: "2", Sensor: "window", Start: e.now.Add(-30 * time.Minute), End: e.now.Add(-25 * time.Minute), Attrs: core.Attrs{core.AttrPrivate: "1"}},
+		{ID: "3", Sensor: "idle", Start: e.now.Add(-25 * time.Minute), End: e.now.Add(-5 * time.Minute), Attrs: core.Attrs{"kind": "locked"}},
+	})
+	_, plain, _ := e.st.AddMCPToken(ctx, "plain", []string{"read"})
+	_, seeing, _ := e.st.AddMCPToken(ctx, "seeing", []string{"read", "observe"})
+
+	cs, err := mcpSession(t, e, plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tools, _ := cs.ListTools(ctx, nil)
+	listed := false
+	for _, tl := range tools.Tools {
+		listed = listed || tl.Name == "list_observations"
+	}
+	if !listed {
+		t.Fatal("list_observations is listed for every token")
+	}
+	var out observationsOut
+	msg := call(t, cs, "list_observations", map[string]any{"period": "today"}, &out)
+	if !strings.Contains(msg, `This token may not read observations. Create a token with "may read observations" in Setup → AI access.`) {
+		t.Fatalf("a read-only token: %q", msg)
+	}
+
+	cs, err = mcpSession(t, e, seeing)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if msg := call(t, cs, "list_observations", map[string]any{"period": "today"}, &out); msg != "" {
+		t.Fatal(msg)
+	}
+	if len(out.Observations) != 3 || out.Truncated {
+		t.Fatalf("observations: %+v", out)
+	}
+	o := out.Observations[0]
+	if o.Device != "laptop" || o.Sensor != "window" || o.App != "Firefox" || o.Title != "Jira" || o.Minutes != 30 || o.Start != "2026-11-04T11:00:00Z" {
+		t.Fatalf("first: %+v", o)
+	}
+	if p := out.Observations[1]; !p.Private || p.App != "" {
+		t.Fatalf("private: %+v", p)
+	}
+	if k := out.Observations[2]; k.Sensor != "idle" || k.Kind != "locked" {
+		t.Fatalf("idle: %+v", k)
+	}
+	call(t, cs, "list_observations", map[string]any{"period": "today", "sensor": "idle"}, &out)
+	if len(out.Observations) != 1 {
+		t.Fatalf("sensor filter: %+v", out)
+	}
+	call(t, cs, "list_observations", map[string]any{"period": "today", "device": "other"}, &out)
+	if len(out.Observations) != 0 {
+		t.Fatalf("device filter: %+v", out)
+	}
+}
+
+func TestAIAccessObserveScope(t *testing.T) {
+	e, b := setupBrowser(t)
+	b.do("POST", "/setup/ai", url.Values{"op": {"add"}, "name": {"Plain"}})
+	b.do("POST", "/setup/ai", url.Values{"op": {"add"}, "name": {"Watcher"}, "observe": {"on"}})
+	list, _ := e.st.MCPTokens(context.Background())
+	got := map[string]string{}
+	for _, tk := range list {
+		got[tk.Name] = strings.Join(tk.Scopes, ",")
+	}
+	if got["Plain"] != "read" || got["Watcher"] != "read,observe" {
+		t.Fatalf("scopes: %v", got)
+	}
+	_, out := b.do("GET", "/setup/ai", nil)
+	if strings.Count(out, `class="scope">Times<`) != 2 || strings.Count(out, `scope obs">&#43; observations<`) != 1 {
+		t.Fatalf("chips: Times %d, observations %d", strings.Count(out, `class="scope">Times<`), strings.Count(out, `scope obs">&#43; observations<`))
+	}
+	if !strings.Contains(out, `name="observe"`) {
+		t.Fatal("checkbox")
 	}
 }

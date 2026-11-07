@@ -19,6 +19,7 @@
   {{range .Tokens}}
     <tr>
       <td><strong>{{.Name}}</strong></td>
+      <td><span class="scope">{{t $.Lang "web.ai.scope_read"}}</span>{{if .Observe}} <span class="scope obs">{{t $.Lang "web.ai.scope_observe"}}</span>{{end}}</td>
       <td class="dim small">{{t $.Lang "web.ai.created" .Created}}</td>
       <td class="dim small">{{if .Used}}{{t $.Lang "web.ai.used" .Used}}{{else}}{{t $.Lang "web.ai.unused"}}{{end}}</td>
       <td class="acts"><form method="post" action="/setup/ai"><input type="hidden" name="op" value="delete"><input type="hidden" name="id" value="{{.ID}}">
@@ -32,6 +33,7 @@
 <form method="post" action="/setup/ai" class="card newhat">
   <input type="hidden" name="op" value="add">
   <input type="text" name="name" placeholder="{{t $.Lang "web.ai.name"}}" required class="grow">
+  <label class="obschk"><input type="checkbox" name="observe"> {{t $.Lang "web.ai.observe"}} <span class="dim small">{{t $.Lang "web.ai.observe_hint"}}</span></label>
   <button class="primary">{{t $.Lang "web.ai.create"}}</button>
 </form>
 <p class="dim small">{{t $.Lang "web.ai.endpoint"}} <code>{{.Endpoint}}</code></p>

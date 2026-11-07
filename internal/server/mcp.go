@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"hatrack/internal/core"
@@ -16,20 +18,28 @@ import (
 )
 
 // MCP: an AI assistant reads the configuration and the time log at /mcp
-// (Streamable HTTP). Access needs an MCP token; for now everything is read
-// only. The tools use the same functions as the Day and Week views, so the
-// numbers agree with the web UI.
+// (Streamable HTTP). Access needs an MCP token; everything is read only. The
+// token's scopes: "read" (always) and "observe" (what the computer observed).
+// The tools use the same functions as the Day and Week views, so the numbers
+// agree with the web UI.
 
 // mcpHandler builds the endpoint: authentication around the SDK's handler.
 func (s *Server) mcpHandler(version string) http.Handler {
 	srv := mcp.NewServer(&mcp.Implementation{Name: "hatrack", Title: "HatRack", Version: version}, &mcp.ServerOptions{
 		Instructions: "HatRack tracks which work context (hat) and activity the user is in. " +
 			"Use query_time for questions like \"how long did I work for X last week\", list_entries for the details of a day, " +
-			"get_current for what runs now, list_hats and get_config for the configuration. Times are in the server's time zone.",
+			"get_current for what runs now, list_hats and get_config for the configuration. " +
+			"list_observations tells what the computer observed (focused app and window title, absence); it needs the observe permission. " +
+			"Times are in the server's time zone.",
 	})
 	s.addMCPTools(srv)
 	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return srv },
 		&mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
+	// the SDK hands the token's scopes on to the tools (req.Extra.TokenInfo)
+	scoped := auth.RequireBearerToken(func(_ context.Context, _ string, r *http.Request) (*auth.TokenInfo, error) {
+		sc, _ := r.Context().Value(mcpScopesKey{}).([]string)
+		return &auth.TokenInfo{Scopes: sc}, nil
+	}, &auth.RequireBearerTokenOptions{AllowMissingExpiration: true})(h)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if token == "" || !strings.HasPrefix(token, "hrm_") {
@@ -47,8 +57,16 @@ func (s *Server) mcpHandler(version string) http.Handler {
 			return
 		}
 		s.st.TouchMCPToken(r.Context(), t.ID)
-		h.ServeHTTP(w, r)
+		scoped.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), mcpScopesKey{}, t.Scopes)))
 	})
+}
+
+// mcpScopesKey carries the scopes of the checked token to the SDK's middleware.
+type mcpScopesKey struct{}
+
+// mcpAllowed reports whether the token of the call has the scope.
+func mcpAllowed(req *mcp.CallToolRequest, scope string) bool {
+	return req != nil && req.Extra != nil && req.Extra.TokenInfo != nil && slices.Contains(req.Extra.TokenInfo.Scopes, scope)
 }
 
 // ---- periods -----------------------------------------------------------------------
@@ -215,6 +233,34 @@ type entriesOut struct {
 	Entries   []entry `json:"entries"`
 	Truncated bool    `json:"truncated,omitempty" jsonschema:"more than 500 entries; ask for a shorter period"`
 }
+
+type observationsIn struct {
+	Period string `json:"period,omitempty" jsonschema:"today, yesterday, week, last week, month or last month; default today. Leave empty when using from/to."`
+	From   string `json:"from,omitempty" jsonschema:"start: a date (2026-11-04) or an RFC 3339 time"`
+	To     string `json:"to,omitempty" jsonschema:"end, inclusive for dates (2026-11-08 includes that day); default: now, or the end of the from date"`
+	Sensor string `json:"sensor,omitempty" jsonschema:"window (focused app and title) or idle (absence); default both"`
+	Device string `json:"device,omitempty" jsonschema:"only this device, by name"`
+}
+
+type observationOut struct {
+	Device  string `json:"device,omitempty"`
+	Sensor  string `json:"sensor" jsonschema:"window or idle"`
+	Start   string `json:"start"`
+	End     string `json:"end"`
+	Minutes int    `json:"minutes"`
+	App     string `json:"app,omitempty"`
+	Title   string `json:"title,omitempty" jsonschema:"window title; absent if it was not recorded"`
+	Private bool   `json:"private,omitempty" jsonschema:"an app the user keeps private: no details recorded"`
+	Kind    string `json:"kind,omitempty" jsonschema:"for idle: locked or inactive"`
+}
+
+type observationsOut struct {
+	Observations []observationOut `json:"observations"`
+	Truncated    bool             `json:"truncated" jsonschema:"more than 2000 spans; ask for a shorter period"`
+}
+
+// maxObservationsOut limits what list_observations returns.
+const maxObservationsOut = 2000
 
 type hatTotal struct {
 	Hat      string `json:"hat"`
@@ -404,6 +450,42 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 				out.Entries = append(out.Entries, entry{Hat: i.Hat, HatName: nameOf(nm, i.Hat), Activity: i.Activity,
 					Detail: core.ShortDetail(i.Detail), DetailURL: core.DetailURL(i.Detail, links),
 					Start: ts(i.Start), End: ts(i.End), Minutes: minutes(i.Duration()), Duration: core.FormatDuration(i.Duration()), Running: i.Open})
+			}
+			return nil, out, nil
+		})
+
+	mcp.AddTool(srv, &mcp.Tool{Name: "list_observations", Annotations: readOnly("What the computer observed"),
+		Description: "What the computer observed in a period, oldest first: spans with the focused app and window title (sensor window) " +
+			"and absences (sensor idle, kind locked or inactive). These are hints, not booked time; they never change the log. " +
+			"Needs a token with the observe permission."},
+		func(ctx context.Context, req *mcp.CallToolRequest, in observationsIn) (*mcp.CallToolResult, observationsOut, error) {
+			if !mcpAllowed(req, "observe") {
+				return nil, observationsOut{}, errors.New("This token may not read observations. Create a token with \"may read observations\" in Setup → AI access.")
+			}
+			from, to, err := s.mcpPeriod(in.Period, in.From, in.To)
+			if err != nil {
+				return nil, observationsOut{}, err
+			}
+			if in.Sensor != "" && in.Sensor != "window" && in.Sensor != "idle" {
+				return nil, observationsOut{}, fmt.Errorf("sensor %q: use window or idle", in.Sensor)
+			}
+			list, err := s.st.ObservationsBetween(ctx, from, to, in.Device, in.Sensor)
+			if err != nil {
+				return nil, observationsOut{}, err
+			}
+			out := observationsOut{Observations: []observationOut{}}
+			ts := func(t time.Time) string { return t.In(s.Loc).Format(time.RFC3339) }
+			for _, o := range list {
+				if o.Sensor != "window" && o.Sensor != "idle" {
+					continue
+				}
+				if len(out.Observations) >= maxObservationsOut {
+					out.Truncated = true
+					break
+				}
+				out.Observations = append(out.Observations, observationOut{Device: o.Device, Sensor: o.Sensor,
+					Start: ts(o.Start), End: ts(o.End), Minutes: minutes(o.End.Sub(o.Start)),
+					App: o.Attrs["app"], Title: o.Attrs["title"], Private: o.Attrs[core.AttrPrivate] == "1", Kind: o.Attrs["kind"]})
 			}
 			return nil, out, nil
 		})

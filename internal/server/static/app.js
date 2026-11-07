@@ -51,6 +51,18 @@
     if (lines.indexOf(app.toLowerCase()) < 0) area.value = (area.value.replace(/\s+$/, "") + "\n" + app).replace(/^\n/, "");
     b.remove();
   });
+  // a block of the "Observed" band: prefill the add form with its time
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest(".obsband button[data-start]");
+    var d = b && document.querySelector("details.card.add");
+    if (!d) return;
+    d.open = true;
+    d.querySelector("input[name=start]").value = b.dataset.start;
+    d.querySelector("input[name=end]").value = b.dataset.end;
+    d.scrollIntoView({ block: "center", behavior: "smooth" });
+    var what = d.querySelector("select[name=what]");
+    if (what) what.focus({ preventScroll: true });
+  });
   // picking a wallpaper from the gallery fills in its path
   document.addEventListener("change", function (e) {
     var t = e.target;

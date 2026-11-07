@@ -245,6 +245,13 @@ observations are kept.
 - **End of day:** one prompt for what is still open, together with the daily
   summary planned in [MVP 3](mvp-3.md).
 
+**Exists now (#7):** the Day view has a band "Observed" below the logged
+one on the same time axis, one row per device. Window spans of one app merge
+into a block (gap under a minute); the tooltip lists the three titles with
+the most time. Idle spans are drawn over the windows and subtracted from the
+per-app totals in the legend. Clicking a block prefills the add form with its
+times. Nothing in it changes the log.
+
 ### 8. MCP
 
 The read-only MCP server grows by three tools:
@@ -254,6 +261,11 @@ The read-only MCP server grows by three tools:
 | `summarize_blocks(from, to, block)` | `read` | blocks with their score lists and the logged entry, no titles |
 | `list_observations(from, to, sensor)` | `observe` (new) | the spans with app and (redacted) title |
 | `propose_correction(...)` | `propose` (new) | stores a correction with `status: proposed`, `source: ai`; it counts only after confirmation in the Day view |
+
+**Exists now (#7):** `list_observations(from, to, period, sensor, device)`
+with the scope `observe`. The scope is set when a token is created (Setup →
+AI access); existing tokens stay `read` only, a new token is needed to grant
+it. Without the scope the tool answers with an error that says so.
 
 `propose_correction` was planned since MVP 2; the review UI of MVP 9 is where
 it gets confirmed. Titles are behind a scope of their own because they are

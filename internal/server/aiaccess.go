@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	"hatrack/internal/i18n"
@@ -18,6 +19,7 @@ type aiView struct {
 
 type aiToken struct {
 	ID, Name, Created, Used string
+	Observe                 bool // the token may read observations
 }
 
 func (s *Server) aiView(r *http.Request, acc access) (view, error) {
@@ -29,7 +31,7 @@ func (s *Server) aiView(r *http.Request, acc access) (view, error) {
 		return v, err
 	}
 	for _, t := range list {
-		a := aiToken{ID: t.ID, Name: t.Name, Created: dayLabel(lang, t.Created.In(loc), true)}
+		a := aiToken{ID: t.ID, Name: t.Name, Observe: slices.Contains(t.Scopes, "observe"), Created: dayLabel(lang, t.Created.In(loc), true)}
 		if !t.LastUsed.IsZero() {
 			a.Used = dayLabel(lang, t.LastUsed.In(loc), true) + " " + t.LastUsed.In(loc).Format("15:04")
 		}
@@ -57,7 +59,11 @@ func (s *Server) aiAction(w http.ResponseWriter, r *http.Request, acc access) {
 			fail(i18n.In(lang, "web.setup.needname"))
 			return
 		}
-		_, token, err := s.st.AddMCPToken(r.Context(), name, []string{"read"})
+		scopes := []string{"read"}
+		if r.PostFormValue("observe") != "" {
+			scopes = append(scopes, "observe") // set at creation only
+		}
+		_, token, err := s.st.AddMCPToken(r.Context(), name, scopes)
 		if err != nil {
 			fail(i18n.In(lang, "web.dev.exists", name))
 			return
