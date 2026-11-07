@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -132,8 +133,21 @@ func TestBuiltinFake(t *testing.T) {
 	r = Builtin()
 	for _, id := range []string{IdleSensor, "window"} {
 		s, ok := r.Get(id)
-		if !ok || len(s.Backends) != 0 {
-			t.Fatalf("%s without %s: want no backends", id, FakeEnv)
+		want := 0
+		if id == IdleSensor {
+			want = 4 // x11, mutter, kde, logind
+		}
+		if !ok || len(s.Backends) != want {
+			t.Fatalf("%s without %s: %d backends, want %d", id, FakeEnv, len(s.Backends), want)
+		}
+		if id == IdleSensor {
+			var names []string
+			for _, b := range s.Backends {
+				names = append(names, b.Name())
+			}
+			if got := strings.Join(names, ","); got != "x11,mutter,kde,logind" {
+				t.Fatalf("idle backends %s", got)
+			}
 		}
 	}
 }

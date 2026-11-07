@@ -54,15 +54,19 @@ func (r *Registry) Get(id string) (Sensor, bool) {
 // All returns the sensors in registration order.
 func (r *Registry) All() []Sensor { return append([]Sensor(nil), r.list...) }
 
-// Builtin returns "idle" and "window". Without backends for now (real
-// backends follow in later tickets), unless FakeEnv is set: then both get a
-// fake backend first.
+// Builtin returns "idle" and "window". "idle" has the backends x11, mutter,
+// kde and logind, "window" none yet. If FakeEnv is set, both get a fake
+// backend first.
 func Builtin() *Registry {
 	r := &Registry{}
 	for _, id := range []string{IdleSensor, "window"} {
 		s := Sensor{ID: id}
 		if path := os.Getenv(FakeEnv); path != "" {
 			s.Backends = []Backend{&fakeBackend{sensor: id, path: path, poll: 100 * time.Millisecond}}
+		}
+		if id == IdleSensor {
+			s.Backends = append(s.Backends, &x11Backend{poll: idlePoll}, &mutterBackend{poll: idlePoll},
+				&kdeBackend{poll: idlePoll}, &logindBackend{})
 		}
 		r.Register(s)
 	}
