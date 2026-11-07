@@ -115,10 +115,16 @@ type Hat struct {
 	// WorkTime false: the hat's time is recorded but is no working time
 	// (e.g. Private): left out of the sums, "today" and MQTT "working".
 	WorkTime *bool `yaml:"work_time,omitempty" json:"work_time,omitempty"`
+	// Observe false: only idle is recorded while this hat is worn.
+	Observe *bool `yaml:"observe,omitempty" json:"observe,omitempty"`
 }
 
 // CountsAsWork reports whether the hat's time is working time (the default).
 func (h Hat) CountsAsWork() bool { return h.WorkTime == nil || *h.WorkTime }
+
+// Observes reports whether observations are recorded under this hat (the
+// default).
+func (h Hat) Observes() bool { return h.Observe == nil || *h.Observe }
 
 // IsWork reports whether time in a hat counts as working time; unknown
 // hats (e.g. deleted ones) count.
@@ -178,6 +184,7 @@ type Config struct {
 	Version  int                  `yaml:"version" json:"version"`
 	Defaults Defaults             `yaml:"defaults,omitempty" json:"defaults"`
 	Modules  map[string]ModuleCfg `yaml:"modules,omitempty" json:"modules,omitempty"`
+	Observe  Observe              `yaml:"observe,omitempty" json:"observe,omitzero"`
 	Hats     HatList              `yaml:"hats" json:"hats"`
 }
 
@@ -211,6 +218,9 @@ func (c Config) Validate() error {
 		if err := c.Defaults.WorkHours.validate(); err != nil {
 			return err
 		}
+	}
+	if err := c.Observe.Validate(); err != nil {
+		return err
 	}
 	seen := map[string]bool{}
 	for _, h := range c.Hats {
@@ -337,7 +347,7 @@ func (c Config) ModuleIDs() []string {
 // because the log refers to it). It returns the result and a list of changes.
 func Merge(cur, in Config, replace bool) (Config, []string) {
 	var changes []string
-	out := Config{Version: ConfigVersion, Defaults: cur.Defaults, Modules: copyModules(cur.Modules)}
+	out := Config{Version: ConfigVersion, Defaults: cur.Defaults, Modules: copyModules(cur.Modules), Observe: cur.Observe}
 
 	if in.Defaults.ResumeActivity != "" && in.Defaults.ResumeActivity != cur.Defaults.ResumeActivity {
 		out.Defaults.ResumeActivity = in.Defaults.ResumeActivity
@@ -347,6 +357,10 @@ func Merge(cur, in Config, replace bool) (Config, []string) {
 		w := *in.Defaults.WorkHours
 		out.Defaults.WorkHours = &w
 		changes = append(changes, "defaults.work_hours: "+w.Start+"-"+w.End)
+	}
+	if !sameJSON(in.Observe, Observe{}) && !sameJSON(in.Observe, cur.Observe) {
+		out.Observe = in.Observe
+		changes = append(changes, "observe settings")
 	}
 	if replace {
 		for id := range out.Modules {
@@ -404,7 +418,7 @@ func Merge(cur, in Config, replace bool) (Config, []string) {
 func mergeHat(old, in Hat, replace bool) Hat {
 	h := old
 	h.Name, h.Color, h.ResumeActivity = in.Name, in.Color, in.ResumeActivity
-	h.Archived, h.WorkTime = in.Archived, in.WorkTime
+	h.Archived, h.WorkTime, h.Observe = in.Archived, in.WorkTime, in.Observe
 	if replace || len(in.Modules) > 0 {
 		// a copy: changing old's map in place would hide the change from
 		// the comparison in Merge, and the import would be dropped
