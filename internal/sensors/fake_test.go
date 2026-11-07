@@ -133,7 +133,7 @@ func TestBuiltinFake(t *testing.T) {
 	r = Builtin()
 	for _, id := range []string{IdleSensor, "window"} {
 		s, ok := r.Get(id)
-		want := 0
+		want := 1 // window: x11
 		if id == IdleSensor {
 			want = 4 // x11, mutter, kde, logind
 		}
