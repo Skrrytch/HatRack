@@ -314,7 +314,7 @@ table.matrix .st { display: block; font-size: .78rem; color: var(--dim); margin-
 
 /* Day view: what the computer observed (apps in focus, absences) */
 .obs { margin: .6rem 0 1rem; position: relative; }
-.obshead { margin-bottom: .3rem; }
+.obsnote { margin: -.3rem 0 .5rem; }
 .obsrow { margin: .1rem 0 .3rem; }
 .obsdev { display: block; font: .68rem var(--mono); color: var(--dim); margin-bottom: .1rem; }
 .obsband { position: relative; height: 1.15rem; background: var(--soft); border-radius: .35rem; overflow: hidden; }
