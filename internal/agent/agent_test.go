@@ -88,7 +88,11 @@ type rig struct {
 	srv    *httptest.Server
 	handle http.Handler
 	down   atomic.Bool
-	token  string
+	// obsStatus and evStatus, when set, are the answer of the observation
+	// and the event endpoints (a fault of just one of them)
+	obsStatus atomic.Int32
+	evStatus  atomic.Int32
+	token     string
 }
 
 func newRig(t *testing.T) *rig {
@@ -103,6 +107,19 @@ func newRig(t *testing.T) *rig {
 		if r.down.Load() {
 			http.Error(w, "down", http.StatusServiceUnavailable)
 			return
+		}
+		if req.Method == http.MethodPost {
+			code := int32(0)
+			switch req.URL.Path {
+			case "/api/observations":
+				code = r.obsStatus.Load()
+			case "/api/events":
+				code = r.evStatus.Load()
+			}
+			if code != 0 {
+				http.Error(w, "fault", int(code))
+				return
+			}
 		}
 		r.handle.ServeHTTP(w, req)
 	}))
@@ -149,9 +166,11 @@ func eventually(t *testing.T, what string, cond func() bool) {
 	t.Fatalf("timeout waiting for %s", what)
 }
 
-func (r *rig) importConfig() {
+func (r *rig) importConfig() { r.t.Helper(); r.importYAML(testConfig) }
+
+func (r *rig) importYAML(y string) {
 	r.t.Helper()
-	cfg, err := core.ParseConfig([]byte(testConfig))
+	cfg, err := core.ParseConfig([]byte(y))
 	if err != nil {
 		r.t.Fatal(err)
 	}

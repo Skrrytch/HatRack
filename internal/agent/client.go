@@ -94,6 +94,18 @@ func (c *Client) PostEvents(ctx context.Context, ev []core.Event) (int64, error)
 	return out.EventRev, err
 }
 
+// PostObservations sends spans of the sensors; the answer says how many the
+// server stored and how many it skipped (sensor off, too old).
+func (c *Client) PostObservations(ctx context.Context, obs []core.Observation) (stored, skipped int, err error) {
+	b, _ := json.Marshal(obs)
+	var out struct {
+		Stored  int `json:"stored"`
+		Skipped int `json:"skipped"`
+	}
+	_, err = c.do(ctx, "POST", "/api/observations", b, "application/json", &out)
+	return out.Stored, out.Skipped, err
+}
+
 // State fetches the current state.
 func (c *Client) State(ctx context.Context) (server.StateResponse, error) {
 	var s server.StateResponse

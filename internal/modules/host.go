@@ -22,6 +22,7 @@ func (f Failure) Error() string { return fmt.Sprintf("%s %s: %v", f.Module, f.Ho
 type Capability struct {
 	Backend   string              `json:"backend,omitempty"`
 	Available bool                `json:"available"`
+	Reason    string              `json:"reason,omitempty"`  // why it is not available, or a warning
 	Choices   map[string][]Choice `json:"choices,omitempty"` // see Host.Choices
 }
 

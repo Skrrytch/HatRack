@@ -8,11 +8,13 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"hatrack/internal/core"
 	"hatrack/internal/i18n"
 	"hatrack/internal/modules"
+	"hatrack/internal/sensors"
 	"hatrack/internal/server"
 )
 
@@ -47,6 +49,24 @@ type Agent struct {
 
 	subMu sync.Mutex
 	subs  map[chan struct{}]struct{}
+
+	// Observations, see observe.go. The sensors and the observation flusher
+	// never take mu; they use the locks below.
+	sensors *sensors.Registry // set by SetSensors before Run
+	rec     *sensors.Recorder
+	obsKick chan struct{}
+
+	devMu        sync.Mutex // guards serverDevice
+	serverDevice string     // the device name the server knows, from the hello
+
+	runMu   sync.Mutex // guards runners and their status
+	runners map[string]*runner
+
+	helloMu      sync.Mutex // guards baseCaps and lastHello
+	baseCaps     map[string]modules.Capability
+	lastHello    time.Time
+	helloPending atomic.Bool
+	obs404Logged atomic.Bool
 }
 
 func (a *Agent) subscribe() chan struct{} {
@@ -81,12 +101,15 @@ func (a *Agent) changed() {
 // New creates an agent. The registry holds the modules available on this
 // device.
 func New(cfg Config, db *DB, reg *modules.Registry) *Agent {
-	return &Agent{
+	a := &Agent{
 		cfg: cfg, db: db, host: modules.NewHost(reg), Now: time.Now,
 		client: NewClient(cfg.Server, cfg.Token),
 		state:  core.NewState(), last: map[string]string{}, config: core.NewConfig(),
 		neutral: map[string]json.RawMessage{}, kick: make(chan struct{}, 1),
+		obsKick: make(chan struct{}, 1),
 	}
+	a.rec = sensors.NewRecorder(time.Minute, a.enqueueObs)
+	return a
 }
 
 // Load reads the cached state, configuration and applied look.
@@ -107,6 +130,13 @@ func (a *Agent) Load() error {
 	if a.neutral == nil {
 		a.neutral = map[string]json.RawMessage{}
 	}
+	var dev string
+	if _, err := a.db.Get("server_device", &dev); err != nil {
+		return fmt.Errorf("cache server_device: %w", err)
+	}
+	a.devMu.Lock()
+	a.serverDevice = dev
+	a.devMu.Unlock()
 	return nil
 }
 
@@ -119,6 +149,7 @@ func (a *Agent) save() {
 			log.Printf("cache %s: %v", key, err)
 		}
 	}
+	a.rec.SetObserve(a.observeNow(), a.Now())
 	a.changed()
 }
 
@@ -128,9 +159,17 @@ func (a *Agent) Run(ctx context.Context) {
 	a.mu.Lock()
 	a.reconcile(ctx)
 	a.save()
+	a.applyObserve(ctx)
 	a.mu.Unlock()
 	go a.flushLoop(ctx)
+	if a.sensors != nil {
+		go a.checkpointLoop(ctx)
+		go a.obsFlushLoop(ctx)
+	}
 	a.streamLoop(ctx)
+	if a.sensors != nil {
+		a.finishObserving()
+	}
 }
 
 func backoff(n int) time.Duration {
@@ -181,11 +220,8 @@ func (a *Agent) onConnect(ctx context.Context) {
 	a.authFail = false
 	a.mu.Unlock()
 	caps := a.host.Capabilities(ctx)
-	if hr, err := a.client.Hello(ctx, caps); err != nil {
-		log.Printf("hello: %v", err)
-	} else {
-		a.noteServer(hr)
-	}
+	a.setBaseCaps(caps)
+	a.sendHello(ctx, a.helloCaps(ctx, caps))
 	a.refreshConfig(ctx)
 	a.kickFlush()
 	// What is installed (themes, wallpapers with previews) takes longer to
@@ -200,9 +236,8 @@ func (a *Agent) onConnect(ctx context.Context) {
 			cp.Choices = c
 			caps[id] = cp
 		}
-		if _, err := a.client.Hello(ctx, caps); err != nil && ctx.Err() == nil {
-			log.Printf("hello with choices: %v", err)
-		}
+		a.setBaseCaps(caps)
+		a.sendHello(ctx, a.helloCaps(ctx, caps))
 	}()
 }
 
@@ -229,6 +264,7 @@ func (a *Agent) refreshConfig(ctx context.Context) {
 	defer a.mu.Unlock()
 	a.config = cfg
 	a.save()
+	a.applyObserve(ctx)
 }
 
 func (a *Agent) onMessage(ctx context.Context, event, data string) {

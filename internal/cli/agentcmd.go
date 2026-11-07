@@ -19,6 +19,7 @@ import (
 	"hatrack/internal/i18n"
 	"hatrack/internal/modules"
 	"hatrack/internal/reexec"
+	"hatrack/internal/sensors"
 )
 
 const unitName = "hatrack-agent.service"
@@ -181,6 +182,7 @@ func (a *App) newAgent() (*agent.Agent, *agent.DB, error) {
 		log.Printf("external module skipped: %v", e)
 	}
 	ag := agent.New(cfg, db, reg)
+	ag.SetSensors(sensors.Builtin())
 	if err := ag.Load(); err != nil {
 		db.Close()
 		return nil, nil, err
@@ -199,12 +201,20 @@ func (a *App) runAgent(parent context.Context) error {
 	defer stop()
 	errc := make(chan error, 1)
 	go func() { errc <- ag.Serve(ctx, a.Socket) }()
-	go ag.Run(ctx)
+	runDone := make(chan struct{})
+	go func() { ag.Run(ctx); close(runDone) }()
 	log.Printf("hatrack agent started (socket %s)", a.Socket)
 	var runErr error
 	select {
 	case runErr = <-errc:
 	case <-ctx.Done():
+	}
+	if ctx.Err() != nil {
+		// let Run stop the sensors and send the last observations
+		select {
+		case <-runDone:
+		case <-time.After(6 * time.Second):
+		}
 	}
 	// A stop signal during the shutdown of the user's session takes the hat
 	// off. A plain restart (update, `hat agent install`) must not.

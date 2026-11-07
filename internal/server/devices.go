@@ -92,6 +92,9 @@ func (s *Server) devicesView(r *http.Request, acc access) (view, error) {
 			}
 			sort.Strings(ids)
 			for _, id := range ids {
+				if strings.HasPrefix(id, "sensor:") {
+					continue // sensors get their own block
+				}
 				cp := caps[id]
 				m := deviceModule{Title: tr(lang, "web.mod."+id, id), Backend: cp.Backend, OK: cp.Available}
 				var parts []string
