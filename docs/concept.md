@@ -87,8 +87,10 @@ devices(id, name, token_hash, capabilities_json, last_seen)
 events(id uuid, ts, device_id, type, hat_id, activity_id, note, payload_json)
 ```
 
-- Event types: `switch`, `activity`, `off`, `idle_start`, `idle_end`,
-  `correction`, `module_error`.
+- Event types: `switch`, `activity`, `detail`, `off`, `correction`,
+  `module_error`. Idle is no event type: absence is booked with `off` and
+  corrections (see [automatic detection](auto-detection.md)); what sensors
+  observe is kept apart from the log in `observations`.
 - `key` is the stable identifier used in the YAML configuration; `name` is
   the display name. Activities are identified by name within their hat.
 - Events are append-only. Intervals and reports are derived.
@@ -141,6 +143,10 @@ then the components, then how it works and the architecture.
    weeks, six hat colours with built-in wallpapers.
 5. [MVP 5](mvp-5.md): the current hat over MQTT, with Home Assistant
    discovery.
+6. [MVP 6](mvp-6.md): installing from a release, without the source code.
+7. MVP 7 to 11, [epic: automatic detection](auto-detection.md): sensors
+   (idle, active window, microphone/camera, notifications), rules per hat,
+   live suggestions, proposals for past time, MCP access for an AI.
 
 ## Later ideas
 
