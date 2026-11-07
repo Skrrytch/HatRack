@@ -86,6 +86,7 @@ func (a *App) runServer(parent context.Context, listen, data, tz string) error {
 	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	web.Start(ctx)
+	go web.RunRetention(ctx)
 	defer web.Close()
 	go func() {
 		<-ctx.Done()

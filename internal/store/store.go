@@ -35,6 +35,12 @@ type Device struct {
 	CanConfig bool `json:"can_config,omitempty"`
 }
 
+// ObsStat is the number and total length of one device's spans of one sensor.
+type ObsStat struct {
+	Count    int
+	Duration time.Duration
+}
+
 // Store is the storage interface of the core.
 type Store interface {
 	// AppendEvents inserts events; events whose ID exists are skipped.
@@ -75,6 +81,23 @@ type Store interface {
 	ResetTicketLink(ctx context.Context, project string) error
 	// DeleteDevice removes a device; its token stops working at once.
 	DeleteDevice(ctx context.Context, id string) error
+	// PutObservations stores spans of one device (the argument is the truth,
+	// Observation.Device is ignored). A known ID only moves its end forward
+	// (end = max(end, new end)); start, sensor and attrs stay. stored counts
+	// inserted spans and spans whose end grew; skipped counts IDs that belong
+	// to another device. A known ID of this device with an end not later is
+	// neither. Invalid input (empty ID or sensor, end before start) is an
+	// error and stores nothing.
+	PutObservations(ctx context.Context, device string, obs []core.Observation) (stored, skipped int, err error)
+	// ObservationsBetween returns spans overlapping [from, to), ordered by
+	// start; "" for device or sensor means all. A zero from or to leaves that
+	// side open.
+	ObservationsBetween(ctx context.Context, from, to time.Time, device, sensor string) ([]core.Observation, error)
+	// ObservationStats sums, per device and sensor, the spans overlapping
+	// [from, to), each clipped to the period.
+	ObservationStats(ctx context.Context, from, to time.Time) (map[string]map[string]ObsStat, error)
+	// DeleteObservationsBefore removes spans that ended before t.
+	DeleteObservationsBefore(ctx context.Context, t time.Time) (int, error)
 	// HatUsed reports whether any event (or correction) refers to the hat.
 	HatUsed(ctx context.Context, key string) (bool, error)
 	TouchDevice(ctx context.Context, id string, caps json.RawMessage) error

@@ -71,6 +71,15 @@ CREATE TABLE IF NOT EXISTS devices (
   created    INTEGER NOT NULL,
   can_config INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS observations (
+  id     TEXT PRIMARY KEY,
+  device TEXT NOT NULL,
+  sensor TEXT NOT NULL,
+  start  INTEGER NOT NULL,
+  end    INTEGER NOT NULL,
+  attrs  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS observations_start ON observations(start);
 `
 
 // Open opens (and creates) the database file. ":memory:" is not supported;
@@ -575,8 +584,138 @@ func (s *SQLite) ResetTicketLink(ctx context.Context, project string) error {
 }
 
 func (s *SQLite) DeleteDevice(ctx context.Context, id string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM devices WHERE id = ?`, id)
-	return err
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	// observations carry the device name; events stay
+	if _, err := tx.ExecContext(ctx, `DELETE FROM observations WHERE device = (SELECT name FROM devices WHERE id = ?)`, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM devices WHERE id = ?`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *SQLite) PutObservations(ctx context.Context, device string, obs []core.Observation) (stored, skipped int, err error) {
+	for _, o := range obs {
+		if o.ID == "" || o.Sensor == "" || o.End.Before(o.Start) {
+			return 0, 0, fmt.Errorf("invalid observation %q", o.ID)
+		}
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer tx.Rollback()
+	for _, o := range obs {
+		var dev string
+		var end int64
+		err := tx.QueryRowContext(ctx, `SELECT device, end FROM observations WHERE id = ?`, o.ID).Scan(&dev, &end)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			attrs := o.Attrs
+			if attrs == nil {
+				attrs = core.Attrs{}
+			}
+			js, err := json.Marshal(attrs)
+			if err != nil {
+				return 0, 0, err
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO observations (id, device, sensor, start, end, attrs) VALUES (?, ?, ?, ?, ?, ?)`,
+				o.ID, device, o.Sensor, o.Start.UnixNano(), o.End.UnixNano(), string(js)); err != nil {
+				return 0, 0, err
+			}
+			stored++
+		case err != nil:
+			return 0, 0, err
+		case dev != device:
+			skipped++
+		case o.End.UnixNano() > end:
+			if _, err := tx.ExecContext(ctx, `UPDATE observations SET end = ? WHERE id = ?`, o.End.UnixNano(), o.ID); err != nil {
+				return 0, 0, err
+			}
+			stored++
+		}
+	}
+	return stored, skipped, tx.Commit()
+}
+
+func (s *SQLite) ObservationsBetween(ctx context.Context, from, to time.Time, device, sensor string) ([]core.Observation, error) {
+	q := `SELECT id, device, sensor, start, end, attrs FROM observations WHERE 1=1`
+	var args []any
+	if !to.IsZero() {
+		q += ` AND start < ?`
+		args = append(args, to.UnixNano())
+	}
+	if !from.IsZero() {
+		q += ` AND end > ?`
+		args = append(args, from.UnixNano())
+	}
+	if device != "" {
+		q += ` AND device = ?`
+		args = append(args, device)
+	}
+	if sensor != "" {
+		q += ` AND sensor = ?`
+		args = append(args, sensor)
+	}
+	rows, err := s.db.QueryContext(ctx, q+` ORDER BY start, id`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []core.Observation
+	for rows.Next() {
+		var o core.Observation
+		var st, en int64
+		var js string
+		if err := rows.Scan(&o.ID, &o.Device, &o.Sensor, &st, &en, &js); err != nil {
+			return nil, err
+		}
+		o.Start, o.End = time.Unix(0, st).UTC(), time.Unix(0, en).UTC()
+		if err := json.Unmarshal([]byte(js), &o.Attrs); err != nil {
+			return nil, fmt.Errorf("observation %s: %w", o.ID, err)
+		}
+		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLite) ObservationStats(ctx context.Context, from, to time.Time) (map[string]map[string]ObsStat, error) {
+	obs, err := s.ObservationsBetween(ctx, from, to, "", "")
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]map[string]ObsStat{}
+	for _, o := range obs {
+		st, en := o.Start, o.End
+		if !from.IsZero() && st.Before(from) {
+			st = from
+		}
+		if !to.IsZero() && en.After(to) {
+			en = to
+		}
+		if out[o.Device] == nil {
+			out[o.Device] = map[string]ObsStat{}
+		}
+		x := out[o.Device][o.Sensor]
+		x.Count++
+		x.Duration += en.Sub(st)
+		out[o.Device][o.Sensor] = x
+	}
+	return out, nil
+}
+
+func (s *SQLite) DeleteObservationsBefore(ctx context.Context, t time.Time) (int, error) {
+	r, err := s.db.ExecContext(ctx, `DELETE FROM observations WHERE end < ?`, t.UnixNano())
+	if err != nil {
+		return 0, err
+	}
+	n, err := r.RowsAffected()
+	return int(n), err
 }
 
 func (s *SQLite) HatUsed(ctx context.Context, key string) (bool, error) {
