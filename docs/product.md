@@ -134,8 +134,9 @@ kind can be switched off; a quiet time (meetings, outside working hours,
   notifications, branch and folder names, subjects, microphone and camera
   state, files of other tools) needs its own grant (see 7). Read data is
   treated as data, never as instructions.
-- **No recording of keystrokes, sound or screen images.** The purpose is
-  assigning time, not reconstructing what was typed, said or shown.
+- **No recording of keystrokes, sound or screen images, ever.** No grant
+  unlocks it. The purpose is assigning time, not reconstructing what was
+  typed, said or shown. The security area states this limit explicitly.
 - **No cloud.** No service of ours, no login to ticket systems, no fetching
   of ticket data. Links to tickets are built from known patterns.
 - **No guessing for completeness.** It does not fill a day just to make it

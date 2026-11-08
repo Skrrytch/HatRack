@@ -88,9 +88,10 @@ its other capabilities today.
 | `notify` | desktop notifications matching a rule | D-Bus monitor on `org.freedesktop.Notifications.Notify`; text stays in memory, only a rule's result becomes an observation |
 | `workdir` | repository and branch of the focused terminal or IDE, added to the window span (1a) | `/proc/<pid>/cwd` and `.git/HEAD`; IDE project lists for JetBrains, VS Code, NetBeans |
 
-Explicitly not sensors: keyboard or mouse content, screenshots, browser
-history, file contents, shell history, the session files of AI tools,
-`/dev/input`.
+Never, not even with a grant: keystrokes and mouse content (`/dev/input`),
+sound, screen images. Other sources (browser history, shell history, the
+session files of AI tools) are possible only as a grant in the security
+area (#19), when they add real value, and with an explanation.
 
 The agent is a user service and may start at boot, before the desktop
 session exists and without `DISPLAY`. It then takes the session's variables
@@ -122,8 +123,10 @@ How (checked on Bert's machine, 2026-11-08):
   comes from `HEAD` like any other, also after Claude Code switched branches
   itself. Its session files (`~/.claude/projects/*/*.jsonl`, or under
   `CLAUDE_CONFIG_DIR`) do carry `cwd` and `gitBranch`, but in the same lines
-  as the conversation (`message`, `content`, `lastPrompt`, `aiTitle`), so
-  HatRack never opens them.
+  as the conversation (`message`, `content`, `lastPrompt`, `aiTitle`). The
+  sensor does not need them; reading them is a separate grant (#19), for
+  cases the process tree cannot decide (tabs), keeps only `cwd` and
+  `gitBranch` and drops every other field unread.
 - **Claude Code's title** (version 2.1.319): Claude Code sets the terminal
   title itself, first the session name from `/rename`, else a topic title a
   small model writes from the conversation, else "Claude Code".
@@ -942,7 +945,7 @@ stands on), Sonnet about half, Haiku the rest.
   of 15 minutes and a new detail only after the memory of 15 minutes; #9
   after the core of #4 (MVP 9); a day report by phases as a new ticket.
 - A `workdir` sensor reads repository and branch from `/proc` and
-  `.git/HEAD` (2026-11-08, 1a); session files of AI tools are never read.
+  `.git/HEAD` (2026-11-08, 1a); session files of AI tools only through their own grant (#19).
 - Setup inside work tools (settings, plugins, prompt titles, instructions
   for Claude Code) goes into a toolbox of how-tos, its own ticket next to
   #15 (2026-11-08, 3c).
