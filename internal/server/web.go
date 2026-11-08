@@ -582,8 +582,7 @@ func (s *Server) nowPage(w http.ResponseWriter, r *http.Request, acc access) {
 	n.Color = pal.color(st.Hat)
 	n.Activity = st.Activity
 	if st.Mode != core.ModeNone {
-		links, _ := s.st.TicketLinks(ctx)
-		n.Detail, n.DetailIn = core.SplitDetail(st.Detail, links), core.ShortDetail(st.Detail)
+		n.Detail, n.DetailIn = s.tickets(ctx, cfg).Split(st.Detail), core.ShortDetail(st.Detail)
 		since := s.Now().Add(-core.RecentWindow)
 		for _, d := range core.RecentDetails(hist.Events, since, 6)[st.Hat][st.Activity] {
 			if d != n.DetailIn && len(n.Recent) < 5 {
@@ -753,7 +752,7 @@ func dayLabel(lang string, t time.Time, year bool) string {
 	return wd + " " + t.Format("01-02")
 }
 
-func (s *Server) totalViews(tot []core.HatTotal, prev map[string]time.Duration, pal palette, nm map[string]string, lang string, links core.TicketLinks, cfg core.Config) []totalView {
+func (s *Server) totalViews(tot []core.HatTotal, prev map[string]time.Duration, pal palette, nm map[string]string, lang string, tk core.Tickets, cfg core.Config) []totalView {
 	var max time.Duration
 	for _, t := range tot {
 		if t.Duration > max {
@@ -778,7 +777,7 @@ func (s *Server) totalViews(tot []core.HatTotal, prev map[string]time.Duration, 
 				}
 				at := actTotal{Name: name, Duration: core.FormatMinutes(actMin[i][j])}
 				for k, d := range a.Details {
-					parts := core.SplitDetail(d.Detail, links)
+					parts := tk.Split(d.Detail)
 					if d.Detail == "" {
 						parts = []core.DetailPart{{Text: i18n.In(lang, "web.nodetail")}}
 					}
@@ -836,7 +835,7 @@ func (s *Server) dayPage(w http.ResponseWriter, r *http.Request, acc access) {
 		return
 	}
 	d.Obs = buildObs(day, obsClip(day, next, obs), iv, pal, nm, lang, acc == fullAccess)
-	links, _ := s.st.TicketLinks(r.Context())
+	tk := s.tickets(r.Context(), cfg)
 	d.Date = dateStr(day)
 	d.IsToday = v.Live
 	d.Done = r.URL.Query().Get("done")
@@ -861,7 +860,7 @@ func (s *Server) dayPage(w http.ResponseWriter, r *http.Request, acc access) {
 		if i.Open {
 			end = i18n.In(lang, "cli.log.now")
 		}
-		row := rowView{Detail: core.SplitDetail(i.Detail, links), DetailIn: core.ShortDetail(i.Detail),
+		row := rowView{Detail: tk.Split(i.Detail), DetailIn: core.ShortDetail(i.Detail),
 			Start: i.Start.In(loc).Format("15:04"), End: end, Hat: nameOf(nm, i.Hat),
 			Color: pal.color(i.Hat), Activity: i.Activity, Duration: core.FormatDuration(i.Duration()), Open: i.Open,
 			ID: i.StartID, What: i.Hat + "|" + i.Activity, StartIn: i.Start.In(loc).Format("15:04")}
@@ -876,7 +875,7 @@ func (s *Server) dayPage(w http.ResponseWriter, r *http.Request, acc access) {
 		d.Booked = append(d.Booked, bookedRange{S: int(clockOf(day, i.Start.In(loc)) / time.Minute),
 			E: int(clockOf(day, i.End.In(loc)) / time.Minute), T: label})
 	}
-	d.Totals = s.totalViews(tot, nil, pal, nm, lang, links, cfg)
+	d.Totals = s.totalViews(tot, nil, pal, nm, lang, tk, cfg)
 	d.Sum = core.FormatDuration(sumOf(tot, cfg))
 	s.render(w, v, http.StatusOK)
 }
@@ -960,12 +959,12 @@ func (s *Server) weekPage(w http.ResponseWriter, r *http.Request, acc access) {
 	if len(wv.Days) > 0 {
 		wv.Ticks = wv.Days[0].TL.Ticks
 	}
-	links, _ := s.st.TicketLinks(r.Context())
+	tk := s.tickets(r.Context(), cfg)
 	if len(prevTot) == 0 {
 		prev = nil // nothing to compare with: no column of "+everything"
 	}
 	wv.Compare = prev != nil
-	wv.Totals = s.totalViews(tot, prev, pal, nm, lang, links, cfg)
+	wv.Totals = s.totalViews(tot, prev, pal, nm, lang, tk, cfg)
 	wv.Sum = core.FormatDuration(sumOf(tot, cfg))
 	if wv.Compare {
 		wv.SumDelta = delta(sumOf(tot, cfg) - sumOf(prevTot, cfg))
@@ -1086,4 +1085,11 @@ func (s *Server) static(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Write(b)
+}
+
+// tickets are the ticket projects that count: learned from issue links and
+// registered in the configuration.
+func (s *Server) tickets(ctx context.Context, cfg core.Config) core.Tickets {
+	links, _ := s.st.TicketLinks(ctx)
+	return core.NewTickets(links, cfg.Tickets)
 }

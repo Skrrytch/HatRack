@@ -195,7 +195,7 @@ type timeGroup struct {
 	HatName        string `json:"hat_name,omitempty"`
 	Activity       string `json:"activity,omitempty" jsonschema:"empty: time without an activity"`
 	Detail         string `json:"detail,omitempty" jsonschema:"for group_by detail; Jira links shortened to their key"`
-	DetailURL      string `json:"detail_url,omitempty" jsonschema:"link of a Jira key in the detail, if known"`
+	DetailURL      string `json:"detail_url,omitempty" jsonschema:"link of a known ticket key in the detail"`
 	Day            string `json:"day,omitempty" jsonschema:"YYYY-MM-DD; for week: the Monday"`
 	Minutes        int    `json:"minutes"`
 	Duration       string `json:"duration" jsonschema:"like 1h 23m"`
@@ -218,7 +218,7 @@ type entry struct {
 	HatName   string `json:"hat_name,omitempty"`
 	Activity  string `json:"activity,omitempty"`
 	Detail    string `json:"detail,omitempty" jsonschema:"free text below the activity, e.g. a ticket key"`
-	DetailURL string `json:"detail_url,omitempty" jsonschema:"link of a Jira key in the detail, if known"`
+	DetailURL string `json:"detail_url,omitempty" jsonschema:"link of a known ticket key in the detail"`
 	Start     string `json:"start"`
 	End       string `json:"end"`
 	Minutes   int    `json:"minutes"`
@@ -342,7 +342,7 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 				group = "hat"
 			}
 			nm, work := names(cfg), cfg.Work()
-			links, _ := s.st.TicketLinks(ctx)
+			tk := s.tickets(ctx, cfg)
 			out := queryTimeOut{From: from.Format(time.RFC3339), To: to.Format(time.RFC3339), GroupBy: group, Groups: []timeGroup{}}
 			idx := map[string]int{}
 			var durs, outs []time.Duration // exact per group, rounded at the end
@@ -381,7 +381,7 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 					case "detail":
 						det := core.ShortDetail(p.Detail)
 						add(p.Hat+"\x00"+p.Activity+"\x00"+det, timeGroup{Hat: p.Hat, HatName: nameOf(nm, p.Hat), Activity: p.Activity,
-							Detail: det, DetailURL: core.DetailURL(p.Detail, links)}, d, o)
+							Detail: det, DetailURL: tk.URL(p.Detail)}, d, o)
 					case "day":
 						day := dateStr(p.Start.In(s.Loc))
 						add(day, timeGroup{Day: day}, d, o)
@@ -433,7 +433,7 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 				iv = filterHat(iv, h.Key)
 			}
 			nm := names(cfg)
-			links, _ := s.st.TicketLinks(ctx)
+			tk := s.tickets(ctx, cfg)
 			out := entriesOut{From: from.Format(time.RFC3339), To: to.Format(time.RFC3339), Entries: []entry{}}
 			ts := func(t time.Time) string { return t.In(s.Loc).Format(time.RFC3339) }
 			var prevEnd time.Time
@@ -448,7 +448,7 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 				}
 				prevEnd = i.End
 				out.Entries = append(out.Entries, entry{Hat: i.Hat, HatName: nameOf(nm, i.Hat), Activity: i.Activity,
-					Detail: core.ShortDetail(i.Detail), DetailURL: core.DetailURL(i.Detail, links),
+					Detail: core.ShortDetail(i.Detail), DetailURL: tk.URL(i.Detail),
 					Start: ts(i.Start), End: ts(i.End), Minutes: minutes(i.Duration()), Duration: core.FormatDuration(i.Duration()), Running: i.Open})
 			}
 			return nil, out, nil
@@ -507,8 +507,8 @@ func (s *Server) addMCPTools(srv *mcp.Server) {
 			out := currentOut{State: string(st.Mode), Today: []hatTotal{}}
 			if st.Mode != core.ModeNone {
 				out.Hat, out.HatName, out.Activity = st.Hat, nameOf(nm, st.Hat), st.Activity
-				links, _ := s.st.TicketLinks(ctx)
-				out.Detail, out.DetailURL = core.ShortDetail(st.Detail), core.DetailURL(st.Detail, links)
+				tk := s.tickets(ctx, cfg)
+				out.Detail, out.DetailURL = core.ShortDetail(st.Detail), tk.URL(st.Detail)
 				out.Since = st.Since.In(s.Loc).Format(time.RFC3339)
 				if st.Mode == core.ModeWearing {
 					out.Minutes = minutes(s.Now().Sub(st.Since))

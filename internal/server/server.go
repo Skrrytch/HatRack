@@ -39,6 +39,7 @@ type Server struct {
 	limiter *loginLimiter
 	mux     *http.ServeMux
 	hist    historyCache // the effective log in memory, see history.go
+	know    knowledgeCache
 }
 
 // New creates a server. The registry is used to validate module settings of
@@ -57,6 +58,7 @@ func New(st store.Store, reg *modules.Registry) *Server {
 	s.mux.HandleFunc("GET /api/stream", s.api(s.stream))
 	s.mux.HandleFunc("POST /api/devices/hello", s.api(s.hello))
 	s.mux.HandleFunc("GET /api/presence", s.api(s.getPresence))
+	s.mux.HandleFunc("GET /api/knowledge", s.api(s.getKnowledge))
 	s.mux.HandleFunc("GET /{$}", s.page(false, s.nowPage))
 	s.mux.HandleFunc("GET /day", s.page(false, s.dayPage))
 	s.mux.HandleFunc("GET /week", s.page(false, s.weekPage))

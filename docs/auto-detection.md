@@ -208,7 +208,7 @@ span may get its hat, activity and detail from different layers:
 |---|---|---|---|
 | Tool | the activity | IDE → Implementierung, Confluence → Dokumentation, a pull request → Code-Review | global rule, often from a template |
 | Context | the hat | IDE project, repository, Confluence space, Jira project, file name | hat rule or learned title part |
-| Ticket key | the detail, and the hat through the project | `NMS-1234` in a Jira title, a branch `feature/NMS-1234-login`, a file name | global rule, learned detail, `TicketLinks` |
+| Ticket key | the detail, and the hat through the project | `ACME-1234` in a Jira title, a branch `feature/ACME-1234-login`, a file name | global rule, learned detail, `TicketLinks` |
 | History | all three | what was booked while the same detail or title part was on screen | learned |
 
 What the tools show, as far as it is typical. This table is a starting
@@ -236,11 +236,11 @@ Consequences for the stages:
   over to spans without a key (the IDE between two Jira views) until another
   key appears, the hat changes or an absence intervenes.
 - **Asking and review (#3, #10):** the prefilled answer and every proposal
-  name the key and where it came from ("NMS-1234, from branch
-  feature/NMS-1234-login").
+  name the key and where it came from ("ACME-1234, from branch
+  feature/ACME-1234-login").
 - **MCP (#11):** block summaries give the tool groups per block with `read`;
   keys taken from titles only with `observe`.
-- **Notifications (#12):** ticket notifications ("NMS-1234 was assigned to
+- **Notifications (#12):** ticket notifications ("ACME-1234 was assigned to
   you") can give a detail hint through the same rules.
 
 ### 3b. Rule templates (#15)

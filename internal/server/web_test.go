@@ -349,11 +349,11 @@ func TestNowSuggestsDetails(t *testing.T) {
 	e, b := setupBrowser(t)
 	// venom/development with a detail earlier, now venom/review is worn
 	evs := []core.Event{e.ev(-50, core.EvSwitch, "venom", "development"), e.ev(-20, core.EvSwitch, "venom", "review")}
-	evs[0].Detail = "NMS-4711"
+	evs[0].Detail = "ACME-4711"
 	body, _ := json.Marshal(evs)
 	e.do("POST", "/api/events", string(body))
 	_, out := b.do("GET", "/", nil)
-	if !strings.Contains(out, `list="detail-suggest"`) || !strings.Contains(out, `<option value="NMS-4711">`) {
+	if !strings.Contains(out, `list="detail-suggest"`) || !strings.Contains(out, `<option value="ACME-4711">`) {
 		t.Fatal("the detail field suggests the hat's details of other activities too")
 	}
 }

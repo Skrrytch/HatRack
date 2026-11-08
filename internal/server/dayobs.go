@@ -153,33 +153,6 @@ func obsClock(day, start, end time.Time) (string, string) {
 	return fmt.Sprintf("%02d:%02d", sm/60, sm%60), fmt.Sprintf("%02d:%02d", em/60, em%60)
 }
 
-// obsSpan is a plain time range.
-type obsSpan struct{ start, end time.Time }
-
-// obsUnion merges overlapping spans; the input is sorted by start.
-func obsUnion(in []obsSpan) []obsSpan {
-	var out []obsSpan
-	for _, s := range in {
-		if n := len(out); n > 0 && !s.start.After(out[n-1].end) {
-			out[n-1].end = later(out[n-1].end, s.end)
-			continue
-		}
-		out = append(out, s)
-	}
-	return out
-}
-
-// obsOverlap is the time of [a, b) covered by the union.
-func obsOverlap(u []obsSpan, a, b time.Time) time.Duration {
-	var d time.Duration
-	for _, s := range u {
-		if lo, hi := later(a, s.start), earlier(b, s.end); lo.Before(hi) {
-			d += hi.Sub(lo)
-		}
-	}
-	return d
-}
-
 // obsWhat is the hat and activity booked at t, or else the last one that
 // ended before it (a gap is most often filled with what ran before), or "".
 func obsWhat(iv []core.Interval, t time.Time) string {
@@ -237,15 +210,15 @@ func buildObs(day time.Time, obs []core.Observation, iv []core.Interval, pal pal
 	for _, dev := range devs {
 		list := byDev[dev]
 		sort.SliceStable(list, func(a, b int) bool { return list[a].Start.Before(list[b].Start) })
-		var idle []obsSpan
+		var idle []core.Span
 		for _, o := range list {
 			if o.Sensor == "idle" {
-				idle = append(idle, obsSpan{o.Start, o.End})
+				idle = append(idle, core.Span{Start: o.Start, End: o.End})
 			}
 		}
-		away := obsUnion(idle) // overlapping absences count once
+		away := core.Union(idle) // overlapping absences count once
 		for _, a := range away {
-			awayTime += a.end.Sub(a.start)
+			awayTime += a.End.Sub(a.Start)
 		}
 		row := obsRow{Device: dev}
 
@@ -270,10 +243,10 @@ func buildObs(day time.Time, obs []core.Observation, iv []core.Interval, pal pal
 			if private {
 				key, app = "\x00private", ""
 			}
-			rest := o.End.Sub(o.Start) - obsOverlap(away, o.Start, o.End)
+			rest := o.End.Sub(o.Start) - core.Overlap(away, o.Start, o.End)
 			for h := 0; h < 24; h++ {
 				hs, he := hourOf(h)
-				if lo, hi := later(o.Start, hs), earlier(o.End, he); lo.Before(hi) && hi.Sub(lo) > obsOverlap(away, lo, hi) {
+				if lo, hi := later(o.Start, hs), earlier(o.End, he); lo.Before(hi) && hi.Sub(lo) > core.Overlap(away, lo, hi) {
 					used[h] = true
 				}
 			}
