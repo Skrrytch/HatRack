@@ -133,6 +133,15 @@ func TestObsOthersAndPrivate(t *testing.T) {
 	}
 }
 
+func TestObsOnlyAbsence(t *testing.T) {
+	if v := build([]core.Observation{idleSpan("a", "locked", obsDay.Add(-time.Hour), at(23, 0))}, true); v != nil {
+		t.Fatalf("a day of only absence has no band: %+v", v)
+	}
+	if v := build([]core.Observation{idleSpan("a", "locked", at(9, 45), at(23, 0)), win("a", "Firefox", "", at(9, 0), at(9, 30))}, true); v == nil || len(v.Hours) != 1 || v.Hours[0].Label != "09" {
+		t.Fatalf("only the hour with use: %+v", v)
+	}
+}
+
 func TestObsClipAndRange(t *testing.T) {
 	next := obsDay.AddDate(0, 0, 1)
 	got := obsClip(obsDay, next, []core.Observation{

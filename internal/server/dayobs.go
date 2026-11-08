@@ -201,7 +201,7 @@ func obsWhat(iv []core.Interval, t time.Time) string {
 // buildObs lays out the clipped observations of one day as one row per hour
 // in which a computer was in use; iv are the booked intervals of the day,
 // shown as a thin line under each hour. It returns nil if there is nothing
-// to show.
+// to show, also on a day of only absence.
 func buildObs(day time.Time, obs []core.Observation, iv []core.Interval, pal palette, nm map[string]string, lang string, canWrite bool) *obsView {
 	if len(obs) == 0 {
 		return nil
@@ -369,6 +369,9 @@ func buildObs(day time.Time, obs []core.Observation, iv []core.Interval, pal pal
 		}
 	}
 	v.Hours = obsHours(day, v.rows, used, iv, pal, nm)
+	if len(v.Hours) == 0 {
+		return nil // only absence: no computer was in use
+	}
 	var others time.Duration
 	for i, k := range keys {
 		if i < obsLegendApps {

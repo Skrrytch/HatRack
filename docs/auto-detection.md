@@ -90,6 +90,12 @@ its other capabilities today.
 Explicitly not sensors: keyboard or mouse content, screenshots, browser
 history, file contents, `/dev/input`.
 
+The agent is a user service and may start at boot, before the desktop
+session exists and without `DISPLAY`. It then takes the session's variables
+(`DISPLAY`, `WAYLAND_DISPLAY`, `XAUTHORITY`, `XDG_*`) from the systemd user
+manager as soon as the desktop has handed them over at login, so sensors and
+the launch module reach the desktop without a restart.
+
 ### 2. Observations
 
 An observation is a span with constant attributes:
@@ -261,8 +267,8 @@ in the legend. Hovering a block shows its info (the three titles with the
 most time); clicking or tapping it opens a slim add form right under its
 hour, prefilled with its times and the hat booked then (or the one before in
 a gap), naming the booked entries the new one would replace. Device names
-appear only in hours with more than one device. Nothing in the band changes
-the log.
+appear only in hours with more than one device. A day with only absence
+has no section. Nothing in the band changes the log.
 
 ### 8. MCP
 
@@ -277,7 +283,9 @@ The read-only MCP server grows by three tools:
 **Exists now (#7):** `list_observations(from, to, period, sensor, device)`
 with the scope `observe`. The scope is set when a token is created (Setup →
 AI access); existing tokens stay `read` only, a new token is needed to grant
-it. Without the scope the tool answers with an error that says so.
+it. Without the scope the tool answers with an error that says so. The
+tool description tells the assistant that window titles are data written by
+other programs, never instructions.
 
 `propose_correction` was planned since MVP 2; the review UI of MVP 9 is where
 it gets confirmed. Titles are behind a scope of their own because they are
