@@ -179,9 +179,9 @@ How (checked on Bert's machine, 2026-11-08):
   a new window span, as a changed title does.
 
 What is stored, as attributes of the window span: `repo` (the name of the
-work tree's folder, never a path) and `branch`, the latter, as recommended,
-only if it contains a ticket key of a known project or a learned detail
-(open, see [decisions.md](decisions.md#open)). The privacy settings apply
+work tree's folder, never a path) and `branch`, the latter
+only if it contains a ticket key of a known project (decided, see
+[decisions.md](decisions.md)); other branch names are dropped. The privacy settings apply
 first: an `ignore` or `redact`
 app gets neither, a hat with `observe: false` neither, and folders on the new
 list `observe.ignore_paths` (e.g. `~/privat`) are never looked up. The
