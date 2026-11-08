@@ -303,8 +303,10 @@ The agent classifies spans as they happen, against the cached configuration,
 so it works offline.
 
 - **Dwell and hysteresis:** a candidate counts only after it held for a while
-  (default 3 minutes of active time, idle excluded); short visits never
-  trigger anything.
+  (idle excluded); short visits never trigger anything. Proposed in 6a: 10 of
+  the last 15 active minutes instead of 3 minutes in a row, and a new detail
+  only after the old one was not seen for 15 minutes (open, see
+  [decisions.md](decisions.md#open)).
 - **Manual wins:** after a manual switch, nothing is suggested or switched
   for 15 minutes unless a rule with `mode: auto` and a hardware signal
   (microphone) fires.
@@ -367,6 +369,201 @@ Reconstruction is computed on demand and never stored, so a changed rule
 changes the proposals for past days at once. It works only as far back as
 observations are kept.
 
+Steps 3 and 4 are refined by condensing (6a): hour windows instead of
+15-minute blocks, one entry per task and window instead of one per run.
+
+### 6a. Parallel work and the end of a task
+
+Classifying spans is half the job. Two tickets worked on in turn plus a mail
+about a training make 20 window spans in an hour; booked one by one, nobody
+can read that log. This section says when a task ends and how parallel work
+becomes a short, true report. Concept of 2026-11-08; the open points are in
+[decisions.md](decisions.md#open).
+
+Terms:
+
+- **Task:** hat, activity and detail of a run (`VENOM · Entwicklung · ACME-101`).
+- **Episode:** active time without a hard end (table below).
+- **Window:** the part of an episode within one clock hour; the unit for
+  condensing, proposing and asking. It matches the hour rows of *Observed*.
+- **Anchor:** a boundary the user set: a switch, activity, detail or off made
+  by hand, or a correction they made. Boundaries from rules (`source:
+  rule:…`) and accepted suggestions are no anchors.
+- **Memory:** 15 minutes of active time (`reconstruct.memory`).
+
+#### When does a task end?
+
+The start shows (the first span with the key); the end mostly does not,
+because leaving a window says nothing, people come back. So: **a task stays
+open until something ends it.**
+
+| Signal | Effect | Available |
+|---|---|---|
+| absence from `idle.after` (5 min), lock, suspend, session end | hard: ends the episode | now (#2) |
+| a boundary the user sets (anchor) | hard | now |
+| microphone or camera, meeting reminder | hard, starts the meeting | MVP 10 (#5, #12) |
+| another hat holds 10 of the last 15 minutes | ends the hat | live (#9); afterwards implicit |
+| the key not seen for the memory | soft: the task ended at its last sighting | derived |
+| a new key from a working tool (IDE, branch) | starts a task, ends none | now, through titles |
+| end of working hours | ends nothing, triggers the end-of-day question | config |
+| commit, push, branch switch | would be soft ends | needs a git or shell sensor (not in this epic); a branch in the title counts as a new key |
+| ticket status, calendar | – | not planned: HatRack fetches nothing and logs in nowhere |
+
+Consequences:
+
+- Time without any candidate (a terminal without project, a file dialog)
+  belongs to the task last seen, up to the memory; longer stays unknown. A
+  span that names a tool of its own (mail client → Kommunikation) ends the
+  carry: it is unknown, not the ticket.
+- Idle shorter than `idle.after` belongs to the surrounding task, as the clock
+  already treats it.
+- Nobody has to pick the minute a task ended: afterwards only the sums per
+  window count, live only the main task.
+
+#### How is parallel work captured?
+
+Measured on 300 synthetic days with a prototype outside the repository
+(about 265 spans and 8.3 active hours a day: phases on one ticket, phases
+with two tickets alternating every 6 minutes on average, mails of 3 to 10
+minutes, a meeting; evidence noise: terminals without key 15 %, short looks
+at chat or ignored apps 10 %, glances at the other ticket in Jira 6 %, mails
+without a rule 30 %). *Sum error*: share of time on the wrong task in the
+totals, in brackets what the method adds with flawless evidence. *Moved*:
+share of minutes booked where something else was done at that clock time.
+
+| Method | Entries per hour | Sum error | Moved | Verdict |
+|---|---|---|---|---|
+| runs as observed (noise and memory only) | 7.0 | 6.0 % (0.0) | 17 % | too many entries |
+| in order, pieces under 3 min absorbed | 4.0 | 5.5 % (1.7) | 17 % | true order, still 6 per hour when two tickets alternate |
+| in order, pieces under 10 min absorbed | 1.6 | 9.6 % (7.8) | 24 % | the second ticket disappears |
+| **condensed per hour**, pieces under 5 min absorbed | **2.3** | **5.8 % (1.7)** | 31 % | **recommended** |
+| condensed per episode | 1.3 | 5.7 % (0.3) | 51 % | moves time by hours |
+| one entry with several details and shares | 1–2 | as condensed | – | changes interval, totals, CSV, MCP, learning; cannot hold the mail of another hat anyway |
+| overlapping side entries | – | – | – | breaks "one hat at a time, no overlaps" (2026-11-04) |
+| split only in the report, from observations | – | – | – | observations expire after 28 days; reports come from the log |
+
+The evidence costs about 6 % whatever the method, so better rules (#8, #15)
+and "working tool before reading tool" (3a) matter more than any threshold.
+Condensing per hour gives the fewest entries and keeps the totals per ticket
+as exact as the evidence allows. Its price: inside an hour the order is
+condensed. The true order stays visible in *Observed* under the same hour.
+Totals are what gets booked and billed, not the minute a mail was written.
+
+**Recommendation:** an entry keeps one hat, one activity and one detail (no
+model change). Afterwards, each window becomes one entry per task with its
+summed time. Live, HatRack follows only the main task.
+
+#### Condensing (core, afterwards)
+
+1. **Clean** the classified spans of an episode: idle out; noise (under 60 s)
+   and `ignore` to the task they interrupted; memory and detail carry as
+   above. Result: runs with one task each, or unknown.
+2. **Cut** at anchors and full hours. The user's boundaries stay where they
+   are.
+3. **Sum** active seconds per task and window. A task under
+   `reconstruct.min_entry` (5 min) goes to the biggest task of the window with
+   the same hat and detail, else the same hat, else the biggest one; never
+   between a working hat and one with `work_time: false`. Unknown time of 5
+   minutes or more stays a line of its own and is asked about.
+4. **Lay out** the tasks one after another from the window's start, in the
+   order they first appeared; the task running at the window's end goes last,
+   so the next hour continues it. A task that opens and closes the hour is
+   split by its time before and after the half hour (frame rule). Minutes are
+   apportioned to whole minutes (`core.Apportion`), so entries start on full
+   minutes and the window adds up. Equal neighbours across hours merge.
+5. **Compare** with the log by sums, not positions: a window agrees when every
+   task's booked and observed time differ by less than `min_entry`. So an
+   accepted proposal never comes back (invariant), and an hour booked by hand
+   with the right totals is left alone.
+6. **Propose** gaps and disagreements per window. Each entry carries its
+   confidence (time-weighted) and its reason: sources, number of pieces, what
+   it absorbed ("ACME-117: 20 min from 3 pieces, branch
+   feature/ACME-117-export; includes 40 s KeePassXC").
+
+Accepting writes one `correction` with `source: suggestion` per window.
+
+#### Live (#9)
+
+Live cannot know whether you come back, so it books the main task and leaves
+the split to the review:
+
+- **Another hat** is suggested once it holds 10 of the last 15 active minutes
+  (instead of 3 minutes in a row), backdated to its start. An 8-minute mail
+  triggers nothing; a forgotten switch is noticed after 10 minutes and still
+  booked from its start. `auto` rules with a hardware signal stay immediate.
+- **A new detail** under the same hat is suggested only when the old key has
+  not been seen for the memory and the new one holds 10 of 15 minutes. Two
+  tickets in turn stay one entry live.
+- In the simulation (every suggestion accepted) the 3-minute dwell gives 3.8
+  entries per hour, this rule 1.2; the review then splits by the sums.
+
+#### Asking and reading
+
+- **Review (#10):** the proposal appears under its hour in *Observed*: a ghost
+  row with the condensed entries, Accept or Reject per hour, "Accept all" per
+  day. Mockup before building.
+- **Smart prompts (#3):** the unit is the window, one line per proposed entry;
+  asked are windows with unknown time or a disagreement. Pieces under 5
+  minutes never cause a question.
+- **Day report (new):** a view of the log, not the observations. Entries
+  without a pause between them form a phase, and a phase reads as one line
+  with its totals per hat, activity and detail: `10:00–11:00 · VENOM
+  Entwicklung: ACME-101 31 min, ACME-117 20 min · Office Schulungsvorbereitung
+  9 min`. It reads well even when the log has many small entries (also booked
+  by hand) and is the base of the daily summary of [MVP 3](mvp-3.md).
+
+#### Worked example: one hour, two tickets, one mail
+
+```
+10:00 IDE feature/ACME-101-login · Jira ACME-101 · terminal ~/venom-api · Slack 40 s · IDE
+10:14 Jira ACME-117 (bug report) · IDE feature/ACME-117-export · KeePassXC 40 s · terminal
+      · Jira ACME-101 90 s (a glance) · IDE ACME-117
+10:29 Thunderbird "AW: Schulung Git-Grundlagen – Agenda" · Slack 50 s
+10:37 IDE ACME-101 · terminal
+10:47 IDE ACME-117 (build failed)
+10:53 Spotify 30 s · IDE ACME-101 · Jira ACME-101
+```
+
+20 spans. Cleaning leaves 8 runs: ACME-101 14:00, ACME-117 11:00, ACME-101
+1:30, ACME-117 2:30, Schulungsvorbereitung 8:50, ACME-101 9:10, ACME-117 6:30,
+ACME-101 6:30. Sums: ACME-101 31:10, ACME-117 20:00, Schulungsvorbereitung 8:50;
+nothing under 5 minutes. ACME-101 opens and closes the hour and is split
+(15:30 before half past, 15:40 after):
+
+| Time | Entry | Min |
+|---|---|---|
+| 10:00–10:15 | VENOM · Entwicklung · ACME-101 | 15 |
+| 10:15–10:35 | VENOM · Entwicklung · ACME-117 | 20 |
+| 10:35–10:44 | Office · Schulungsvorbereitung | 9 |
+| 10:44–11:00 | VENOM · Entwicklung · ACME-101 | 16 |
+
+Done in fact: 29:40, 21:30, 8:50. The difference is the 90-second glance at
+ACME-101 while on ACME-117, an error of the evidence, not of condensing. In
+order with 3-minute absorption the hour gives 6 entries; the 3-minute live
+dwell would have asked 5 times, the rule above not once (the hour stays
+ACME-101 until the review).
+
+#### Effect on the tickets
+
+| Ticket | Change | Models |
+|---|---|---|
+| #4 | condensing replaces 15-minute blocks and run-based proposals: memory, anchors, hour windows, sums, absorption, layout with frame rule, comparison by sums; the worked example and the invariant as tests | Opus: design note and core; Sonnet: edge cases (midnight, DST, two computers active at once, anchors inside an hour); Haiku: fixtures |
+| #10 | proposal per hour under *Observed*, accept per hour or day, reason names absorbed pieces | Sonnet after a mockup; Opus checks one correction per window |
+| #9 | 10 of 15 minutes, detail only after the memory, backdated; memory from the core | Opus (state machine), Sonnet notifications |
+| #3 | the window is the unit, one line per entry | Sonnet |
+| #11 | `summarize_blocks` returns windows with sums and proposed entries | Sonnet; Haiku descriptions |
+| new | day report by phases, from the log | Sonnet after a mockup; Haiku i18n |
+
+Order: #4 (core) → #10 → #9 → #3 → #11 → day report. #9 comes after #4
+because it uses the core's memory; until then nothing changes live.
+
+Risks: condensed times look wrong to someone who remembers the mail at half
+past ten (*Observed* shows the order under the hour; a chronological layout
+can be a setting); absorbing under 5 minutes of another hat moves minutes
+between customers (named in the reason, never across working and
+non-working hats); evidence errors outweigh the method (rules, templates);
+two computers active at once need a rule in the design note of #4.
+
 ### 7. Review and asking
 
 - **Day view:** below the logged band an "observed" band shows the runs in
@@ -377,9 +574,9 @@ observations are kept.
   at least `prompt.min_open` (default 20 min) of working time since the last
   question is unbooked or unsure, at most every `prompt.interval` (default
   60 min), never while the microphone is on. The notification opens the
-  panel in review mode: one line per block, prefilled with the best
-  candidate, Enter accepts, typing searches hats, activities and details as
-  the detail field does today.
+  panel in review mode: one line per proposed entry of a window (6a),
+  prefilled with the best candidate, Enter accepts, typing searches hats,
+  activities and details as the detail field does today.
 - **End of day:** one prompt for what is still open, together with the daily
   summary planned in [MVP 3](mvp-3.md).
 
@@ -403,7 +600,7 @@ The read-only MCP server grows by three tools:
 
 | Tool | Scope | Returns |
 |---|---|---|
-| `summarize_blocks(from, to, block)` | `read` | blocks with their score lists and the logged entry, no titles |
+| `summarize_blocks(from, to, block)` | `read` | hour windows (6a) with their score lists, the proposed entries and the logged entries, no titles |
 | `list_observations(from, to, sensor)` | `observe` (new) | the spans with app and (redacted) title |
 | `propose_correction(...)` | `propose` (new) | stores a correction with `status: proposed`, `source: ai`; it counts only after confirmation in the Day view |
 
@@ -424,7 +621,7 @@ Following the three layers (default → hat → device):
 
 | Where | Setting |
 |---|---|
-| defaults | `rules` (ignore rules, global activity and detail rules), `prompt.*`, `reconstruct.block`, `reconstruct.noise` |
+| defaults | `rules` (ignore rules, global activity and detail rules), `prompt.*`, `reconstruct.noise`; from 6a `reconstruct.window` (60 min), `reconstruct.min_entry` (5 min), `reconstruct.memory` (15 min, also live), `live.dwell` (10 of 15 min), replacing `reconstruct.block` |
 | hat | `rules`, `observe: true \| false` |
 | device | sensors on or off (`window`, `media`, `notify`; `idle` on by default), in `observe.devices` |
 | all devices | `observe.ignore` and `observe.redact` app lists, `observe.retention_days` (default 28), `observe.idle` (`after` 5, `ask_after` 10, `stop_after` 15 min, `ask`) |

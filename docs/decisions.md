@@ -4,6 +4,7 @@
 
 | Date | Decision |
 |---|---|
+| 2026-11-08 | Parallel work and the end of a task ([auto-detection.md, 6a](auto-detection.md#6a-parallel-work-and-the-end-of-a-task)), what follows from the earlier decisions: an entry keeps one hat, one activity and one detail; no detail lists with shares and no side entries (they would change totals, CSV, MCP and learning, or break "no overlaps"). Reports come from the log, never from observations (those expire). A task stays open until something ends it: an absence, a boundary the user set, a meeting, another hat, or not being seen for the memory (15 min); time without any candidate goes to the task last seen within the memory. Afterwards, proposals are made per hour window and compared with the log by sums per task, not by positions, so an accepted proposal never comes back; boundaries the user set are kept. Live follows only the main task; splitting is the review's job. Commit, ticket status and calendar are no signals in this epic (no git sensor, nothing fetched, no logins). A day report by phases (from the log) is proposed as a new ticket. Simulation on synthetic days in the section; the parameters below are open. |
 | 2026-11-08 | UI of #8: the tab is called **Zuordnung** and teaches how assignment works: a three-step strip (observed → clues → suggestion), the same three colours for the sources everywhere (rule blue, ticket orange, learned green), the own day as the entry point with the reason for every row, the share of time found, and "+ Rule" on every unclear row. Rules read as sentences and show what they matched in the last 7 days. Rules are edited only in this tab, right above the test; the hat page lists them and links there (no form inside the hat form). No technical words in the UI: sure / likely / possible instead of confidence, no "regex". Plan for the implementation in the comment on #8. |
 | 2026-11-08 | Work tools and rules (#8, #15): global rules (`defaults.rules`) may give an activity as a list of names, the first one the hat has wins; how hats and activities relate is looked at again when #8 is built (hats per role, such as developer, DevOps, business analyst, make the activity easy to assign; someone on several similar projects needs hats per project and must name or pick the hat). Learned title parts suggest a hat (80 % of at least 30 minutes on one hat). Tickets are recognised only for projects that are registered or learned, per ticket system with its own key pattern; a learned ticket is linked by its key in the UI, as details already are. Rule templates come from a public JSON library on GitHub, preceded by an evaluation of user groups and tools. The agent takes `DISPLAY` and the other session variables from the systemd user manager when it started before the desktop. |
 | 2026-11-07 | The band "Observed" becomes one row per used hour at the end of the Day view (after the totals): on the day's axis short switches were a few pixels wide, an hour per row gives a minute about 16 px. Booked time is a 3 px line in the hat colour under each hour, so the comparison stays next to the blocks; the booked band at the top goes back to its own axis (working hours). Clicking a block opens a slim add form under its hour instead of scrolling to the big form. Supersedes the shared axis and the touch button of the band row below. |
@@ -74,3 +75,22 @@
 - **Cinnamon `color_scheme`:** does Cinnamon evaluate a light/dark preference,
   or only the GTK theme? Test on the desktop early in MVP 1; if not, drop
   `prefer`.
+- **Condensed or in order (#4, #10):** recommended: per clock hour one entry
+  per task with its summed time, laid out in the order of first appearance
+  (2.3 entries per hour in the simulation, totals as exact as the evidence,
+  but about 30 % of the minutes sit at another clock time within the hour).
+  Alternative: keep the order and absorb pieces under 3 minutes (4 entries
+  per hour, true positions). Possible as a setting later; one is the default.
+- **Smallest entry and other hats (#4):** recommended `min_entry` 5 minutes;
+  a smaller piece goes to the biggest task of its hour, also when it belongs
+  to another hat (named in the reason, never across working and non-working
+  hats). Alternative: time of another hat always becomes its own entry, so
+  hats (customers) stay exact at the cost of more short entries.
+- **Live dwell (#9):** recommended 10 of the last 15 active minutes for
+  another hat (instead of 3 minutes in a row) and a new detail only after the
+  old one was not seen for 15 minutes; the log during the day then holds the
+  main task, details are split in the review. Alternative: keep 3 minutes
+  (about 4 live switches per hour when two tickets alternate).
+- **Order (#9):** recommended to build #9 after the core of #4, because it
+  uses the same memory; #9 then moves from MVP 8 to MVP 9, or MVP 8 ends
+  without it.
