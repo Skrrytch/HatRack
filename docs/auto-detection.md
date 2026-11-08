@@ -149,6 +149,8 @@ defaults:
   rules:
     - match: {app: "(?i)spotify|keepassxc"}
       ignore: true                # noise: never a candidate
+    - match: {app: "jetbrains-|^code$|netbeans"}
+      activity: [Implementierung, Entwicklung]   # the first one the hat has
 ```
 
 - `match` fields are regular expressions on the span's attributes (`app`,
@@ -156,6 +158,16 @@ defaults:
   must match.
 - The hat is the one the rule is defined in; `activity` and `detail` are
   optional, `detail` may use capture groups.
+- **Global rules** (`defaults.rules`) name no hat. Besides `ignore` they may
+  give an activity and a detail, which join whatever names the hat (a hat
+  rule, a learned detail or title, live also the worn hat). Activity names
+  differ per hat, so `activity` may be a list: the first one the hat has
+  wins, none means no activity. This is how "an IDE means development"
+  works for every hat with one rule.
+- `app` is matched without regard to case: the X11 class is `Code`,
+  `Vivaldi-stable`, `jetbrains-idea`, the Wayland app id may differ.
+- The classifier normalizes titles itself (`core.NormalizeTitle`), so spans
+  stored before normalization classify the same.
 - Several rules may fill different fields (one gives the activity, another
   the ticket key). For the same field: higher `priority` wins, then the rule
   with more conditions, then the earlier one.
@@ -168,7 +180,121 @@ hat and activity it was used with; a ticket key of a known project
 confidence (0.6). This makes the feature useful before the first rule is
 written.
 
+A ticket key counts only if its project is known: from `core.TicketLinks`,
+from a booked detail, or named in a rule. `UTF-8` or `ISO-8859` in a title
+are no tickets.
+
+**Learned title parts** without any configuration: titles are split at
+their separators (` - `, ` – `, ` — `, ` · `, ` | `) into parts such as an
+IDE project, a repository, a Confluence space or a file name. A part seen
+mostly while one hat was booked (default: at least 30 minutes in the last
+eight weeks, 80 % of its time on that hat) suggests that hat with lower
+confidence (0.5). Parts seen under many hats (`Vivaldi`, `Visual Studio
+Code`, `Jira`) carry no hat. This covers what rules cannot know in advance,
+for example a terminal whose title is the topic of a session and names no
+project (seen in the first data of MVP 7).
+
 A span no rule or detail matches has no candidate ("unknown").
+
+### 3a. Strategies for work tools
+
+The primary users are developers and DevOps engineers, then office work.
+Their tools show in the window title what they work on, often with a ticket
+key. The classifier uses four layers of evidence, from weak to strong; one
+span may get its hat, activity and detail from different layers:
+
+| Layer | Tells | Example | Source |
+|---|---|---|---|
+| Tool | the activity | IDE → Implementierung, Confluence → Dokumentation, a pull request → Code-Review | global rule, often from a template |
+| Context | the hat | IDE project, repository, Confluence space, Jira project, file name | hat rule or learned title part |
+| Ticket key | the detail, and the hat through the project | `NMS-1234` in a Jira title, a branch `feature/NMS-1234-login`, a file name | global rule, learned detail, `TicketLinks` |
+| History | all three | what was booked while the same detail or title part was on screen | learned |
+
+What the tools show, as far as it is typical. This table is a starting
+point, not the catalogue: #15 first evaluates which user groups and tools
+matter, and every template is checked against recorded titles before it
+ships.
+
+| Group | Tools | Title shows | Notes |
+|---|---|---|---|
+| IDE | IntelliJ IDEA and other JetBrains IDEs, NetBeans, VS Code, Eclipse | project, file; VS Code also the folder | VS Code can show the branch: `window.title` with `${activeRepositoryBranchName}`. Visual Studio runs on Windows only and is out of scope. |
+| Git | branches, pull/merge requests | branch only where the tool shows it; PR title and repository in the browser | branch names usually carry the ticket key. A terminal shows repository and branch if the shell prompt sets the title (a template carries the snippet); tools that set their own title (e.g. Claude Code) hide it unless switched off. |
+| Tickets | Jira, YouTrack, Redmine, GitHub and GitLab issues, ServiceNow, Znuny/OTRS | key and summary, project or space | Jira-shaped keys `ABC-123`; others (`INC0012345`, `Ticket#…`) through template rules |
+| Docs | Confluence, wikis | page and space | the space usually names the project |
+| Office | LibreOffice, ONLYOFFICE, Microsoft 365 in the browser | file name | file names often carry customer, project or key |
+| PDF | Xreader, Evince, Okular, the browser | file name | like office documents |
+
+Consequences for the stages:
+
+- **Live (#9):** a new ticket key under the same hat suggests a new detail,
+  not a switch, and fills an empty detail by itself only with `mode: auto`.
+  A short visit to another tool (a look at Jira while coding) changes no
+  activity: the dwell applies to activities as to hats. A key from a working
+  tool (IDE, branch) outranks one from a reading tool (browser).
+- **Afterwards (#4):** within a run of one hat, the key last seen carries
+  over to spans without a key (the IDE between two Jira views) until another
+  key appears, the hat changes or an absence intervenes.
+- **Asking and review (#3, #10):** the prefilled answer and every proposal
+  name the key and where it came from ("NMS-1234, from branch
+  feature/NMS-1234-login").
+- **MCP (#11):** block summaries give the tool groups per block with `read`;
+  keys taken from titles only with `observe`.
+- **Notifications (#12):** ticket notifications ("NMS-1234 was assigned to
+  you") can give a detail hint through the same rules.
+
+### 3b. Rule templates (#15)
+
+Nobody should write regular expressions for Jira or IntelliJ by hand. A
+library of rule templates lives in the repository as one JSON file, is
+embedded in the binary (works offline, nothing is fetched by default) and is
+readable by anyone on GitHub, so others can add templates by pull request.
+
+- A template has an id, a version, a category (`ide`, `git`, `tickets`,
+  `docs`, `office`, `pdf`, `terminal`, `meeting`, `ignore`), names and a
+  description in German and English, parameters (target hat, activity from
+  the hat's list, project keys prefilled from `TicketLinks`, a space or
+  repository name), the rules with placeholders, optional setup hints (VS
+  Code `window.title`, the shell prompt snippet), app names for X11 and
+  Wayland, and examples: app and title with the expected result.
+- Using one: Setup → Erkennung → Regeln → "Add from template": pick, fill
+  the parameters, see in the rule test what it would match on the last day,
+  save. The rules are copied into the configuration with a note of their
+  origin (`template: jira@3`), so export and import keep working and a newer
+  library never changes saved rules; Setup only says that a newer version
+  exists.
+- The server can fetch the current file from GitHub on request (a button,
+  never automatically); only a GET, nothing is sent. A file that fails
+  validation is ignored and the embedded one stays. A company may point to
+  its own file instead.
+- A test checks the file: schema, every expression compiles, every example
+  gives its expected result, ids are unique.
+
+**Evaluation first.** Before the library is filled, #15 works out what is
+useful, beyond the examples above, and records it in
+`docs/rule-templates.md`:
+
+- **User groups:** developers and DevOps (primary), QA, product owners and
+  Scrum masters, project managers, business analysts, IT support and
+  operations (ITSM), consultants and freelancers who bill per customer,
+  office and administration.
+- **Per group:** the tools in daily use on Linux and in the browser (SaaS),
+  what their titles show, and which identifiers the work is booked by
+  (ticket keys, customer names, project or order numbers, cost centres).
+- **Sources:** public surveys (e.g. developer surveys for IDE shares), the
+  documentation of the tools, recorded titles from real machines, requests
+  from users (an issue template "template wanted"). No telemetry: HatRack
+  sends nothing to collect usage.
+- **Criteria per tool:** reach (how many users), signal (does the title say
+  hat or detail, or only the tool), stability (title formats change between
+  versions and with the UI language, German and English at least), privacy
+  (mail subjects and chats are sensitive: rather `redact` than a rule),
+  effort.
+- **Result:** a ranked catalogue: first wave, later, not suitable (with the
+  reason). The first wave ships with #15, the rest follows by pull request.
+
+In the user's own Setup the same idea works locally: the rule test lists the
+apps of the last days that no rule matches and offers the templates that fit
+them. Nothing of that leaves the server.
 
 ### 4. Live behaviour (agent)
 
@@ -297,7 +423,7 @@ Following the three layers (default → hat → device):
 
 | Where | Setting |
 |---|---|
-| defaults | `rules` (ignore rules), `prompt.*`, `reconstruct.block`, `reconstruct.noise` |
+| defaults | `rules` (ignore rules, global activity and detail rules), `prompt.*`, `reconstruct.block`, `reconstruct.noise` |
 | hat | `rules`, `observe: true \| false` |
 | device | sensors on or off (`window`, `media`, `notify`; `idle` on by default), in `observe.devices` |
 | all devices | `observe.ignore` and `observe.redact` app lists, `observe.retention_days` (default 28), `observe.idle` (`after` 5, `ask_after` 10, `stop_after` 15 min, `ask`) |
@@ -311,7 +437,7 @@ pile up on other pages; each later ticket adds a tab instead of a block:
 | Datenschutz | #6 | `ignore` and `redact` lists, retention |
 | Abwesenheit | #2 | `idle.*` thresholds, the return question |
 | Rückfragen | #3 | `prompt.*`, end of day |
-| Regeln | #8 | all rules at a glance and the **rule test**: the last day's spans, which rule each one matches, and what a new rule would match before it is saved |
+| Regeln | #8, #15 | all rules at a glance and the **rule test**: the last day's spans, which rule each one matches, and what a new rule would match before it is saved; "Add from template" (#15) |
 
 The setup overview shows one summary line for it; the Devices page one line
 per device. The rules themselves stay on the hat's page (a folded section like
@@ -325,7 +451,7 @@ works without observations, nothing afterwards without rules.
 | Stage | Name | What you get | Issues |
 |---|---|---|---|
 | **MVP 7** | Observe | Idle and lock handled, return question; window titles recorded on X11; an "observed" band in the Day view and the raw spans over MCP. Booking stays manual, but you can see what you did. | #6, #2, #1, #7 |
-| **MVP 8** | Assign | Rules per hat, learned details, rule test in Setup; live suggestions and opt-in auto-switch. | #8, #9 |
+| **MVP 8** | Assign | Rules per hat and global, learned details and title parts, rule test in Setup, rule templates for common work tools; live suggestions and opt-in auto-switch. | #8, #15, #9 |
 | **MVP 9** | Afterwards | Reconstruction with blocks and proposals, review in the Day view, smart prompts, MCP block summary and AI proposals. | #4, #10, #3, #11 |
 | **MVP 10** | Meetings | Microphone and camera as signals, meeting rules shipped as examples, meeting names from reminder notifications. | #5, #12 |
 | **MVP 11** | More desktops | The `window` sensor on GNOME Wayland, KDE, sway, Hyprland; idle on wlroots. | #13 |
@@ -379,6 +505,7 @@ fails its check goes to Sonnet, not back to Haiku.
 | #1 Window on X11 | – (Sonnet reviews) | `xgb` backend, `PropertyNotify` handling, `detect()` | Tests with a fake window manager from given cases, docs |
 | #7 Show observations | Short review of the `observe` scope | Day view band, MCP `list_observations`, scope in Setup | CSS, i18n, MCP tool description |
 | #8 Rules and learned details | Design note: rule semantics, conflict order, confidence, core API; core classifier; review | Config parsing and validation, Setup rule list and rule test | Table tests from the note, example rules, i18n |
+| #15 Rule templates | Design note: file format, parameters and placeholders, how a template becomes rules; review | Loader, embedding, optional fetch and validation, "Add from template" in Setup | Template content and examples for the listed tools, i18n, docs |
 | #9 Live suggestions, auto-switch | Design note and implementation: dwell, hysteresis, manual-wins, auto start and revert (agent concurrency); review | Notifications with actions, tray hint, wiring | Settings, i18n |
 | #4 Reconstruction | Algorithm (smoothing, blocks, scores, proposals), consistent with `Settle` and `Apportion`; review | Edge-case tests (midnight, overlaps, idle at edges), performance check | Docs, test fixtures |
 | #10 Review in Day view | Check of proposal → correction mapping | Ghost entries, accept/reject, "accept all gaps" | CSS, i18n |
@@ -393,9 +520,10 @@ stands on), Sonnet about half, Haiku the rest.
 
 ## Not in this epic
 
-- A browser extension for URLs, a shell hook for the working directory or git
-  repository: strong signals, but each a separate install; possible later as
-  further sensors.
+- A browser extension for URLs, a shell hook or sensor for the working
+  directory or git repository: strong signals, but each a separate install;
+  possible later as further sensors. Until then the window title carries
+  them (VS Code setting, shell prompt snippet from a template).
 - Calendar access (ICS link, Exchange, Google): MVP 10 works without any
   login on purpose; "Calendar entries as activity suggestions" stays in the
   outlook of MVP 3.
