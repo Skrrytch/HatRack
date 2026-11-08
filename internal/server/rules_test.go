@@ -208,3 +208,29 @@ func TestRulesEmptyStates(t *testing.T) {
 		t.Error("empty day")
 	}
 }
+
+func TestHatPageRules(t *testing.T) {
+	e, b := setupBrowser(t)
+	rulesDay(t, e)
+	// a registered project booked on the hat shows as a ticket chip
+	for i := 0; i < 3; i++ {
+		ev := e.ev(-250+i*10, core.EvSwitch, "venom", "development")
+		ev.Detail = "VEN-1"
+		e.do("POST", "/api/events", mustJSON(t, []core.Event{ev, e.ev(-245+i*10, core.EvOff, "venom", "")}))
+	}
+	_, out := b.do("GET", "/setup/hat?key=venom", nil)
+	for _, want := range []string{"How HatRack tells you are working on VENOM", `<code>venom</code>`, "VENOM</span>",
+		"last 7 days:", "ed_edit=venom%3A0#try", "ed_scope=venom#try", "HatRack also finds VENOM by:", "See assignment"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q", want)
+		}
+	}
+	if !strings.Contains(out, `class="src ticket"`) {
+		t.Errorf("ticket chip:\n%s", out[strings.Index(out, "also"):])
+	}
+	// a hat without rules says so, and offers the first rule
+	_, out = b.do("GET", "/setup/hat?key=tag", nil)
+	if !strings.Contains(out, "No rule yet. HatRack still finds TAG by") || !strings.Contains(out, "ed_scope=tag#try") || strings.Contains(out, "%!") {
+		t.Errorf("empty hat:\n%s", out)
+	}
+}

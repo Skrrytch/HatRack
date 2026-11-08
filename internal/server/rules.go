@@ -1054,3 +1054,49 @@ func (s *Server) renderRulesFailure(w http.ResponseWriter, r *http.Request, acc 
 	}
 	s.render(w, v, http.StatusBadRequest)
 }
+
+// hatRules is the section "Detection" of the hat page: the rules of the hat
+// to read (they are edited in the tab Assignment), and what else finds it.
+type hatRules struct {
+	Name     string
+	Lines    []ruleLine
+	AddHref  string
+	Projects []string
+	Learned  string // "3 title parts, 2 details", empty if nothing
+}
+
+func (s *Server) fillHatRules(r *http.Request, v *view, cfg core.Config, h core.Hat) {
+	hr := &v.Hat.Rules
+	hr.Name = h.DisplayName()
+	hr.AddHref = "/setup/detection?tab=rules&ed_new=1&ed_scope=" + url.QueryEscape(h.Key) + "#try"
+	k, stats, err := s.knowledge(r)
+	if err != nil {
+		return
+	}
+	nm, pal := names(cfg), newPalette(cfg)
+	for n, rule := range h.Rules {
+		l := s.ruleLineOf(v.Lang, cfg, nm, pal, stats, h.Key, n, rule, "/setup/detection?tab=rules")
+		l.HatName = ""
+		hr.Lines = append(hr.Lines, l)
+	}
+	for p, u := range k.Projects {
+		if u.Hat == h.Key {
+			hr.Projects = append(hr.Projects, p)
+		}
+	}
+	sort.Strings(hr.Projects)
+	var parts, details int
+	for _, p := range k.Parts {
+		if p.Hat == h.Key {
+			parts++
+		}
+	}
+	for _, d := range k.Details {
+		if d.Hat == h.Key {
+			details++
+		}
+	}
+	if parts+details > 0 {
+		hr.Learned = i18n.In(v.Lang, "web.hat.also_learned", strconv.Itoa(parts), strconv.Itoa(details))
+	}
+}

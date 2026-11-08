@@ -105,6 +105,7 @@ type hatEdit struct {
 	Archived         []string
 	Modules          []moduleForm
 	Saved            bool
+	Rules            hatRules
 }
 
 type actRow struct {
@@ -734,6 +735,7 @@ func (s *Server) hatPage(w http.ResponseWriter, r *http.Request, acc access) {
 	}
 	v := s.base(r, "sethat", acc)
 	s.fillHat(&v, cfg, h)
+	s.fillHatRules(r, &v, cfg, h)
 	v.Hat.Saved = r.URL.Query().Get("saved") != ""
 	s.render(w, v, http.StatusOK)
 }
@@ -862,6 +864,7 @@ func (s *Server) hatSave(w http.ResponseWriter, r *http.Request, acc access) {
 		// show the form again with what was typed
 		v := s.base(r, "sethat", acc)
 		s.fillHat(&v, cfg, tried)
+		s.fillHatRules(r, &v, cfg, tried)
 		v.Err = userError(lang, err)
 		s.render(w, v, http.StatusBadRequest)
 		return

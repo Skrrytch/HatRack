@@ -41,6 +41,22 @@
     {{end}}
   </div>
 
+  {{with .Rules}}
+  <h1>{{t $.Lang "web.hat.rules"}}</h1>
+  <div class="card">
+    <p class="sub" style="margin:0 0 .4rem">{{t $.Lang "web.hat.rules_sub" .Name}}</p>
+    {{if .Lines}}<ul class="rules">{{range .Lines}}{{template "ruleline" dict "L" . "Lang" $.Lang "CanWrite" $.CanWrite}}{{end}}</ul>
+    {{else}}<p class="dim">{{t $.Lang "web.hat.rules_empty" .Name}}</p>{{end}}
+    <p class="row" style="margin:.5rem 0 0">{{if $.CanWrite}}<a class="btn" href="{{.AddHref}}">{{t $.Lang "web.rules.add"}}</a>{{end}}<span class="dim small">{{t $.Lang "web.hat.rules_where"}}</span></p>
+    <div class="also"><span class="dim">{{t $.Lang "web.hat.also" .Name}}</span>
+      {{if or .Projects .Learned}}
+      {{range .Projects}}<span class="src ticket">{{t $.Lang "web.rules.src_ticket"}} <span class="f">{{t $.Lang "web.hat.also_project"}}</span> {{.}}</span>{{end}}
+      {{if .Learned}}<span class="src learned">{{t $.Lang "web.rules.src_learned"}} <span class="f">{{.Learned}}</span></span>{{end}}
+      {{else}}<span class="dim">{{t $.Lang "web.hat.also_none"}}</span>{{end}}
+      <span class="grow"></span><a class="small" href="/setup/detection?tab=rules">{{t $.Lang "web.hat.to_rules"}}</a></div>
+  </div>
+  {{end}}
+
   <h1>{{t $.Lang "web.setup.modules"}}</h1>
   <p class="dim">{{t $.Lang "web.setup.modules_hat_note"}}</p>
   {{template "modforms" .Modules}}

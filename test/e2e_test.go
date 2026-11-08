@@ -214,6 +214,22 @@ func TestEndToEnd(t *testing.T) {
 	if out := w.must("config", "import", reimport); !strings.Contains(out, "Nothing to change") {
 		t.Fatalf("export → import should be lossless: %s", out)
 	}
+	// rules and ticket projects survive export and import
+	rulesFile := filepath.Join(w.dir, "rules.yaml")
+	os.WriteFile(rulesFile, []byte("version: 1\nhats:\n  ruled:\n    name: Ruled\n    activities: [development]\n    rules:\n      - match: {title: venom}\n        activity: development\ndefaults:\n  rules:\n    - match: {app: spotify}\n      ignore: true\ntickets:\n  - project: VEN\n    url: https://jira.example.org/browse/\n"), 0o644)
+	if out := w.must("config", "import", rulesFile); !strings.Contains(out, "Imported") {
+		t.Fatalf("import rules: %s", out)
+	}
+	exported = w.must("config", "export")
+	for _, want := range []string{"title: venom", "ignore: true", "project: VEN"} {
+		if !strings.Contains(exported, want) {
+			t.Fatalf("export lacks %q:\n%s", want, exported)
+		}
+	}
+	os.WriteFile(reimport, []byte(exported), 0o644)
+	if out := w.must("config", "import", reimport); !strings.Contains(out, "Nothing to change") {
+		t.Fatalf("rules and tickets: export → import should be lossless: %s", out)
+	}
 	if _, errs, code := w.hat("config", "import", filepath.Join(w.dir, "nope.yaml")); code == 0 {
 		t.Fatalf("missing file accepted: %s", errs)
 	}

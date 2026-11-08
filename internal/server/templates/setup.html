@@ -75,8 +75,8 @@
   {{else}}<p class="dim">{{t $.Lang "web.tickets.none"}}</p>{{end}}
   <form method="post" action="/setup/tickets" class="row" style="margin-top:.8rem;align-items:flex-end">
     <input type="hidden" name="op" value="register">
-    <label class="small dim">{{t $.Lang "web.tickets.reg_project"}}<br><input name="project" placeholder="VEN" size="8"></label>
-    <label class="small dim grow">{{t $.Lang "web.tickets.reg_link"}}<br><input name="link" placeholder="https://jira.example.org/browse/VEN-1" style="width:100%" required></label>
+    <label class="small dim">{{t $.Lang "web.tickets.reg_project"}}<br><input type="text" name="project" placeholder="VEN" size="8"></label>
+    <label class="small dim grow">{{t $.Lang "web.tickets.reg_link"}}<br><input type="text" name="link" placeholder="https://jira.example.org/browse/VEN-1" style="width:100%" required></label>
     <button class="btn">{{t $.Lang "web.tickets.reg_button"}}</button>
   </form>
   <p class="dim small">{{t $.Lang "web.tickets.other"}}</p>
