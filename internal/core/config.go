@@ -30,6 +30,9 @@ type ModuleCfg map[string]any
 type Defaults struct {
 	ResumeActivity string     `yaml:"resume_activity,omitempty" json:"resume_activity,omitempty"`
 	WorkHours      *WorkHours `yaml:"work_hours,omitempty" json:"work_hours,omitempty"`
+	// Rules for all hats: noise, or an activity or detail for whatever hat
+	// something else names.
+	Rules []Rule `yaml:"rules,omitempty" json:"rules,omitempty"`
 }
 
 // WorkHours are the usual working hours. The Day view shows this stretch
@@ -117,6 +120,8 @@ type Hat struct {
 	WorkTime *bool `yaml:"work_time,omitempty" json:"work_time,omitempty"`
 	// Observe false: only idle is recorded while this hat is worn.
 	Observe *bool `yaml:"observe,omitempty" json:"observe,omitempty"`
+	// Rules say which observed windows belong to this hat.
+	Rules []Rule `yaml:"rules,omitempty" json:"rules,omitempty"`
 }
 
 // CountsAsWork reports whether the hat's time is working time (the default).
@@ -185,6 +190,7 @@ type Config struct {
 	Defaults Defaults             `yaml:"defaults,omitempty" json:"defaults"`
 	Modules  map[string]ModuleCfg `yaml:"modules,omitempty" json:"modules,omitempty"`
 	Observe  Observe              `yaml:"observe,omitempty" json:"observe,omitzero"`
+	Tickets  []TicketSystem       `yaml:"tickets,omitempty" json:"tickets,omitempty"`
 	Hats     HatList              `yaml:"hats" json:"hats"`
 }
 
@@ -248,7 +254,16 @@ func (c Config) Validate() error {
 			acts[strings.ToLower(a)] = true
 		}
 	}
-	return nil
+	ids := map[string]string{}
+	for _, h := range c.Hats {
+		if err := validateRules("hats."+h.Key+".rules", &h, h.Rules, ids); err != nil {
+			return err
+		}
+	}
+	if err := validateRules("defaults.rules", nil, c.Defaults.Rules, ids); err != nil {
+		return err
+	}
+	return validateTickets(c.Tickets)
 }
 
 func validResume(s string) bool {
@@ -347,7 +362,7 @@ func (c Config) ModuleIDs() []string {
 // because the log refers to it). It returns the result and a list of changes.
 func Merge(cur, in Config, replace bool) (Config, []string) {
 	var changes []string
-	out := Config{Version: ConfigVersion, Defaults: cur.Defaults, Modules: copyModules(cur.Modules), Observe: cur.Observe}
+	out := Config{Version: ConfigVersion, Defaults: cur.Defaults, Modules: copyModules(cur.Modules), Observe: cur.Observe, Tickets: cur.Tickets}
 
 	if in.Defaults.ResumeActivity != "" && in.Defaults.ResumeActivity != cur.Defaults.ResumeActivity {
 		out.Defaults.ResumeActivity = in.Defaults.ResumeActivity
@@ -357,6 +372,14 @@ func Merge(cur, in Config, replace bool) (Config, []string) {
 		w := *in.Defaults.WorkHours
 		out.Defaults.WorkHours = &w
 		changes = append(changes, "defaults.work_hours: "+w.Start+"-"+w.End)
+	}
+	if (replace || len(in.Defaults.Rules) > 0) && !sameJSON(in.Defaults.Rules, cur.Defaults.Rules) {
+		out.Defaults.Rules = in.Defaults.Rules
+		changes = append(changes, "defaults.rules")
+	}
+	if (replace || len(in.Tickets) > 0) && !sameJSON(in.Tickets, cur.Tickets) {
+		out.Tickets = in.Tickets
+		changes = append(changes, "tickets")
 	}
 	if !sameJSON(in.Observe, Observe{}) && !sameJSON(in.Observe, cur.Observe) {
 		out.Observe = in.Observe
@@ -419,6 +442,9 @@ func mergeHat(old, in Hat, replace bool) Hat {
 	h := old
 	h.Name, h.Color, h.ResumeActivity = in.Name, in.Color, in.ResumeActivity
 	h.Archived, h.WorkTime, h.Observe = in.Archived, in.WorkTime, in.Observe
+	if replace || len(in.Rules) > 0 {
+		h.Rules = in.Rules
+	}
 	if replace || len(in.Modules) > 0 {
 		// a copy: changing old's map in place would hide the change from
 		// the comparison in Merge, and the import would be dropped
