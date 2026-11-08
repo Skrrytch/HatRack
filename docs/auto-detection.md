@@ -146,7 +146,7 @@ How (checked on Bert's machine, 2026-11-08):
     folder and branch from the moment Claude Code was started.
   So the sensor reads the branch from `/proc`, and the title stays a
   fallback for users without the sensor (`/rename`, or the title off plus
-  the prompt snippet).
+  the prompt snippet), described in the toolbox (3c).
 - **IDEs:** IntelliJ's title names project, file and module
   ("my-repo – <file> [module]" in real data), no branch. The IDE process
   does not run in the project, so the title's project name is mapped to its path through the IDE's own list of recent
@@ -349,9 +349,10 @@ readable by anyone on GitHub, so others can add templates by pull request.
   `docs`, `office`, `pdf`, `terminal`, `meeting`, `ignore`), names and a
   description in German and English, parameters (target hat, activity from
   the hat's list, project keys prefilled from `TicketLinks`, a space or
-  repository name), the rules with placeholders, optional setup hints (VS
-  Code `window.title`, the shell prompt snippet), app names for X11 and
-  Wayland, and examples: app and title with the expected result.
+  repository name), the rules with placeholders, a link to the toolbox page
+  for setup (3c: VS Code `window.title`, the shell prompt snippet), app
+  names for X11 and Wayland, and examples: app and title with the expected
+  result.
 - Using one: Setup → Erkennung → Regeln → "Add from template": pick, fill
   the parameters, see in the rule test what it would match on the last day,
   save. The rules are copied into the configuration with a note of their
@@ -391,6 +392,57 @@ useful, beyond the examples above, and records it in
 In the user's own Setup the same idea works locally: the rule test lists the
 apps of the last days that no rule matches and offers the templates that fit
 them. Nothing of that leaves the server.
+
+### 3c. Toolbox: setting up work tools (new ticket)
+
+Rules read what a tool shows; some tools show more once set up: VS Code puts
+the branch into its title with one setting, a shell prompt can set the
+terminal title to folder and branch, Claude Code takes a session name from
+`/rename`. Such setup belongs in a **toolbox** of how-tos, one page per tool,
+not into rules and not into sensors.
+
+Each page:
+
+| Part | Content |
+|---|---|
+| Goal | what HatRack should see afterwards ("the branch in the title of VS Code") |
+| Setup | the setting, snippet, plugin or instruction to copy, with the tool versions it was checked with |
+| Check | how to see that it works: the tab Zuordnung shows the tool's rows with the key and its source ("ticket from title") |
+| Privacy | what the tool then shows to anyone looking at the screen, and to HatRack; hooks that see prompts are not offered |
+| Not needed if | what the `workdir` sensor (1a) or a template (#15) already covers |
+
+First pages: VS Code (`window.title` with `${activeRepositoryBranchName}`),
+the shell prompt title for bash and zsh, Claude Code (rely on the sensor;
+`/rename` with the key works by hand; an instruction in `CLAUDE.md` to name
+the key is not proven: Bert's first title after giving it, 2026-11-08 12:34,
+named the work but no key, which fits a topic title written by a separate
+model call; it stays "to try, check in Zuordnung"), IntelliJ (a branch in the
+frame title by setting or plugin, to evaluate; with the sensor not needed),
+Jira and Confluence (title formats, language), Thunderbird (subjects:
+`redact` or rules, privacy first).
+
+Where: Markdown in `docs/toolbox/` in the repository, readable on GitHub and
+open to pull requests like the templates. A template (#15) links to its page
+(`setup: toolbox/vscode.md#branch`) instead of carrying setup hints itself.
+In Setup the rule test names, for a tool whose rows lack a key, the page that
+would help (a one-line hint in both languages and a link); nothing is fetched
+for that.
+
+Toolbox and sensor, honestly: the sensor works without anything the user
+does, for every terminal, Claude Code and IDE, as long as the process can be
+told (one tab or a clear match) and the branch carries the key. The toolbox
+covers what no sensor sees (titles of Jira, Confluence, mail, office files),
+helps where the sensor cannot decide (a prompt title names the folder of the
+visible tab) or is missing (desktops without a process id, users who leave
+it off), but needs setup per tool and machine, drifts with tool versions,
+and some tips are unreliable (the Claude Code instruction so far). So:
+branches come from the sensor, the toolbox fills the gaps.
+
+Ticket: its own, next to #15 and not inside it. #15 is code and data
+(library format, loader, validation, "Add from template"); the toolbox is
+mostly prose that can ship before any code. Both use the tool list from the
+evaluation of #15 (`docs/rule-templates.md`) and the same tool ids, so a
+template and its page find each other.
 
 ### 4. Live behaviour (agent)
 
@@ -688,10 +740,12 @@ once (the hour stays ACME-101 until the review).
 | #3 | the window is the unit, one line per entry | Sonnet |
 | #11 | `summarize_blocks` returns windows with sums, parallel marks and proposed entries | Sonnet; Haiku descriptions |
 | new: day report | phases from the log, parallel entries as `A + B (parallel)` | Sonnet after a mockup; Haiku i18n |
+| new: toolbox (3c) | how-tos per tool in `docs/toolbox/`, linked from templates and the rule test | Sonnet writes and checks the pages; Haiku skeletons and i18n; Opus privacy review |
 
 Order: #4 (core), with the `workdir` sensor alongside (independent, better
 evidence) → #10 → #9 → #3 → #11 → day report (no dependency, can come
-earlier).
+earlier). The toolbox (3c) follows the evaluation of #15 and ships its first
+pages before the templates; it needs no code until the rule test links it.
 
 Risks: condensed times look wrong to someone who remembers the mail at half
 past ten (*Observed* shows the order under the hour; parallel entries keep
@@ -787,7 +841,7 @@ works without observations, nothing afterwards without rules.
 | Stage | Name | What you get | Issues |
 |---|---|---|---|
 | **MVP 7** | Observe | Idle and lock handled, return question; window titles recorded on X11; an "observed" band in the Day view and the raw spans over MCP. Booking stays manual, but you can see what you did. | #6, #2, #1, #7 |
-| **MVP 8** | Assign | Rules per hat and global, learned details and title parts, rule test in Setup, rule templates for common work tools; repository and branch of the focused terminal or IDE. | #8, #15, new `workdir` sensor |
+| **MVP 8** | Assign | Rules per hat and global, learned details and title parts, rule test in Setup, rule templates for common work tools, a toolbox of how-tos for setting tools up; repository and branch of the focused terminal or IDE. | #8, #15, new toolbox, new `workdir` sensor |
 | **MVP 9** | Afterwards | Condensing per hour with parallel entries and proposals, review in the Day view, live suggestions and opt-in auto-switch, smart prompts, MCP window summary and AI proposals, day report by phases. | #4, #10, #9, #3, #11, new day report |
 | **MVP 10** | Meetings | Microphone and camera as signals, meeting rules shipped as examples, meeting names from reminder notifications. | #5, #12 |
 | **MVP 11** | More desktops | The `window` sensor on GNOME Wayland, KDE, sway, Hyprland; idle on wlroots. | #13 |
@@ -848,6 +902,7 @@ fails its check goes to Sonnet, not back to Haiku.
 | #3 Smart prompts | – (Sonnet reviews; Opus in the MVP 9 pass) | Prompt scheduling, panel review mode | Settings, i18n, docs |
 | #11 MCP blocks and proposals | Security review of the `propose` scope | Tools, scopes, Setup | Tool descriptions, tests from given cases |
 | new `workdir` sensor | Short design note (what is read and stored, tab rule); privacy review | `/proc` walk, `HEAD` parsing (worktree, detached), IDE project lists, X11 pid, classifier fields `branch`, `repo` | Fake `/proc` and repository fixtures, i18n, docs |
+| new toolbox | Privacy review of the snippets (no hook that sees prompts) | Pages checked against recorded titles, link from the rule test, `setup` link in templates | Page skeletons from the table in 3c, i18n of the hints, docs |
 | new day report | – (Sonnet reviews) | Phases from the log, rounding with `Apportion`, view after a mockup | i18n, docs |
 | #5 Meetings (mic, cam) | – (design is in #8/#9; MVP 10 pass) | `pw-dump`/`pactl` parsing, `/proc` camera scan, meeting rules | JSON fixtures, example rules for Teams/Zoom/Webex/Meet, docs |
 | #12 Notification names | Privacy review (text never stored or logged) | D-Bus monitor, rule evaluation, link to meetings | Example patterns (German, English), docs |
@@ -883,3 +938,6 @@ stands on), Sonnet about half, Haiku the rest.
   after the core of #4 (MVP 9); a day report by phases as a new ticket.
 - A `workdir` sensor reads repository and branch from `/proc` and
   `.git/HEAD` (2026-11-08, 1a); session files of AI tools are never read.
+- Setup inside work tools (settings, plugins, prompt titles, instructions
+  for Claude Code) goes into a toolbox of how-tos, its own ticket next to
+  #15 (2026-11-08, 3c).
