@@ -335,8 +335,8 @@ Consequences for the stages:
   feature/ACME-1234-login").
 - **MCP (#11):** block summaries give the tool groups per block with `read`;
   keys taken from titles only with `observe`.
-- **Notifications (#12):** only calendar reminders; ticket notifications are
-  not read (see the conflict noted in #12).
+- **Notifications (#12):** a grant (#19) with two levels, calendar apps only
+  or all apps; with all apps, ticket notifications can give a detail hint.
 
 ### 3b. Rule templates (#15)
 
@@ -456,9 +456,10 @@ so it works offline.
 - **Manual wins:** after a manual switch, nothing is suggested or switched
   for 15 minutes unless a rule with `mode: auto` and a hardware signal
   (microphone) fires.
-- **`suggest`:** a hint on the tray icon; a notification with an action
-  ("Wechseln zu VENOM · Entwicklung · ACME-142") only when the user turns on
-  `live.notify` (default off). Ignoring it is fine.
+- **`suggest`:** a mark on the tray icon and a hint (product.md 7a: low
+  urgency, no sound, disappears by itself) with an action ("Wechseln zu
+  VENOM · Entwicklung · ACME-142"); `live.notify` (default on) turns these
+  hints off. Ignoring it is fine.
 - **`auto`:** the switch happens, backdated to its start; the event carries
   `source: rule:<id>`, the tray hint offers "Rückgängig". When the condition ends (microphone off)
   the previous hat and activity come back, also with `source`.
@@ -764,8 +765,8 @@ method; two computers active at once need a rule in the design note of #4.
   Accepting writes one `correction` with `source: suggestion`.
 - **Calls for help:** instead of a fixed hourly question, HatRack signals
   quietly: a mark on the tray icon with the number of open hours and a "Needs
-  you" list in the Day view. A notification is a choice (`prompt.notify`,
-  default off): when at least `prompt.min_open` (default 20 min) is unbooked
+  you" list in the Day view. Hints follow the levels of product.md 7a (on by
+  default, each kind can be switched off): when at least `prompt.min_open` (default 20 min) is unbooked
   or disagrees, at most every `prompt.interval` (default 60 min), only at a
   natural pause (return from absence, after a hat switch), never while the
   microphone is on. The tray or the notification opens the panel in review

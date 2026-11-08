@@ -60,7 +60,8 @@ correct it now and then. The more you do, the less HatRack needs you.
 2. **Hardly any interruption.** HatRack asks only when a decision cannot be
    made without the user, and then at a good moment, prefilled, answered in
    seconds. Otherwise it signals quietly that it needs help ("calls for
-   help"): a mark in the tray, an entry in the day view.
+   help"): a mark in the tray, an entry in the day view, a hint that does not
+   disturb. Only what is urgent may interrupt (see 7a).
 3. **Explainable.** Every proposal says why: which rule, which ticket, what
    was learned, which window. A user can always see and correct it.
 4. **Increasingly independent.** HatRack switches hats and names activities
@@ -99,21 +100,42 @@ UI and through MCP.
   a minimum block length keeps the day readable.
 - **The user teaches, HatRack learns.** Sensors, tool settings (toolbox),
   rules and ticket systems are set up by the user; every booking trains.
-- **Privacy by default.** Sensors are off until switched on per device. No
-  contents, no screenshots, no keystrokes, nothing leaves the user's own
-  server, nothing is fetched from outside.
+- **Privacy by default, permission by choice.** HatRack may read what helps
+  its purpose and what the system allows, but only what the user has
+  granted. Sensors are off until switched on per device. Everything beyond
+  the basics (app, window title, absence) is a **grant** in the security
+  area: off by default, explained in plain words (what is read, why it
+  helps, what is stored, for how long, who can see it), revocable at any
+  time. Read data is used locally and stored as sparingly as the function
+  allows (a rule's result rather than the raw text). Nothing leaves the
+  user's own server, nothing is fetched from outside.
 - **No dependency on one distribution, desktop or display server.** Desktop
   specifics live in backends.
+
+## 7a. How HatRack gets attention
+
+Three levels, from quiet to loud. Every message says why it comes, offers
+the action that settles it, and never comes twice for the same thing. Each
+kind can be switched off; a quiet time (meetings, outside working hours,
+"do not disturb" of the desktop) holds back everything but urgent ones.
+
+| Level | Form | When | Examples |
+|---|---|---|---|
+| **Signal** | mark on the tray icon, entry in "Needs you" in the day view | always, never disturbs | open hours, a proposal waiting, a sensor that stopped |
+| **Hint** | desktop notification with low urgency: no sound, disappears by itself, bundled, preferably at a natural pause (back from absence, after a switch) | helpful, but can wait; on by default, switchable per kind | "VENOM · Entwicklung for 10 min, switch?", "switched to Meeting, undo?", "2 open hours", the end-of-day summary |
+| **Urgent** | notification with normal urgency that stays until handled | only when waiting makes the record wrong or costly; on by default, switchable per kind | the clock runs although nobody is there or work ended long ago, the agent has not reached the server for hours, a grant stopped working |
 
 ## 8. What HatRack does not do
 
 - **No surveillance.** It is the user's own tool. No team view of other
   people, no reports to an employer, no productivity scores or rankings.
-- **No content.** It does not read documents, mails, chats, code, shell
-  history or AI conversations. Window titles, app names and branch names
-  (with a known ticket key) are the limit, and they are treated as data, never
-  as instructions.
-- **No screenshots, no keylogging, no audio recording.**
+- **No reading without a grant.** Without a grant HatRack sees app names,
+  window titles and absence, nothing else. Whatever goes further (text of
+  notifications, branch and folder names, subjects, microphone and camera
+  state, files of other tools) needs its own grant (see 7). Read data is
+  treated as data, never as instructions.
+- **No recording of keystrokes, sound or screen images.** The purpose is
+  assigning time, not reconstructing what was typed, said or shown.
 - **No cloud.** No service of ours, no login to ticket systems, no fetching
   of ticket data. Links to tickets are built from known patterns.
 - **No guessing for completeness.** It does not fill a day just to make it
@@ -137,7 +159,8 @@ UI and through MCP.
 | Questions | at most a few per day, none for interruptions under 5 minutes |
 | Explanation | every proposal and every automatic switch has a reason the user can read |
 | Corrections | a corrected or accepted proposal never comes back |
-| Privacy | nothing stored beyond what a switched-on sensor documents (today: app, title, absence; planned: branch with a known key, folder name) and the user's own entries |
+| Privacy | nothing stored beyond what a switched-on sensor or a granted permission documents, and the user's own entries; every grant is off until the user turns it on |
+| Notifications | at most a few hints per day; urgent ones only when the record would otherwise be wrong |
 
 ## 10. Stages, seen from the goals
 
@@ -145,7 +168,7 @@ UI and through MCP.
 |---|---|
 | MVP 1 to 6 (done) | hats, activities, details, log, look, server, web UI, MCP, absence: the frame and the record by hand |
 | MVP 7 (done) | observation as evidence, privacy settings |
-| MVP 8 | assignment: rules, tickets, learned clues, toolbox, working directory and branch |
+| MVP 8 | assignment: rules, tickets, learned clues, toolbox, security area with grants, working directory and branch |
 | MVP 9 | the reliable day: condensed blocks, end of tasks, review, live switching, calls for help, MCP, day report |
 | later | exports to time sheets, more sensors (meetings), Wayland, standalone mode |
 
