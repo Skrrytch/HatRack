@@ -199,6 +199,8 @@ func (a *App) runAgent(parent context.Context) error {
 	defer db.Close()
 	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// started at boot: the desktop's DISPLAY comes later (sensors, launch)
+	go agent.WatchSessionEnv(ctx, agent.UserManagerEnv)
 	errc := make(chan error, 1)
 	go func() { errc <- ag.Serve(ctx, a.Socket) }()
 	runDone := make(chan struct{})
