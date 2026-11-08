@@ -40,6 +40,14 @@
     if (area) area.value = (area.value.replace(/\s+$/, "") + "\n" + t.value).replace(/^\n/, "");
     t.value = "";
   });
+  // a select marked data-submit reloads its form when it changes (the day,
+  // the device, the hat of a rule); the hat's activity list is then new
+  document.addEventListener("change", function (e) {
+    var t = e.target, f = t.form;
+    if (!t.dataset || t.dataset.submit === undefined || !f) return;
+    if (t.name === "ed_scope" && f.elements.ed_act) f.elements.ed_act.value = "";
+    f.requestSubmit(f.querySelector("[data-try]") || undefined);
+  });
   // "recently seen" apps: a chip appends its app to the ignore list
   document.addEventListener("click", function (e) {
     var b = e.target.closest && e.target.closest("[data-add]");

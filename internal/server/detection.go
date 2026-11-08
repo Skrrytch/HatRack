@@ -26,6 +26,7 @@ var detTabs = []struct{ ID, Key string }{
 	{"sensors", "web.detection.tab_sensors"},
 	{"privacy", "web.detection.tab_privacy"},
 	{"idle", "web.detection.tab_idle"},
+	{"rules", "web.detection.tab_rules"},
 }
 
 type detTab struct {
@@ -42,6 +43,7 @@ type detectionView struct {
 	SensorIDs string      // the rows, comma-separated
 	Observe   observeView
 	Idle      idleView
+	Rules     rulesView
 }
 
 type detDevice struct {
@@ -188,6 +190,8 @@ func (s *Server) detectionPage(w http.ResponseWriter, r *http.Request, acc acces
 			Retention: int(cfg.Observe.Retention() / (24 * time.Hour)),
 			Recent:    s.recentApps(ctx, cfg.Observe, now),
 		}
+	case "rules":
+		err = s.rulesTab(r, &v, cfg, r.URL.Query(), nil)
 	case "idle":
 		i := cfg.Observe.Idle
 		d.Idle = idleView{
@@ -252,6 +256,8 @@ func (s *Server) detectionAction(w http.ResponseWriter, r *http.Request, acc acc
 		http.Redirect(w, r, "/setup/detection?tab="+tab+"&e="+url.QueryEscape(msg), http.StatusSeeOther)
 	}
 	switch r.PostFormValue("op") {
+	case "rule.save", "rule.delete":
+		s.ruleAction(w, r, acc)
 	case "sensors":
 		tab = "sensors"
 		s.sensorsSave(w, r, tab, fail)
