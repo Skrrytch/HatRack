@@ -438,11 +438,12 @@ pile up on other pages; each later ticket adds a tab instead of a block:
 | Datenschutz | #6 | `ignore` and `redact` lists, retention |
 | Abwesenheit | #2 | `idle.*` thresholds, the return question |
 | Rückfragen | #3 | `prompt.*`, end of day |
-| Regeln | #8, #15 | all rules at a glance and the **rule test**: the last day's spans, which rule each one matches, and what a new rule would match before it is saved; "Add from template" (#15) |
+| Zuordnung | #8, #15 | how assignment works (observed → clues → suggestion, sources in three colours), the **rule test** on a real day with the reason for every row, the rule editor right above it (rules are edited only here, so every change is seen on the day at once), rules for all hats, an overview of the hats' rules, and what was learned; "Add from template" (#15) |
 
 The setup overview shows one summary line for it; the Devices page one line
-per device. The rules themselves stay on the hat's page (a folded section like
-the module settings), next to the hat's `observe` checkbox.
+per device. The hat's page lists its rules as sentences with what they matched in the
+last 7 days and what else points to the hat (tickets, learned clues); the
+links open the editor in the tab Zuordnung.
 
 ## Stages
 
