@@ -372,3 +372,86 @@ func TestSetupListField(t *testing.T) {
 		t.Fatal("the list comes back one per line, and in the summary on one line")
 	}
 }
+
+func TestSetupTickets(t *testing.T) {
+	e, b := setupBrowser(t)
+	// register with an issue link: project and base come from it
+	r, _ := b.do("POST", "/setup/tickets", url.Values{"op": {"register"}, "link": {"https://jira.example.org/browse/VEN-1"}})
+	if r.StatusCode != 303 || strings.Contains(r.Header.Get("Location"), "e=") {
+		t.Fatalf("register: %d %s", r.StatusCode, r.Header.Get("Location"))
+	}
+	if c := config(t, e); len(c.Tickets) != 1 || c.Tickets[0].Project != "VEN" || c.Tickets[0].URL != "https://jira.example.org/browse/" {
+		t.Fatalf("tickets: %+v", c.Tickets)
+	}
+	// register with project and base
+	b.do("POST", "/setup/tickets", url.Values{"op": {"register"}, "project": {"atl"}, "link": {"https://other.example.org/browse"}})
+	c := config(t, e)
+	if len(c.Tickets) != 2 || c.Tickets[1].Project != "ATL" || c.Tickets[1].URL != "https://other.example.org/browse/" {
+		t.Fatalf("tickets: %+v", c.Tickets)
+	}
+	// the list shows both, registered
+	if _, out := b.do("GET", "/setup", nil); !strings.Contains(out, "VEN") || !strings.Contains(out, "ATL") || !strings.Contains(out, "registered") {
+		t.Fatalf("list:\n%s", out)
+	}
+	// invalid: no project, no link, bad base
+	for _, f := range []url.Values{
+		{"op": {"register"}, "link": {"https://jira.example.org/browse/"}},
+		{"op": {"register"}, "project": {"VEN"}},
+		{"op": {"register"}, "project": {"X"}, "link": {"https://a.example/browse/"}},
+		{"op": {"register"}, "project": {"VEN"}, "link": {"ftp://a.example/browse/"}},
+	} {
+		if r, _ := b.do("POST", "/setup/tickets", f); !strings.Contains(r.Header.Get("Location"), "e=") {
+			t.Fatalf("%v: want an error, got %s", f, r.Header.Get("Location"))
+		}
+	}
+	if len(config(t, e).Tickets) != 2 {
+		t.Fatal("invalid input changed the configuration")
+	}
+	// a registered project makes its keys links in the day view
+	e.do("POST", "/api/events", mustJSON(t, []core.Event{func() core.Event {
+		ev := e.ev(-20, core.EvSwitch, "venom", "development")
+		ev.Detail = "VEN-42 fix"
+		return ev
+	}()}))
+	if _, out := b.do("GET", "/day", nil); !strings.Contains(out, `href="https://jira.example.org/browse/VEN-42"`) {
+		t.Fatalf("day view without link:\n%s", out)
+	}
+	// remove
+	b.do("POST", "/setup/tickets", url.Values{"op": {"remove"}, "project": {"VEN"}})
+	if c := config(t, e); len(c.Tickets) != 1 || c.Tickets[0].Project != "ATL" {
+		t.Fatalf("after remove: %+v", c.Tickets)
+	}
+}
+
+func mustJSON(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestRenameActivityFollowsRules(t *testing.T) {
+	e, b := setupBrowser(t)
+	r, _ := e.do("PUT", "/api/config", `version: 1
+hats:
+  venom:
+    name: VENOM
+    activities: [development, review]
+    rules:
+      - match: {title: venom}
+        activity: development
+`)
+	if r.StatusCode != 200 {
+		t.Fatalf("config: %d", r.StatusCode)
+	}
+	resp, _ := b.do("POST", "/setup/hat", hatForm(map[string]string{"act.0": "dev"}))
+	if resp.StatusCode != 303 {
+		t.Fatalf("rename: %d", resp.StatusCode)
+	}
+	h, _ := config(t, e).Hat("venom")
+	if len(h.Rules) != 1 || len(h.Rules[0].Activity) != 1 || h.Rules[0].Activity[0] != "dev" {
+		t.Fatalf("rules after rename: %+v", h.Rules)
+	}
+}

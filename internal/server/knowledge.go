@@ -135,3 +135,10 @@ func (s *Server) getKnowledge(w http.ResponseWriter, r *http.Request, _ store.De
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(b)
 }
+
+// drop forgets the cached knowledge, e.g. after ticket links changed.
+func (c *knowledgeCache) drop() {
+	c.mu.Lock()
+	c.cur = nil
+	c.mu.Unlock()
+}

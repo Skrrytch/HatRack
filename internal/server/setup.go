@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -40,13 +41,21 @@ type setupView struct {
 	Hats      []setupHat
 	Archived  []setupHat
 	NextColor string // a colour no hat uses yet, for the next new hat
-	Tickets   []ticketLink
+	Tickets   []ticketRow
 	Devices   []deviceRow
 	Detection string // one-line summary of the detection settings
 	Import    importView
 }
 
-type ticketLink struct{ Project, Base string }
+// ticketRow is a known ticket project in the list; Pattern rows are
+// registered systems that match by pattern and have no project.
+type ticketRow struct {
+	Project, System, Base string
+	Registered, Pattern   bool
+	Booked                bool // a hat it is booked on is known
+	Hat, Color            string
+	Share, Count          int
+}
 
 type deviceRow struct {
 	Name   string
@@ -604,11 +613,11 @@ func (s *Server) setupPage(w http.ResponseWriter, r *http.Request, acc access) {
 	if n := r.URL.Query().Get("imported"); n != "" {
 		v.Msg = i18n.In(v.Lang, "web.setup.import.done", n)
 	}
-	s.fillSetup(&v, cfg)
+	s.fillSetup(r, &v, cfg)
 	s.render(w, v, http.StatusOK)
 }
 
-func (s *Server) fillSetup(v *view, cfg core.Config) {
+func (s *Server) fillSetup(r *http.Request, v *view, cfg core.Config) {
 	pal := newPalette(cfg)
 	active := cfg.ActiveHats()
 	for i, h := range active {
@@ -616,11 +625,15 @@ func (s *Server) fillSetup(v *view, cfg core.Config) {
 			Activities: len(h.Activities), First: i == 0, Last: i == len(active)-1})
 	}
 	v.Setup.NextColor = freeColor(cfg)
-	if links, err := s.st.TicketLinks(context.Background()); err == nil {
-		for p, b := range links {
-			v.Setup.Tickets = append(v.Setup.Tickets, ticketLink{p, b})
+	if links, err := s.st.TicketLinks(r.Context()); err == nil {
+		k, _, _ := s.knowledge(r)
+		for _, p := range core.NewTickets(links, cfg.Tickets).Projects() {
+			row := ticketRow{Project: p.Project, System: p.System, Base: p.URL, Registered: p.Source == core.TicketRegistered, Pattern: p.Project == ""}
+			if use, ok := k.Projects[p.Project]; ok {
+				row.Booked, row.Hat, row.Color, row.Share, row.Count = true, nameOf(names(cfg), use.Hat), pal.color(use.Hat), int(use.Share*100+.5), use.Count
+			}
+			v.Setup.Tickets = append(v.Setup.Tickets, row)
 		}
-		sort.Slice(v.Setup.Tickets, func(i, j int) bool { return v.Setup.Tickets[i].Project < v.Setup.Tickets[j].Project })
 	}
 	if devs, err := s.st.Devices(context.Background()); err == nil {
 		v.Setup.Detection = detectionOverview(v.Lang, cfg.Observe, devs)
@@ -770,12 +783,29 @@ func (s *Server) hatSave(w http.ResponseWriter, r *http.Request, acc access) {
 		h.ResumeActivity = r.PostFormValue("resume")
 		// activities as typed; an emptied field keeps its old name
 		acts := make([]string, 0, len(h.Activities)+1)
+		renamed := map[string]string{} // lower-case old name -> new name
 		for j, old := range h.Activities {
 			a := strings.TrimSpace(r.PostFormValue(fmt.Sprintf("act.%d", j)))
 			if a == "" {
 				a = old
 			}
+			if a != old {
+				renamed[strings.ToLower(old)] = a
+			}
 			acts = append(acts, a)
+		}
+		if len(renamed) > 0 {
+			// rules name activities; they follow the new name
+			h.Rules = slices.Clone(h.Rules)
+			for ri, rule := range h.Rules {
+				rule.Activity = slices.Clone(rule.Activity)
+				for ai, a := range rule.Activity {
+					if n, ok := renamed[strings.ToLower(a)]; ok {
+						rule.Activity[ai] = n
+					}
+				}
+				h.Rules[ri] = rule
+			}
 		}
 		have := map[string]bool{}
 		for _, a := range acts {
@@ -898,12 +928,58 @@ func (s *Server) defaultsSave(w http.ResponseWriter, r *http.Request, acc access
 	http.Redirect(w, r, "/setup/defaults?saved=1", http.StatusSeeOther)
 }
 
-// ticketsAction forgets a learned project; the next issue link teaches it.
+// ticketsAction registers a ticket project, removes a registered one, or
+// forgets a learned one (the next issue link teaches it again).
 func (s *Server) ticketsAction(w http.ResponseWriter, r *http.Request, _ access) {
-	if err := s.st.ResetTicketLink(r.Context(), r.PostFormValue("project")); err != nil {
+	lang := s.langOf(r)
+	project := strings.TrimSpace(r.PostFormValue("project"))
+	link := strings.TrimSpace(r.PostFormValue("link"))
+	var err error
+	switch r.PostFormValue("op") {
+	case "register":
+		_, err = s.editConfig(r.Context(), false, func(c *core.Config) error {
+			if learned := core.LearnTicketLinks(link, nil); len(learned) > 0 {
+				for p, base := range learned {
+					project, link = p, base
+				}
+			} else if link != "" && !strings.HasSuffix(link, "/") {
+				link += "/"
+			}
+			if project == "" || link == "" {
+				return badConfig{errors.New(i18n.In(lang, "web.tickets.need_both"))}
+			}
+			t := core.TicketSystem{Project: strings.ToUpper(project), URL: link}
+			for i, old := range c.Tickets {
+				if old.Project == t.Project {
+					c.Tickets[i] = t
+					return nil
+				}
+			}
+			c.Tickets = append(c.Tickets, t)
+			return nil
+		})
+	case "remove":
+		_, err = s.editConfig(r.Context(), false, func(c *core.Config) error {
+			i := slices.IndexFunc(c.Tickets, func(t core.TicketSystem) bool { return t.Project == project })
+			if i < 0 {
+				return errUnchanged
+			}
+			c.Tickets = slices.Delete(c.Tickets, i, i+1)
+			return nil
+		})
+	default:
+		err = s.st.ResetTicketLink(r.Context(), project)
+	}
+	if err != nil {
+		var bad badConfig
+		if errors.As(err, &bad) {
+			http.Redirect(w, r, "/setup?e="+url.QueryEscape(userError(lang, err))+"#tickets", http.StatusSeeOther)
+			return
+		}
 		serverError(w, err)
 		return
 	}
+	s.know.drop()
 	http.Redirect(w, r, "/setup#tickets", http.StatusSeeOther)
 }
 
@@ -936,7 +1012,7 @@ func (s *Server) importAction(w http.ResponseWriter, r *http.Request, acc access
 	v.Setup.Import = importView{Data: data, Replace: replace}
 	if strings.TrimSpace(data) == "" {
 		v.Err = i18n.In(lang, "web.setup.import.empty")
-		s.fillSetup(&v, cfg)
+		s.fillSetup(r, &v, cfg)
 		s.render(w, v, http.StatusBadRequest)
 		return
 	}
@@ -948,7 +1024,7 @@ func (s *Server) importAction(w http.ResponseWriter, r *http.Request, acc access
 			return
 		}
 		v.Err = userError(lang, err)
-		s.fillSetup(&v, cfg)
+		s.fillSetup(r, &v, cfg)
 		s.render(w, v, http.StatusBadRequest)
 		return
 	}
@@ -961,7 +1037,7 @@ func (s *Server) importAction(w http.ResponseWriter, r *http.Request, acc access
 		v.Setup.Import.Changes = append(v.Setup.Import.Changes, changeText(lang, c))
 	}
 	v.Setup.Import.Warnings = res.Warnings
-	s.fillSetup(&v, cfg)
+	s.fillSetup(r, &v, cfg)
 	s.render(w, v, http.StatusOK)
 }
 

@@ -59,13 +59,27 @@
   <p class="dim small" style="margin-top:0">{{t $.Lang "web.tickets.intro"}}</p>
   {{if .Tickets}}
   <table class="list">
+  <tr class="dim small"><th>{{t $.Lang "web.tickets.col_project"}}</th><th>{{t $.Lang "web.tickets.col_system"}}</th><th>{{t $.Lang "web.tickets.col_link"}}</th><th>{{t $.Lang "web.tickets.col_source"}}</th><th>{{t $.Lang "web.tickets.col_hat"}}</th><th></th></tr>
   {{range .Tickets}}
-    <tr><td><strong class="num">{{.Project}}</strong></td><td class="dim small"><code>{{.Base}}</code></td>
-      <td class="acts"><form method="post" action="/setup/tickets"><input type="hidden" name="project" value="{{.Project}}">
-        <button title="{{t $.Lang "web.tickets.reset_hint" .Project}}" onclick="return confirm(this.title)">{{t $.Lang "web.tickets.reset"}}</button></form></td></tr>
+    <tr>
+      <td>{{if .Pattern}}<span class="dim">–</span>{{else}}<strong class="num">{{.Project}}</strong>{{end}}</td>
+      <td>{{.System}}</td>
+      <td class="dim small"><code>{{.Base}}</code></td>
+      <td>{{if .Registered}}{{t $.Lang "web.tickets.registered"}}{{else}}{{t $.Lang "web.tickets.learned"}}{{end}}</td>
+      <td>{{if .Pattern}}<span class="dim small">{{t $.Lang "web.tickets.pattern_all"}}</span>{{else if .Booked}}<span class="hatdot" style="--c:{{.Color}}"></span>{{.Hat}} <span class="dim small">{{.Count}}×</span>{{else}}<span class="dim small">{{t $.Lang "web.tickets.not_booked"}}</span>{{end}}</td>
+      <td class="acts">{{if not .Pattern}}<form method="post" action="/setup/tickets"><input type="hidden" name="project" value="{{.Project}}">
+        {{if .Registered}}<input type="hidden" name="op" value="remove"><button>{{t $.Lang "web.tickets.remove"}}</button>
+        {{else}}<button title="{{t $.Lang "web.tickets.reset_hint" .Project}}" onclick="return confirm(this.title)">{{t $.Lang "web.tickets.reset"}}</button>{{end}}</form>{{end}}</td></tr>
   {{end}}
   </table>
   {{else}}<p class="dim">{{t $.Lang "web.tickets.none"}}</p>{{end}}
+  <form method="post" action="/setup/tickets" class="row" style="margin-top:.8rem;align-items:flex-end">
+    <input type="hidden" name="op" value="register">
+    <label class="small dim">{{t $.Lang "web.tickets.reg_project"}}<br><input name="project" placeholder="VEN" size="8"></label>
+    <label class="small dim grow">{{t $.Lang "web.tickets.reg_link"}}<br><input name="link" placeholder="https://jira.example.org/browse/VEN-1" style="width:100%" required></label>
+    <button class="btn">{{t $.Lang "web.tickets.reg_button"}}</button>
+  </form>
+  <p class="dim small">{{t $.Lang "web.tickets.other"}}</p>
 </div>
 
 <h1>{{t $.Lang "web.ai.title"}}</h1>
