@@ -86,15 +86,110 @@ its other capabilities today.
 | `idle` | inactive since, screen locked | **logind `LockedHint`**, **`org.freedesktop.ScreenSaver`/Cinnamon/GNOME screensaver signals**, **X11 MIT-SCREEN-SAVER**, Mutter `IdleMonitor`, KDE `GetSessionIdleTime`; wlroots `ext-idle-notify` later |
 | `media` | microphone capture stream active, camera open, and by which app | PipeWire (`pw-dump` JSON), PulseAudio (`pactl -f json`); camera: own processes holding `/dev/video*` (read from `/proc`, no root) |
 | `notify` | desktop notifications matching a rule | D-Bus monitor on `org.freedesktop.Notifications.Notify`; text stays in memory, only a rule's result becomes an observation |
+| `workdir` | repository and branch of the focused terminal or IDE, added to the window span (1a) | `/proc/<pid>/cwd` and `.git/HEAD`; IDE project lists for JetBrains, VS Code, NetBeans |
 
 Explicitly not sensors: keyboard or mouse content, screenshots, browser
-history, file contents, `/dev/input`.
+history, file contents, shell history, the session files of AI tools,
+`/dev/input`.
 
 The agent is a user service and may start at boot, before the desktop
 session exists and without `DISPLAY`. It then takes the session's variables
 (`DISPLAY`, `WAYLAND_DISPLAY`, `XAUTHORITY`, `XDG_*`) from the systemd user
 manager as soon as the desktop has handed them over at login, so sensors and
 the launch module reach the desktop without a restart.
+
+### 1a. Working directory and branch (`workdir`)
+
+Branch names carry the ticket key (`feature/ACME-101-login`), and so does the
+work with Claude Code in that repository. Titles rarely show them: IntelliJ
+names project and file, Claude Code replaces the terminal title with the
+topic of its session. The `workdir` sensor finds the repository and branch
+of the focused window locally, without network or login, from metadata only.
+
+How (checked on Bert's machine, 2026-11-08):
+
+- **Process:** the focused window's process id (X11 `_NET_WM_PID`; the GNOME
+  extension, KWin, sway and Hyprland report it too), then its child
+  processes in `/proc`. A known working tool among them (`claude`, `nvim`,
+  `vim`, `git`) wins over the shell. Its working directory is
+  `readlink /proc/<pid>/cwd` (own processes only, no root).
+- **Branch:** from that directory upwards to `.git` (a directory, or a file
+  `gitdir: …` for worktrees), then the one line of `HEAD`
+  (`ref: refs/heads/<branch>`; a detached head gives no branch). Nothing else
+  in the repository is read.
+- **Claude Code:** the process is called `claude` and runs as a child of the
+  shell in the terminal; its working directory is the project, so the branch
+  comes from `HEAD` like any other, also after Claude Code switched branches
+  itself. Its session files (`~/.claude/projects/*/*.jsonl`, or under
+  `CLAUDE_CONFIG_DIR`) do carry `cwd` and `gitBranch`, but in the same lines
+  as the conversation (`message`, `content`, `lastPrompt`, `aiTitle`), so
+  HatRack never opens them.
+- **Claude Code's title** (version 2.1.319): Claude Code sets the terminal
+  title itself, first the session name from `/rename`, else a topic title a
+  small model writes from the conversation, else "Claude Code".
+  `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1` switches that off, the setting
+  `terminalTitleFromRename: false` keeps `/rename` out of the title. Bert's
+  titles of 2026-11-08 show it: "Claude Code", "Claude WORK", a German topic
+  title, and the shell's "user@host: ~/projects/…/my-repo" (folder, no
+  branch). The options for a key in the title, judged:
+  - an instruction in `CLAUDE.md` does not reach the title: the topic title
+    comes from a separate model call that does not follow it, and a command
+    Claude runs to set the title has no reliable terminal and is overwritten
+    at the next update. Not reliable.
+  - `/rename ACME-101 …` by hand works and stays (the session name outranks
+    the topic), but must be done in every session.
+  - a hook (`SessionStart`) writing the title with the branch needs the
+    built-in title off, setup per user, and misses later checkouts;
+    `UserPromptSubmit` would also see the prompt. The status line only
+    shows inside Claude Code, never in the window title. Not worth it.
+  - the title off plus the shell prompt snippet from a template keeps the
+    folder and branch from the moment Claude Code was started.
+  So the sensor reads the branch from `/proc`, and the title stays a
+  fallback for users without the sensor (`/rename`, or the title off plus
+  the prompt snippet).
+- **IDEs:** IntelliJ's title names project, file and module
+  ("my-repo – <file> [module]" in real data), no branch. The IDE process
+  does not run in the project, so the title's project name is mapped to its path through the IDE's own list of recent
+  projects: JetBrains `~/.config/JetBrains/<product><version>/options/recentProjects.xml`
+  (entries keyed by project path, with `customProjectName`), VS Code
+  `~/.config/Code/User/workspaceStorage/*/workspace.json`, NetBeans similar
+  (evaluated in the ticket). Only paths and names are taken from those files.
+- **IDE plugins, judged:** the ActivityWatch watcher for JetBrains
+  (`aw-watcher-jetbrains`, source read 2026-11-08) does send `branch`, taken
+  from the IDE's Git support, but only of the project's first repository,
+  together with `project`, `projectPath`, `file`, `fileFullPath`, `commit`,
+  `sourceUrl` (the remote, which can hold a token) and the language, to a
+  running ActivityWatch server (`localhost:5600`); last release 2023, one
+  plugin per IDE family. WakaTime-style plugins send heartbeats through their
+  own command line tool to a cloud service with an API key (or a self-hosted
+  server). Either way: something extra to install and run, more data than a
+  branch, and a server HatRack would have to imitate or query. Rejected;
+  `/proc` plus `HEAD` covers terminals, Claude Code and every IDE with nothing
+  installed. Reading the buckets of an ActivityWatch the user already runs
+  can come later.
+- **Terminals with tabs:** Guake, GNOME Terminal and tmux run one process for
+  all tabs, so `/proc` alone does not tell the visible tab. Rule: use a result
+  only if all shells of the window agree, if the title names a folder (the
+  shell's own title, as in Bert's Guake) that matches one shell's working
+  directory, or if the shell whose `/dev/pts` was typed into last can be told
+  apart (its access time; to verify on the desktop); otherwise record nothing
+  rather than guess. Bert's terminal is Guake, so this matters from day one.
+- **When:** on every focus change and every 30 s while a terminal or IDE has
+  the focus (a checkout changes `HEAD`); a changed repository or branch starts
+  a new window span, as a changed title does.
+
+What is stored, as attributes of the window span: `repo` (the name of the
+work tree's folder, never a path) and `branch`, the latter, as recommended,
+only if it contains a ticket key of a known project or a learned detail
+(open, see [decisions.md](decisions.md#open)). The privacy settings apply
+first: an `ignore` or `redact`
+app gets neither, a hat with `observe: false` neither, and folders on the new
+list `observe.ignore_paths` (e.g. `~/privat`) are never looked up. The
+sensor is off until enabled per device, like `window`.
+
+The classifier treats `branch` like a title from a working tool: rules may
+match it, a ticket key in it outranks one from the browser (3a), and `repo`
+counts as a title part for learning.
 
 ### 2. Observations
 
@@ -219,7 +314,7 @@ ships.
 | Group | Tools | Title shows | Notes |
 |---|---|---|---|
 | IDE | IntelliJ IDEA and other JetBrains IDEs, NetBeans, VS Code, Eclipse | project, file; VS Code also the folder | VS Code can show the branch: `window.title` with `${activeRepositoryBranchName}`. Visual Studio runs on Windows only and is out of scope. |
-| Git | branches, pull/merge requests | branch only where the tool shows it; PR title and repository in the browser | branch names usually carry the ticket key. A terminal shows repository and branch if the shell prompt sets the title (a template carries the snippet); tools that set their own title (e.g. Claude Code) hide it unless switched off. |
+| Git | branches, pull/merge requests | branch only where the tool shows it; PR title and repository in the browser | branch names usually carry the ticket key. The `workdir` sensor (1a) reads the branch of the focused terminal or IDE, Claude Code included; without it a terminal shows repository and branch only if the shell prompt sets the title (a template carries the snippet). |
 | Tickets | Jira, YouTrack, Redmine, GitHub and GitLab issues, ServiceNow, Znuny/OTRS | key and summary, project or space | Jira-shaped keys `ABC-123`; others (`INC0012345`, `Ticket#…`) through template rules |
 | Docs | Confluence, wikis | page and space | the space usually names the project |
 | Office | LibreOffice, ONLYOFFICE, Microsoft 365 in the browser | file name | file names often carry customer, project or key |
@@ -303,10 +398,9 @@ The agent classifies spans as they happen, against the cached configuration,
 so it works offline.
 
 - **Dwell and hysteresis:** a candidate counts only after it held for a while
-  (idle excluded); short visits never trigger anything. Proposed in 6a: 10 of
-  the last 15 active minutes instead of 3 minutes in a row, and a new detail
-  only after the old one was not seen for 15 minutes (open, see
-  [decisions.md](decisions.md#open)).
+  (idle excluded); short visits never trigger anything: 10 of the last 15
+  active minutes, and a new detail only after the old one was not seen for
+  15 minutes (6a).
 - **Manual wins:** after a manual switch, nothing is suggested or switched
   for 15 minutes unless a rule with `mode: auto` and a hardware signal
   (microphone) fires.
@@ -369,16 +463,17 @@ Reconstruction is computed on demand and never stored, so a changed rule
 changes the proposals for past days at once. It works only as far back as
 observations are kept.
 
-Steps 3 and 4 are refined by condensing (6a): hour windows instead of
-15-minute blocks, one entry per task and window instead of one per run.
+Steps 3 and 4 are replaced by condensing (6a): hour windows instead of
+15-minute blocks, one entry per task and window instead of one per run, and
+tickets worked on in turn as one parallel entry.
 
 ### 6a. Parallel work and the end of a task
 
 Classifying spans is half the job. Two tickets worked on in turn plus a mail
 about a training make 20 window spans in an hour; booked one by one, nobody
 can read that log. This section says when a task ends and how parallel work
-becomes a short, true report. Concept of 2026-11-08; the open points are in
-[decisions.md](decisions.md#open).
+becomes a short, true report. Decided on 2026-11-08 (see
+[decisions.md](decisions.md)).
 
 Terms:
 
@@ -404,9 +499,10 @@ open until something ends it.**
 | microphone or camera, meeting reminder | hard, starts the meeting | MVP 10 (#5, #12) |
 | another hat holds 10 of the last 15 minutes | ends the hat | live (#9); afterwards implicit |
 | the key not seen for the memory | soft: the task ended at its last sighting | derived |
-| a new key from a working tool (IDE, branch) | starts a task, ends none | now, through titles |
+| a new key from a working tool (IDE, branch) | starts a task, ends none | titles now; branch from the `workdir` sensor (1a) |
+| a branch switch in the repository | starts a task (new key), ends none | `workdir` sensor (1a) |
 | end of working hours | ends nothing, triggers the end-of-day question | config |
-| commit, push, branch switch | would be soft ends | needs a git or shell sensor (not in this epic); a branch in the title counts as a new key |
+| commit, push | – | not observed: would need git hooks in every repository; the branch carries the key anyway |
 | ticket status, calendar | – | not planned: HatRack fetches nothing and logs in nowhere |
 
 Consequences:
@@ -429,29 +525,34 @@ minutes, a meeting; evidence noise: terminals without key 15 %, short looks
 at chat or ignored apps 10 %, glances at the other ticket in Jira 6 %, mails
 without a rule 30 %). *Sum error*: share of time on the wrong task in the
 totals, in brackets what the method adds with flawless evidence. *Moved*:
-share of minutes booked where something else was done at that clock time.
+share of minutes booked where something else was done at that clock time
+(a parallel entry counts as right for each of its tickets).
 
 | Method | Entries per hour | Sum error | Moved | Verdict |
 |---|---|---|---|---|
 | runs as observed (noise and memory only) | 7.0 | 6.0 % (0.0) | 17 % | too many entries |
 | in order, pieces under 3 min absorbed | 4.0 | 5.5 % (1.7) | 17 % | true order, still 6 per hour when two tickets alternate |
 | in order, pieces under 10 min absorbed | 1.6 | 9.6 % (7.8) | 24 % | the second ticket disappears |
-| **condensed per hour**, pieces under 5 min absorbed | **2.3** | **5.8 % (1.7)** | 31 % | **recommended** |
+| condensed per hour, pieces under 5 min absorbed | 2.3 | 5.8 % (1.7) | 31 % | totals per ticket, order inside the hour condensed |
+| **condensed per hour, alternating tickets of one activity as one parallel entry** | **2.1** | not split per ticket for that time | **16 %** | **decided** |
 | condensed per episode | 1.3 | 5.7 % (0.3) | 51 % | moves time by hours |
-| one entry with several details and shares | 1–2 | as condensed | – | changes interval, totals, CSV, MCP, learning; cannot hold the mail of another hat anyway |
+| one entry with several details and stored shares | 1–2 | as condensed | – | changes interval, totals, CSV, MCP, learning |
 | overlapping side entries | – | – | – | breaks "one hat at a time, no overlaps" (2026-11-04) |
 | split only in the report, from observations | – | – | – | observations expire after 28 days; reports come from the log |
 
-The evidence costs about 6 % whatever the method, so better rules (#8, #15)
-and "working tool before reading tool" (3a) matter more than any threshold.
-Condensing per hour gives the fewest entries and keeps the totals per ticket
-as exact as the evidence allows. Its price: inside an hour the order is
-condensed. The true order stays visible in *Observed* under the same hour.
-Totals are what gets booked and billed, not the minute a mail was written.
+The evidence costs about 6 % whatever the method, so better evidence (rules,
+#15, the branch from 1a) matters more than any threshold. Within one
+activity, the split between two tickets worked on in turn is exactly where
+the evidence is weakest (a glance at the other ticket, the IDE open while
+thinking); only the person who did the work knows it. So such time is not
+split but named: **one entry with both tickets as its detail**. Different
+activities or hats are still split by their sums, because they are booked
+and billed apart.
 
-**Recommendation:** an entry keeps one hat, one activity and one detail (no
-model change). Afterwards, each window becomes one entry per task with its
-summed time. Live, HatRack follows only the main task.
+**Decided:** an entry keeps one hat, one activity and one detail (no model
+change). Afterwards each window becomes one entry per task with its summed
+time; tickets of one hat and activity worked on in turn become one parallel
+entry. Live, HatRack follows only the main task.
 
 #### Condensing (core, afterwards)
 
@@ -462,25 +563,53 @@ summed time. Live, HatRack follows only the main task.
    are.
 3. **Sum** active seconds per task and window. A task under
    `reconstruct.min_entry` (5 min) goes to the biggest task of the window with
-   the same hat and detail, else the same hat, else the biggest one; never
-   between a working hat and one with `work_time: false`. Unknown time of 5
-   minutes or more stays a line of its own and is asked about.
-4. **Lay out** the tasks one after another from the window's start, in the
+   the same hat and detail, else the same hat, else the biggest one, also
+   across hats (named in the reason); never between a working hat and one
+   with `work_time: false`. Unknown time of 5 minutes or more stays a line of
+   its own and is asked about.
+4. **Group parallel work:** tasks of the same hat and activity, each with at
+   least `min_entry` in the window and at least two pieces of 2 minutes or
+   more (they alternate), become one task whose detail lists the keys in
+   sorted order: `ACME-101, ACME-117`. Sorted, so the same pair always adds up
+   to one line in the totals. A task of another activity or hat in between
+   stays apart.
+5. **Lay out** the tasks one after another from the window's start, in the
    order they first appeared; the task running at the window's end goes last,
    so the next hour continues it. A task that opens and closes the hour is
    split by its time before and after the half hour (frame rule). Minutes are
    apportioned to whole minutes (`core.Apportion`), so entries start on full
    minutes and the window adds up. Equal neighbours across hours merge.
-5. **Compare** with the log by sums, not positions: a window agrees when every
-   task's booked and observed time differ by less than `min_entry`. So an
-   accepted proposal never comes back (invariant), and an hour booked by hand
-   with the right totals is left alone.
-6. **Propose** gaps and disagreements per window. Each entry carries its
+6. **Compare** with the log by sums, not positions: a window agrees when every
+   task's booked and observed time differ by less than `min_entry`. A
+   parallel task agrees with booked entries of its hat and activity whose
+   details name only its keys (`ACME-101, ACME-117` or `ACME-101` and `ACME-117`
+   apart, as the user split them). So an accepted proposal never comes back
+   (invariant), and an hour booked by hand with the right totals is left
+   alone.
+7. **Propose** gaps and disagreements per window. Each entry carries its
    confidence (time-weighted) and its reason: sources, number of pieces, what
-   it absorbed ("ACME-117: 20 min from 3 pieces, branch
-   feature/ACME-117-export; includes 40 s KeePassXC").
+   it absorbed ("includes 40 s KeePassXC"); a parallel entry also its
+   observed shares and where each key came from ("ACME-101 about 31 min,
+   branch feature/ACME-101-login; ACME-117 about 20 min, Jira").
 
 Accepting writes one `correction` with `source: suggestion` per window.
+
+What a parallel entry means downstream:
+
+- **Totals and CSV:** one detail line `ACME-101, ACME-117`; the time is not
+  split per ticket. Ticket links work for both keys (`core.SplitDetail`).
+- **Learning:** both keys learn the hat and activity of the entry
+  (`learnables` already finds every key in a detail).
+- **Per-ticket booking** (the export of MVP 3): needs a split; the review
+  offers it, and the export asks or books the pair as one item.
+- **Marker:** none stored; an entry is parallel when its detail names two or
+  more ticket keys, so entries typed by hand count too.
+
+In the simulation 39 % of the time ended in parallel entries (the synthetic
+days alternate about 45 % of the time); 11 % of that was really worked in
+sequence, misread because of a glance. Requiring longer pieces lowers the
+false part only a little (8 % at 3 minutes) but hides real alternation, so 2
+minutes it is. The review shows the shares and splits with one click.
 
 #### Live (#9)
 
@@ -501,16 +630,18 @@ the split to the review:
 
 - **Review (#10):** the proposal appears under its hour in *Observed*: a ghost
   row with the condensed entries, Accept or Reject per hour, "Accept all" per
-  day. Mockup before building.
+  day. A parallel entry shows a "parallel" mark and its observed shares, with
+  "Split" (two entries by the shares) next to Accept. Mockup before building.
 - **Smart prompts (#3):** the unit is the window, one line per proposed entry;
   asked are windows with unknown time or a disagreement. Pieces under 5
-  minutes never cause a question.
-- **Day report (new):** a view of the log, not the observations. Entries
-  without a pause between them form a phase, and a phase reads as one line
-  with its totals per hat, activity and detail: `10:00–11:00 · VENOM
-  Entwicklung: ACME-101 31 min, ACME-117 20 min · Office Schulungsvorbereitung
-  9 min`. It reads well even when the log has many small entries (also booked
-  by hand) and is the base of the daily summary of [MVP 3](mvp-3.md).
+  minutes and parallel entries never cause a question by themselves.
+- **Day report (new ticket):** a view of the log, not the observations.
+  Entries without a pause between them form a phase, and a phase reads as one
+  line with its totals per hat, activity and detail: `10:00–11:00 · VENOM
+  Entwicklung: ACME-101 + ACME-117 (parallel) 51 min · Office
+  Schulungsvorbereitung 9 min`. It reads well even when the log has many
+  small entries (also booked by hand) and is the base of the daily summary of
+  [MVP 3](mvp-3.md).
 
 #### Worked example: one hour, two tickets, one mail
 
@@ -527,42 +658,48 @@ the split to the review:
 20 spans. Cleaning leaves 8 runs: ACME-101 14:00, ACME-117 11:00, ACME-101
 1:30, ACME-117 2:30, Schulungsvorbereitung 8:50, ACME-101 9:10, ACME-117 6:30,
 ACME-101 6:30. Sums: ACME-101 31:10, ACME-117 20:00, Schulungsvorbereitung 8:50;
-nothing under 5 minutes. ACME-101 opens and closes the hour and is split
-(15:30 before half past, 15:40 after):
+nothing under 5 minutes. ACME-101 and ACME-117 alternate with pieces of 2
+minutes and more, same hat and activity: one parallel task of 51:10. It
+opens and closes the hour and is split at half past (29:00 before, 22:10
+after):
 
 | Time | Entry | Min |
 |---|---|---|
-| 10:00–10:15 | VENOM · Entwicklung · ACME-101 | 15 |
-| 10:15–10:35 | VENOM · Entwicklung · ACME-117 | 20 |
-| 10:35–10:44 | Office · Schulungsvorbereitung | 9 |
-| 10:44–11:00 | VENOM · Entwicklung · ACME-101 | 16 |
+| 10:00–10:29 | VENOM · Entwicklung · ACME-101, ACME-117 (parallel) | 29 |
+| 10:29–10:38 | Office · Schulungsvorbereitung | 9 |
+| 10:38–11:00 | VENOM · Entwicklung · ACME-101, ACME-117 (parallel) | 22 |
 
-Done in fact: 29:40, 21:30, 8:50. The difference is the 90-second glance at
-ACME-101 while on ACME-117, an error of the evidence, not of condensing. In
-order with 3-minute absorption the hour gives 6 entries; the 3-minute live
-dwell would have asked 5 times, the rule above not once (the hour stays
-ACME-101 until the review).
+The mail lands at its real time (10:29–10:37:50). The reason says
+"ACME-101 about 31 min (branch feature/ACME-101-login), ACME-117 about 20 min";
+done in fact were 29:40 and 21:30, the difference is the 90-second glance.
+"Split" gives 10:00–10:15 ACME-101, 10:15–10:35 ACME-117, 10:35–10:44 Office,
+10:44–11:00 ACME-101. In order with 3-minute absorption the hour gives 6
+entries; the 3-minute live dwell would have asked 5 times, the rule above not
+once (the hour stays ACME-101 until the review).
 
 #### Effect on the tickets
 
 | Ticket | Change | Models |
 |---|---|---|
-| #4 | condensing replaces 15-minute blocks and run-based proposals: memory, anchors, hour windows, sums, absorption, layout with frame rule, comparison by sums; the worked example and the invariant as tests | Opus: design note and core; Sonnet: edge cases (midnight, DST, two computers active at once, anchors inside an hour); Haiku: fixtures |
-| #10 | proposal per hour under *Observed*, accept per hour or day, reason names absorbed pieces | Sonnet after a mockup; Opus checks one correction per window |
-| #9 | 10 of 15 minutes, detail only after the memory, backdated; memory from the core | Opus (state machine), Sonnet notifications |
+| #4 | condensing replaces 15-minute blocks and run-based proposals: memory, anchors, hour windows, sums, absorption, parallel grouping, layout with frame rule, comparison by sums; the worked example and the invariant as tests | Opus: design note and core; Sonnet: edge cases (midnight, DST, two computers active at once, anchors inside an hour); Haiku: fixtures |
+| new: `workdir` sensor (1a) | repository and branch of the focused terminal or IDE, so branch keys (also from Claude Code) reach the classifier | Opus: short design note and privacy review; Sonnet: `/proc`, `HEAD`, IDE project lists, classifier fields; Haiku: fixtures, docs |
+| #10 | proposal per hour under *Observed*, accept per hour or day, "Split" for parallel entries, reason names absorbed pieces | Sonnet after a mockup; Opus checks one correction per window |
+| #9 | moves to MVP 9: 10 of 15 minutes, detail only after the memory, backdated; memory from the core | Opus (state machine), Sonnet notifications |
 | #3 | the window is the unit, one line per entry | Sonnet |
-| #11 | `summarize_blocks` returns windows with sums and proposed entries | Sonnet; Haiku descriptions |
-| new | day report by phases, from the log | Sonnet after a mockup; Haiku i18n |
+| #11 | `summarize_blocks` returns windows with sums, parallel marks and proposed entries | Sonnet; Haiku descriptions |
+| new: day report | phases from the log, parallel entries as `A + B (parallel)` | Sonnet after a mockup; Haiku i18n |
 
-Order: #4 (core) → #10 → #9 → #3 → #11 → day report. #9 comes after #4
-because it uses the core's memory; until then nothing changes live.
+Order: #4 (core), with the `workdir` sensor alongside (independent, better
+evidence) → #10 → #9 → #3 → #11 → day report (no dependency, can come
+earlier).
 
 Risks: condensed times look wrong to someone who remembers the mail at half
-past ten (*Observed* shows the order under the hour; a chronological layout
-can be a setting); absorbing under 5 minutes of another hat moves minutes
+past ten (*Observed* shows the order under the hour; parallel entries keep
+most positions); absorbing under 5 minutes of another hat moves minutes
 between customers (named in the reason, never across working and
-non-working hats); evidence errors outweigh the method (rules, templates);
-two computers active at once need a rule in the design note of #4.
+non-working hats); about a tenth of the parallel time was really sequential
+(the shares and "Split" make it visible); evidence errors outweigh the
+method; two computers active at once need a rule in the design note of #4.
 
 ### 7. Review and asking
 
@@ -623,8 +760,8 @@ Following the three layers (default → hat → device):
 |---|---|
 | defaults | `rules` (ignore rules, global activity and detail rules), `prompt.*`, `reconstruct.noise`; from 6a `reconstruct.window` (60 min), `reconstruct.min_entry` (5 min), `reconstruct.memory` (15 min, also live), `live.dwell` (10 of 15 min), replacing `reconstruct.block` |
 | hat | `rules`, `observe: true \| false` |
-| device | sensors on or off (`window`, `media`, `notify`; `idle` on by default), in `observe.devices` |
-| all devices | `observe.ignore` and `observe.redact` app lists, `observe.retention_days` (default 28), `observe.idle` (`after` 5, `ask_after` 10, `stop_after` 15 min, `ask`) |
+| device | sensors on or off (`window`, `workdir`, `media`, `notify`; `idle` on by default), in `observe.devices` |
+| all devices | `observe.ignore` and `observe.redact` app lists, `observe.ignore_paths` (folders `workdir` never looks up), `observe.retention_days` (default 28), `observe.idle` (`after` 5, `ask_after` 10, `stop_after` 15 min, `ask`) |
 
 Setup gets its own page **"Erkennung"** with tabs, so the settings do not
 pile up on other pages; each later ticket adds a tab instead of a block:
@@ -650,8 +787,8 @@ works without observations, nothing afterwards without rules.
 | Stage | Name | What you get | Issues |
 |---|---|---|---|
 | **MVP 7** | Observe | Idle and lock handled, return question; window titles recorded on X11; an "observed" band in the Day view and the raw spans over MCP. Booking stays manual, but you can see what you did. | #6, #2, #1, #7 |
-| **MVP 8** | Assign | Rules per hat and global, learned details and title parts, rule test in Setup, rule templates for common work tools; live suggestions and opt-in auto-switch. | #8, #15, #9 |
-| **MVP 9** | Afterwards | Reconstruction with blocks and proposals, review in the Day view, smart prompts, MCP block summary and AI proposals. | #4, #10, #3, #11 |
+| **MVP 8** | Assign | Rules per hat and global, learned details and title parts, rule test in Setup, rule templates for common work tools; repository and branch of the focused terminal or IDE. | #8, #15, new `workdir` sensor |
+| **MVP 9** | Afterwards | Condensing per hour with parallel entries and proposals, review in the Day view, live suggestions and opt-in auto-switch, smart prompts, MCP window summary and AI proposals, day report by phases. | #4, #10, #9, #3, #11, new day report |
 | **MVP 10** | Meetings | Microphone and camera as signals, meeting rules shipped as examples, meeting names from reminder notifications. | #5, #12 |
 | **MVP 11** | More desktops | The `window` sensor on GNOME Wayland, KDE, sway, Hyprland; idle on wlroots. | #13 |
 
@@ -710,6 +847,8 @@ fails its check goes to Sonnet, not back to Haiku.
 | #10 Review in Day view | Check of proposal → correction mapping | Ghost entries, accept/reject, "accept all gaps" | CSS, i18n |
 | #3 Smart prompts | – (Sonnet reviews; Opus in the MVP 9 pass) | Prompt scheduling, panel review mode | Settings, i18n, docs |
 | #11 MCP blocks and proposals | Security review of the `propose` scope | Tools, scopes, Setup | Tool descriptions, tests from given cases |
+| new `workdir` sensor | Short design note (what is read and stored, tab rule); privacy review | `/proc` walk, `HEAD` parsing (worktree, detached), IDE project lists, X11 pid, classifier fields `branch`, `repo` | Fake `/proc` and repository fixtures, i18n, docs |
+| new day report | – (Sonnet reviews) | Phases from the log, rounding with `Apportion`, view after a mockup | i18n, docs |
 | #5 Meetings (mic, cam) | – (design is in #8/#9; MVP 10 pass) | `pw-dump`/`pactl` parsing, `/proc` camera scan, meeting rules | JSON fixtures, example rules for Teams/Zoom/Webex/Meet, docs |
 | #12 Notification names | Privacy review (text never stored or logged) | D-Bus monitor, rule evaluation, link to meetings | Example patterns (German, English), docs |
 | #13 Wayland | – (Sonnet reviews) | GNOME extension and its install in `hat setup`, KWin script, sway and Hyprland IPC | Recorded-event fixtures, docs |
@@ -719,10 +858,10 @@ stands on), Sonnet about half, Haiku the rest.
 
 ## Not in this epic
 
-- A browser extension for URLs, a shell hook or sensor for the working
-  directory or git repository: strong signals, but each a separate install;
-  possible later as further sensors. Until then the window title carries
-  them (VS Code setting, shell prompt snippet from a template).
+- A browser extension for URLs, shell hooks and git hooks (commit, push):
+  strong signals, but each a separate install in every browser, shell or
+  repository; possible later. The working directory and branch come from
+  `/proc` instead (1a), which needs no install.
 - Calendar access (ICS link, Exchange, Google): MVP 10 works without any
   login on purpose; "Calendar entries as activity suggestions" stays in the
   outlook of MVP 3.
@@ -737,3 +876,10 @@ stands on), Sonnet about half, Haiku the rest.
 - Observations are kept 28 days by default (2026-11-07).
 - The GNOME Shell extension is embedded in the binary and installed by
   `hat setup` (2026-11-07); extensions.gnome.org maybe later.
+- Parallel work and the end of a task (2026-11-08, 6a): condensing per hour;
+  pieces under 5 minutes go to the main task, also across hats; tickets of
+  one hat and activity worked on in turn become one parallel entry; live 10
+  of 15 minutes and a new detail only after the memory of 15 minutes; #9
+  after the core of #4 (MVP 9); a day report by phases as a new ticket.
+- A `workdir` sensor reads repository and branch from `/proc` and
+  `.git/HEAD` (2026-11-08, 1a); session files of AI tools are never read.
