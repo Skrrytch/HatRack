@@ -335,14 +335,14 @@ Consequences for the stages:
   feature/ACME-1234-login").
 - **MCP (#11):** block summaries give the tool groups per block with `read`;
   keys taken from titles only with `observe`.
-- **Notifications (#12):** ticket notifications ("ACME-1234 was assigned to
-  you") can give a detail hint through the same rules.
+- **Notifications (#12):** only calendar reminders; ticket notifications are
+  not read (see the conflict noted in #12).
 
 ### 3b. Rule templates (#15)
 
 Nobody should write regular expressions for Jira or IntelliJ by hand. A
 library of rule templates lives in the repository as one JSON file, is
-embedded in the binary (works offline, nothing is fetched by default) and is
+embedded in the binary (works offline, nothing is ever fetched) and is
 readable by anyone on GitHub, so others can add templates by pull request.
 
 - A template has an id, a version, a category (`ide`, `git`, `tickets`,
@@ -359,10 +359,10 @@ readable by anyone on GitHub, so others can add templates by pull request.
   origin (`template: jira@3`), so export and import keep working and a newer
   library never changes saved rules; Setup only says that a newer version
   exists.
-- The server can fetch the current file from GitHub on request (a button,
-  never automatically); only a GET, nothing is sent. A file that fails
-  validation is ignored and the embedded one stays. A company may point to
-  its own file instead.
+- New templates come with a new HatRack version; the server fetches nothing
+  (product.md: nothing is fetched from outside). Own templates (a company's
+  Jira) are imported as a file; a file that fails validation changes nothing
+  and is reported with the reason.
 - A test checks the file: schema, every expression compiles, every example
   gives its expected result, ids are unique.
 
@@ -456,10 +456,11 @@ so it works offline.
 - **Manual wins:** after a manual switch, nothing is suggested or switched
   for 15 minutes unless a rule with `mode: auto` and a hardware signal
   (microphone) fires.
-- **`suggest`:** a notification with an action ("Wechseln zu VENOM ·
-  Entwicklung · VEN-142"), and a hint on the tray icon. Ignoring it is fine.
-- **`auto`:** the switch happens; the event carries `source: rule:<id>`, a
-  notification offers "Rückgängig". When the condition ends (microphone off)
+- **`suggest`:** a hint on the tray icon; a notification with an action
+  ("Wechseln zu VENOM · Entwicklung · ACME-142") only when the user turns on
+  `live.notify` (default off). Ignoring it is fine.
+- **`auto`:** the switch happens, backdated to its start; the event carries
+  `source: rule:<id>`, the tray hint offers "Rückgängig". When the condition ends (microphone off)
   the previous hat and activity come back, also with `source`.
 - **`auto` also starts a hat** when none is worn or the clock is paused: the
   most automatic behaviour is the default. Where a choice makes sense, a
@@ -684,7 +685,7 @@ the split to the review:
   row with the condensed entries, Accept or Reject per hour, "Accept all" per
   day. A parallel entry shows a "parallel" mark and its observed shares, with
   "Split" (two entries by the shares) next to Accept. Mockup before building.
-- **Smart prompts (#3):** the unit is the window, one line per proposed entry;
+- **Calls for help (#3):** the unit is the window, one line per proposed entry;
   asked are windows with unknown time or a disagreement. Pieces under 5
   minutes and parallel entries never cause a question by themselves.
 - **Day report (new ticket):** a view of the log, not the observations.
@@ -761,11 +762,14 @@ method; two computers active at once need a rule in the design note of #4.
   their hat colours (hatched when unsure, grey when unknown). Proposals appear
   as ghost entries with Accept / Reject; "Accept all gaps" for a whole day.
   Accepting writes one `correction` with `source: suggestion`.
-- **Smart prompts:** instead of a fixed hourly question, the agent asks when
-  at least `prompt.min_open` (default 20 min) of working time since the last
-  question is unbooked or unsure, at most every `prompt.interval` (default
-  60 min), never while the microphone is on. The notification opens the
-  panel in review mode: one line per proposed entry of a window (6a),
+- **Calls for help:** instead of a fixed hourly question, HatRack signals
+  quietly: a mark on the tray icon with the number of open hours and a "Needs
+  you" list in the Day view. A notification is a choice (`prompt.notify`,
+  default off): when at least `prompt.min_open` (default 20 min) is unbooked
+  or disagrees, at most every `prompt.interval` (default 60 min), only at a
+  natural pause (return from absence, after a hat switch), never while the
+  microphone is on. The tray or the notification opens the panel in review
+  mode: one line per proposed entry of a window (6a),
   prefilled with the best candidate, Enter accepts, typing searches hats,
   activities and details as the detail field does today.
 - **End of day:** one prompt for what is still open, together with the daily
@@ -842,7 +846,7 @@ works without observations, nothing afterwards without rules.
 |---|---|---|---|
 | **MVP 7** | Observe | Idle and lock handled, return question; window titles recorded on X11; an "observed" band in the Day view and the raw spans over MCP. Booking stays manual, but you can see what you did. | #6, #2, #1, #7 |
 | **MVP 8** | Assign | Rules per hat and global, learned details and title parts, rule test in Setup, rule templates for common work tools, a toolbox of how-tos for setting tools up; repository and branch of the focused terminal or IDE. | #8, #15, new toolbox, new `workdir` sensor |
-| **MVP 9** | Afterwards | Condensing per hour with parallel entries and proposals, review in the Day view, live suggestions and opt-in auto-switch, smart prompts, MCP window summary and AI proposals, day report by phases. | #4, #10, #9, #3, #11, new day report |
+| **MVP 9** | The reliable day | Condensing per hour with parallel entries and proposals, review in the Day view, live switching of the main task, calls for help, MCP window summary and AI proposals, day report by phases. | #4, #10, #9, #3, #11, new day report |
 | **MVP 10** | Meetings | Microphone and camera as signals, meeting rules shipped as examples, meeting names from reminder notifications. | #5, #12 |
 | **MVP 11** | More desktops | The `window` sensor on GNOME Wayland, KDE, sway, Hyprland; idle on wlroots. | #13 |
 
@@ -895,11 +899,11 @@ fails its check goes to Sonnet, not back to Haiku.
 | #1 Window on X11 | – (Sonnet reviews) | `xgb` backend, `PropertyNotify` handling, `detect()` | Tests with a fake window manager from given cases, docs |
 | #7 Show observations | Short review of the `observe` scope | Day view band, MCP `list_observations`, scope in Setup | CSS, i18n, MCP tool description |
 | #8 Rules and learned details | Design note: rule semantics, conflict order, confidence, core API; core classifier; review | Config parsing and validation, Setup rule list and rule test | Table tests from the note, example rules, i18n |
-| #15 Rule templates | Design note: file format, parameters and placeholders, how a template becomes rules; review | Loader, embedding, optional fetch and validation, "Add from template" in Setup | Template content and examples for the listed tools, i18n, docs |
+| #15 Rule templates | Design note: file format, parameters and placeholders, how a template becomes rules; review | Embedding, import of own templates with validation, "Add from template" in Setup | Template content and examples for the listed tools, i18n, docs |
 | #9 Live suggestions, auto-switch | Design note and implementation: dwell, hysteresis, manual-wins, auto start and revert (agent concurrency); review | Notifications with actions, tray hint, wiring | Settings, i18n |
 | #4 Reconstruction | Algorithm (smoothing, blocks, scores, proposals), consistent with `Settle` and `Apportion`; review | Edge-case tests (midnight, overlaps, idle at edges), performance check | Docs, test fixtures |
 | #10 Review in Day view | Check of proposal → correction mapping | Ghost entries, accept/reject, "accept all gaps" | CSS, i18n |
-| #3 Smart prompts | – (Sonnet reviews; Opus in the MVP 9 pass) | Prompt scheduling, panel review mode | Settings, i18n, docs |
+| #3 Calls for help | – (Sonnet reviews; Opus in the MVP 9 pass) | Prompt scheduling, panel review mode | Settings, i18n, docs |
 | #11 MCP blocks and proposals | Security review of the `propose` scope | Tools, scopes, Setup | Tool descriptions, tests from given cases |
 | new `workdir` sensor | Short design note (what is read and stored, tab rule); privacy review | `/proc` walk, `HEAD` parsing (worktree, detached), IDE project lists, X11 pid, classifier fields `branch`, `repo` | Fake `/proc` and repository fixtures, i18n, docs |
 | new toolbox | Privacy review of the snippets (no hook that sees prompts) | Pages checked against recorded titles, link from the rule test, `setup` link in templates | Page skeletons from the table in 3c, i18n of the hints, docs |
