@@ -187,8 +187,9 @@ are no tickets.
 **Learned title parts** without any configuration: titles are split at
 their separators (` - `, ` – `, ` — `, ` · `, ` | `) into parts such as an
 IDE project, a repository, a Confluence space or a file name. A part seen
-mostly while one hat was booked (default: at least 30 minutes in the last
-eight weeks, 80 % of its time on that hat) suggests that hat with lower
+mostly while one hat was booked (default: at least 30 minutes within the
+retention period, 80 % of its time on that hat; title parts are not kept
+longer than the observations they come from) suggests that hat with lower
 confidence (0.5). Parts seen under many hats (`Vivaldi`, `Visual Studio
 Code`, `Jira`) carry no hat. This covers what rules cannot know in advance,
 for example a terminal whose title is the topic of a session and names no
