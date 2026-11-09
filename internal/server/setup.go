@@ -93,6 +93,7 @@ type field struct {
 
 type moduleForm struct {
 	ID, Title, Desc string
+	Set             bool   // has own settings here (defaults, or the hat's own)
 	Summary         string // what applies, shown while the section is closed
 	Fields          []field
 	Extra           string // YAML of settings the form cannot show
@@ -109,6 +110,9 @@ type hatEdit struct {
 	Modules          []moduleForm
 	Saved            bool
 	Rules            hatRules
+	Tab              string
+	Tabs             []pageTab
+	Shown            []moduleForm // the modules of the tab shown
 }
 
 type actRow struct {
@@ -124,6 +128,9 @@ type defaultsEdit struct {
 	WorkDays  []option // Monday first
 	Modules   []moduleForm
 	Saved     bool
+	Tab       string
+	Tabs      []pageTab
+	Shown     []moduleForm // the modules of the tab shown
 }
 
 // ---- helpers ----------------------------------------------------------------
@@ -371,7 +378,7 @@ func (s *Server) moduleForms(lang string, own, inherited map[string]core.ModuleC
 		for _, r := range sch.Required {
 			req[r] = true
 		}
-		f := moduleForm{ID: id, Title: tr(lang, "web.mod."+id, id), Desc: tr(lang, "web.moddesc."+id, "")}
+		f := moduleForm{ID: id, Title: tr(lang, "web.mod."+id, id), Desc: tr(lang, "web.moddesc."+id, ""), Set: len(own[id]) > 0}
 		extra := core.ModuleCfg{}
 		for k, v := range own[id] {
 			if p, ok := sch.Properties[k]; !ok || p.kind() == "" {
@@ -542,7 +549,7 @@ func freeColor(cfg core.Config) string {
 
 // readModules applies the module form fields to settings. Modules the server
 // does not know (external ones) and values the form does not show are kept.
-func (s *Server) readModules(r *http.Request, cur map[string]core.ModuleCfg) (map[string]core.ModuleCfg, error) {
+func (s *Server) readModules(r *http.Request, cur map[string]core.ModuleCfg, only []string) (map[string]core.ModuleCfg, error) {
 	out := map[string]core.ModuleCfg{}
 	for id, m := range cur {
 		c := core.ModuleCfg{}
@@ -553,6 +560,9 @@ func (s *Server) readModules(r *http.Request, cur map[string]core.ModuleCfg) (ma
 	}
 	for _, m := range s.reg.All() {
 		id := m.ID()
+		if only != nil && !slices.Contains(only, id) {
+			continue // not in this form: unchanged
+		}
 		sch := parseSchema(m.ConfigSchema())
 		c := out[id]
 		if c == nil {
@@ -748,13 +758,13 @@ func (s *Server) hatPage(w http.ResponseWriter, r *http.Request, acc access) {
 		return
 	}
 	v := s.base(r, "sethat", acc)
-	s.fillHat(&v, cfg, h)
+	s.fillHat(&v, cfg, h, r.URL.Query().Get("tab"))
 	s.fillHatRules(r, &v, cfg, h)
 	v.Hat.Saved = r.URL.Query().Get("saved") != ""
 	s.render(w, v, http.StatusOK)
 }
 
-func (s *Server) fillHat(v *view, cfg core.Config, h core.Hat) {
+func (s *Server) fillHat(v *view, cfg core.Config, h core.Hat, tab string) {
 	pal := newPalette(cfg)
 	color := h.Color
 	if color == "" {
@@ -767,6 +777,16 @@ func (s *Server) fillHat(v *view, cfg core.Config, h core.Hat) {
 	for i, a := range h.Activities {
 		v.Hat.Activities = append(v.Hat.Activities, actRow{i, a, i == 0, i == len(h.Activities)-1})
 	}
+	ids := []string{"general"}
+	for _, t := range modTabs {
+		ids = append(ids, t.ID)
+	}
+	v.Hat.Tab = pickTab(url.Values{"tab": {tab}}, ids...)
+	base := "/setup/hat?key=" + url.QueryEscape(h.Key) + "&"
+	v.Hat.Tabs = []pageTab{{ID: "general", Href: base + "tab=general", Title: i18n.In(v.Lang, "web.setup.tab_general"),
+		Stat: i18n.In(v.Lang, "web.setup.nacts", len(h.Activities)), On: v.Hat.Tab == "general"}}
+	v.Hat.Tabs = moduleTabs(v.Lang, base, v.Hat.Tab, v.Hat.Modules, v.Hat.Tabs)
+	v.Hat.Shown = modsIn(v.Hat.Modules, v.Hat.Tab)
 }
 
 // hatSave stores the hat form. Buttons for single activities (move, archive,
@@ -775,6 +795,8 @@ func (s *Server) hatSave(w http.ResponseWriter, r *http.Request, acc access) {
 	lang := s.langOf(r)
 	key := r.PostFormValue("key")
 	op := r.PostFormValue("op")
+	tab := r.PostFormValue("tab")
+	has, only := formParts(r.PostFormValue("part"), r.PostFormValue("mods"))
 	var tried core.Hat
 	cfg, err := s.editConfig(r.Context(), false, func(c *core.Config) error {
 		i := hatIndex(c, key)
@@ -782,89 +804,95 @@ func (s *Server) hatSave(w http.ResponseWriter, r *http.Request, acc access) {
 			return badConfig{fmt.Errorf("unknown hat %q", key)}
 		}
 		h := c.Hats[i]
-		h.Name = strings.TrimSpace(r.PostFormValue("name"))
-		h.Color = strings.ToLower(r.PostFormValue("color"))
-		if r.PostFormValue("work") == "" {
-			no := false
-			h.WorkTime = &no
-		} else {
-			h.WorkTime = nil // the default
-		}
-		if r.PostFormValue("observe") == "" {
-			no := false
-			h.Observe = &no
-		} else {
-			h.Observe = nil // the default
-		}
-		h.ResumeActivity = r.PostFormValue("resume")
-		// activities as typed; an emptied field keeps its old name
-		acts := make([]string, 0, len(h.Activities)+1)
-		renamed := map[string]string{} // lower-case old name -> new name
-		for j, old := range h.Activities {
-			a := strings.TrimSpace(r.PostFormValue(fmt.Sprintf("act.%d", j)))
-			if a == "" {
-				a = old
+		if has("basics") {
+			h.Name = strings.TrimSpace(r.PostFormValue("name"))
+			h.Color = strings.ToLower(r.PostFormValue("color"))
+			if r.PostFormValue("work") == "" {
+				no := false
+				h.WorkTime = &no
+			} else {
+				h.WorkTime = nil // the default
 			}
-			if a != old {
-				renamed[strings.ToLower(old)] = a
+			if r.PostFormValue("observe") == "" {
+				no := false
+				h.Observe = &no
+			} else {
+				h.Observe = nil // the default
 			}
-			acts = append(acts, a)
+			h.ResumeActivity = r.PostFormValue("resume")
 		}
-		if len(renamed) > 0 {
-			// rules name activities; they follow the new name
-			h.Rules = slices.Clone(h.Rules)
-			for ri, rule := range h.Rules {
-				rule.Activity = slices.Clone(rule.Activity)
-				for ai, a := range rule.Activity {
-					if n, ok := renamed[strings.ToLower(a)]; ok {
-						rule.Activity[ai] = n
-					}
+		if has("activities") {
+			// activities as typed; an emptied field keeps its old name
+			acts := make([]string, 0, len(h.Activities)+1)
+			renamed := map[string]string{} // lower-case old name -> new name
+			for j, old := range h.Activities {
+				a := strings.TrimSpace(r.PostFormValue(fmt.Sprintf("act.%d", j)))
+				if a == "" {
+					a = old
 				}
-				h.Rules[ri] = rule
-			}
-		}
-		have := map[string]bool{}
-		for _, a := range acts {
-			have[strings.ToLower(a)] = true
-		}
-		for _, a := range splitList(r.PostFormValue("newact")) {
-			if !have[strings.ToLower(a)] {
+				if a != old {
+					renamed[strings.ToLower(old)] = a
+				}
 				acts = append(acts, a)
 			}
-		}
-		archived := append([]string(nil), h.ArchivedActivity...)
-		verb, arg, _ := strings.Cut(op, ":")
-		if j, err := strconv.Atoi(arg); err == nil && j >= 0 && j < len(acts) {
-			switch verb {
-			case "up":
-				if j > 0 {
-					acts[j-1], acts[j] = acts[j], acts[j-1]
+			if len(renamed) > 0 {
+				// rules name activities; they follow the new name
+				h.Rules = slices.Clone(h.Rules)
+				for ri, rule := range h.Rules {
+					rule.Activity = slices.Clone(rule.Activity)
+					for ai, a := range rule.Activity {
+						if n, ok := renamed[strings.ToLower(a)]; ok {
+							rule.Activity[ai] = n
+						}
+					}
+					h.Rules[ri] = rule
 				}
-			case "down":
-				if j < len(acts)-1 {
-					acts[j], acts[j+1] = acts[j+1], acts[j]
-				}
-			case "archive":
-				archived = append(archived, acts[j])
-				acts = append(acts[:j], acts[j+1:]...)
 			}
-		}
-		if verb == "restore" {
-			for j, a := range archived {
-				if a == arg {
-					archived = append(archived[:j], archived[j+1:]...)
+			have := map[string]bool{}
+			for _, a := range acts {
+				have[strings.ToLower(a)] = true
+			}
+			for _, a := range splitList(r.PostFormValue("newact")) {
+				if !have[strings.ToLower(a)] {
 					acts = append(acts, a)
-					break
 				}
 			}
+			archived := append([]string(nil), h.ArchivedActivity...)
+			verb, arg, _ := strings.Cut(op, ":")
+			if j, err := strconv.Atoi(arg); err == nil && j >= 0 && j < len(acts) {
+				switch verb {
+				case "up":
+					if j > 0 {
+						acts[j-1], acts[j] = acts[j], acts[j-1]
+					}
+				case "down":
+					if j < len(acts)-1 {
+						acts[j], acts[j+1] = acts[j+1], acts[j]
+					}
+				case "archive":
+					archived = append(archived, acts[j])
+					acts = append(acts[:j], acts[j+1:]...)
+				}
+			}
+			if verb == "restore" {
+				for j, a := range archived {
+					if a == arg {
+						archived = append(archived[:j], archived[j+1:]...)
+						acts = append(acts, a)
+						break
+					}
+				}
+			}
+			h.Activities, h.ArchivedActivity = acts, archived
 		}
-		h.Activities, h.ArchivedActivity = acts, archived
-		mods, err := s.readModules(r, h.Modules)
-		if err != nil {
-			tried = h
-			return err
+		if has("mods") {
+			mods, err := s.readModules(r, h.Modules, only)
+			if err != nil {
+				tried = h
+				return err
+			}
+			h.Modules = mods
 		}
-		h.Modules = mods
 		tried = h
 		c.Hats[i] = h
 		return nil
@@ -877,13 +905,13 @@ func (s *Server) hatSave(w http.ResponseWriter, r *http.Request, acc access) {
 		}
 		// show the form again with what was typed
 		v := s.base(r, "sethat", acc)
-		s.fillHat(&v, cfg, tried)
+		s.fillHat(&v, cfg, tried, tab)
 		s.fillHatRules(r, &v, cfg, tried)
 		v.Err = userError(lang, err)
 		s.render(w, v, http.StatusBadRequest)
 		return
 	}
-	http.Redirect(w, r, "/setup/hat?saved=1&key="+url.QueryEscape(key), http.StatusSeeOther)
+	http.Redirect(w, r, "/setup/hat?saved=1&key="+url.QueryEscape(key)+tabQuery(tab), http.StatusSeeOther)
 }
 
 func (s *Server) defaultsPage(w http.ResponseWriter, r *http.Request, acc access) {
@@ -893,12 +921,12 @@ func (s *Server) defaultsPage(w http.ResponseWriter, r *http.Request, acc access
 		return
 	}
 	v := s.base(r, "setdefaults", acc)
-	s.fillDefaults(&v, cfg)
+	s.fillDefaults(&v, cfg, r.URL.Query().Get("tab"))
 	v.Defaults.Saved = r.URL.Query().Get("saved") != ""
 	s.render(w, v, http.StatusOK)
 }
 
-func (s *Server) fillDefaults(v *view, cfg core.Config) {
+func (s *Server) fillDefaults(v *view, cfg core.Config, tab string) {
 	w := cfg.Work()
 	v.Defaults = defaultsEdit{Resume: resumeOptions(v.Lang, cfg.Defaults.ResumeActivity, true, ""),
 		WorkStart: w.Start, WorkEnd: w.End,
@@ -907,25 +935,45 @@ func (s *Server) fillDefaults(v *view, cfg core.Config) {
 		d := core.Weekdays[i%7]
 		v.Defaults.WorkDays = append(v.Defaults.WorkDays, option{Value: d, Label: i18n.In(v.Lang, "web.wd."+d), Selected: w.IsWorkday(time.Weekday(i % 7))})
 	}
+	ids := []string{"general"}
+	for _, t := range modTabs {
+		ids = append(ids, t.ID)
+	}
+	d := &v.Defaults
+	d.Tab = pickTab(url.Values{"tab": {tab}}, ids...)
+	var days []string
+	for _, x := range w.Days {
+		days = append(days, i18n.In(v.Lang, "web.wd."+x))
+	}
+	d.Tabs = []pageTab{{ID: "general", Href: "/setup/defaults?tab=general", Title: i18n.In(v.Lang, "web.setup.tab_general"),
+		Stat: daysText(v.Lang, w.Days, days) + " " + w.Start + "–" + w.End, On: d.Tab == "general"}}
+	d.Tabs = moduleTabs(v.Lang, "/setup/defaults?", d.Tab, d.Modules, d.Tabs)
+	d.Shown = modsIn(d.Modules, d.Tab)
 }
 
 func (s *Server) defaultsSave(w http.ResponseWriter, r *http.Request, acc access) {
 	var tried core.Config
+	tab := r.PostFormValue("tab")
+	has, only := formParts(r.PostFormValue("part"), r.PostFormValue("mods"))
 	cfg, err := s.editConfig(r.Context(), false, func(c *core.Config) error {
-		c.Defaults.ResumeActivity = r.PostFormValue("resume")
-		if ws, we := r.PostFormValue("work_start"), r.PostFormValue("work_end"); ws != "" || we != "" {
+		if has("resume") {
+			c.Defaults.ResumeActivity = r.PostFormValue("resume")
+		}
+		if ws, we := r.PostFormValue("work_start"), r.PostFormValue("work_end"); has("work") && (ws != "" || we != "") {
 			wh := core.WorkHours{Start: ws, End: we, Days: r.Form["work_day"]}
 			if len(wh.Days) == 0 {
 				return badConfig{errors.New(i18n.In(s.langOf(r), "web.setup.nodays"))}
 			}
 			c.Defaults.WorkHours = &wh
 		}
-		mods, err := s.readModules(r, c.Modules)
-		if err != nil {
-			tried = *c
-			return err
+		if has("mods") {
+			mods, err := s.readModules(r, c.Modules, only)
+			if err != nil {
+				tried = *c
+				return err
+			}
+			c.Modules = mods
 		}
-		c.Modules = mods
 		tried = *c
 		return nil
 	})
@@ -937,12 +985,12 @@ func (s *Server) defaultsSave(w http.ResponseWriter, r *http.Request, acc access
 		}
 		_ = cfg
 		v := s.base(r, "setdefaults", acc)
-		s.fillDefaults(&v, tried)
+		s.fillDefaults(&v, tried, tab)
 		v.Err = userError(s.langOf(r), err)
 		s.render(w, v, http.StatusBadRequest)
 		return
 	}
-	http.Redirect(w, r, "/setup/defaults?saved=1", http.StatusSeeOther)
+	http.Redirect(w, r, "/setup/defaults?saved=1"+tabQuery(tab), http.StatusSeeOther)
 }
 
 // ticketsAction registers a ticket project, removes a registered one, or

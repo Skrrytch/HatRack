@@ -110,10 +110,13 @@ hats:
 	withPassword(t, e, "pw")
 	br := newBrowser(t, e)
 	br.login("pw")
-	if _, out := br.do("GET", "/setup/hat?key=tickets", nil); strings.Contains(out, `name="m/mqtt/broker"`) || !strings.Contains(out, "Testen") {
+	if _, out := br.do("GET", "/setup/hat?key=tickets&tab=report", nil); strings.Contains(out, `name="m/mqtt/broker"`) {
 		t.Fatal("no mqtt form on the hat page")
 	}
-	_, out := br.do("GET", "/setup/defaults", nil)
+	if _, out := br.do("GET", "/setup/hat?key=tickets", nil); !strings.Contains(out, "Testen") {
+		t.Fatal("no mqtt form on the hat page")
+	}
+	_, out := br.do("GET", "/setup/defaults?tab=report", nil)
 	if !strings.Contains(out, "${env:HATRACK_TEST_MQTT_PW}") {
 		t.Fatal("an env reference may show in the field")
 	}
@@ -132,7 +135,7 @@ hats:
     name: Tickets
     activities: [Testen]
 `)
-	_, out = br.do("GET", "/setup/defaults", nil)
+	_, out = br.do("GET", "/setup/defaults?tab=report", nil)
 	if strings.Count(out, "klartext-pw") != 1 || !strings.Contains(out, "Password: ****") || strings.Contains(out, "Discovery<") || !strings.Contains(out, `type="password" name="m/mqtt/password"`) {
 		t.Fatal("a plain password shows neither in the summary nor readable in the field")
 	}

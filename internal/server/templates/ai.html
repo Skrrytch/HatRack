@@ -1,7 +1,6 @@
 {{define "content"}}
 {{with .AI}}
-<nav class="crumbs"><a href="/setup">{{template "icon" "back"}} {{t $.Lang "web.nav.setup"}}</a> <span class="dim">/</span> <span>{{t $.Lang "web.ai.title"}}</span></nav>
-<p class="dim">{{t $.Lang "web.ai.intro"}}</p>
+{{template "pagehead" (dict "Lang" $.Lang "Title" (t $.Lang "web.ai.title") "Lead" (t $.Lang "web.ai.intro"))}}
 
 {{with .Added}}
 <div class="card added">

@@ -1,6 +1,6 @@
 {{define "content"}}
 {{with .Devices}}
-<nav class="crumbs"><a href="/setup">{{template "icon" "back"}} {{t $.Lang "web.nav.setup"}}</a> <span class="dim">/</span> <span>{{t $.Lang "web.devices"}}</span></nav>
+{{template "pagehead" (dict "Lang" $.Lang "Title" (t $.Lang "web.devices") "Lead" (t $.Lang "web.setup.t_devices"))}}
 
 {{with .Added}}
 <div class="card added">

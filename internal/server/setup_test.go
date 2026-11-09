@@ -87,7 +87,7 @@ func TestSetupHatForm(t *testing.T) {
 	e, b := setupBrowser(t)
 	// defaults with an image, so the hat may set only the fit
 	e.do("PUT", "/api/config", "version: 1\nmodules:\n  wallpaper: {image: /pics/default.jpg}\nhats: {}\n")
-	r, out := b.do("GET", "/setup/hat?key=venom", nil)
+	r, out := b.do("GET", "/setup/hat?key=venom&tab=look", nil)
 	if r.StatusCode != 200 || !strings.Contains(out, "Wallpaper") || !strings.Contains(out, `placeholder="/pics/default.jpg"`) {
 		t.Fatalf("hat page: %d\n%s", r.StatusCode, out)
 	}
@@ -135,7 +135,7 @@ func TestSetupHatForm(t *testing.T) {
 
 func TestSetupDefaults(t *testing.T) {
 	e, b := setupBrowser(t)
-	if r, out := b.do("GET", "/setup/defaults", nil); r.StatusCode != 200 || !strings.Contains(out, "Image file") {
+	if r, out := b.do("GET", "/setup/defaults?tab=look", nil); r.StatusCode != 200 || !strings.Contains(out, "Image file") {
 		t.Fatalf("defaults page: %d", r.StatusCode)
 	}
 	// a fit without an image would leave every hat without one: refused
@@ -238,7 +238,7 @@ func TestSetupQuickPaths(t *testing.T) {
 	}
 	// the module sections say what applies while closed
 	e.do("PUT", "/api/config", "version: 1\nmodules:\n  wallpaper: {image: /pics/d.jpg}\nhats:\n  kunde:\n    name: Kunde\n    activities: []\n    modules:\n      wallpaper: {options: zoom}\n")
-	_, out = b.do("GET", "/setup/hat?key=kunde", nil)
+	_, out = b.do("GET", "/setup/hat?key=kunde&tab=look", nil)
 	if !strings.Contains(out, "Fit: fill · rest from the defaults") || !strings.Contains(out, "not set up") {
 		t.Fatalf("module summaries missing:\n%s", out)
 	}
@@ -246,7 +246,7 @@ func TestSetupQuickPaths(t *testing.T) {
 	if r, o := e.do("PUT", "/api/config", "version: 1\nhats:\n  kunde:\n    name: Kunde\n    activities: []\n    modules:\n      wallpaper: {image: \"hatrack:wp02-purple\"}\n"); r.StatusCode != 200 {
 		t.Fatalf("put: %s", o)
 	}
-	if _, out = b.do("GET", "/setup/hat?key=kunde", nil); !strings.Contains(out, "Image file: Purple 2") || strings.Contains(out, "hatrack:wp02") && strings.Contains(out, "Image file: hatrack") {
+	if _, out = b.do("GET", "/setup/hat?key=kunde&tab=look", nil); !strings.Contains(out, "Image file: Purple 2") || strings.Contains(out, "hatrack:wp02") && strings.Contains(out, "Image file: hatrack") {
 		t.Fatal("built-in wallpaper by colour and number in the summary")
 	}
 }
@@ -279,7 +279,7 @@ func TestSetupChoicesFromDevices(t *testing.T) {
 	if !strings.Contains(body, fmt.Sprintf(`"protocol":%d`, Protocol)) {
 		t.Errorf("hello answer lacks the protocol: %s", body)
 	}
-	_, out := b.do("GET", "/setup/hat?key=venom", nil)
+	_, out := b.do("GET", "/setup/hat?key=venom&tab=look", nil)
 	for _, want := range []string{`list="f-color_scheme-theme-list"`, `<option value="Mint-Y-Dark">`, `class="gallery"`,
 		`name="pick/m/wallpaper/image" value="/pics/a.jpg" data-target="f-wallpaper-image"`, `src="data:image/jpeg;base64,AAAA"`} {
 		if !strings.Contains(out, want) {
@@ -354,7 +354,7 @@ func TestDevicesPage(t *testing.T) {
 func TestSetupListField(t *testing.T) {
 	e, b := setupBrowser(t)
 	e.do("POST", "/api/devices/hello", `{"capabilities":{"launch":{"backend":"xdg","available":true,"choices":{"apps":[{"value":"firefox","label":"Firefox"}]}}}}`)
-	_, out := b.do("GET", "/setup/hat?key=venom", nil)
+	_, out := b.do("GET", "/setup/hat?key=venom&tab=switch", nil)
 	if !strings.Contains(out, `<textarea name="m/launch/apps"`) || !strings.Contains(out, `data-append="f-launch-apps"`) || !strings.Contains(out, "Firefox (firefox)") {
 		t.Fatal("launch form with a program pick list")
 	}
@@ -367,7 +367,7 @@ func TestSetupListField(t *testing.T) {
 	if len(apps) != 2 || apps[0] != "firefox" || apps[1] != "thunderbird" {
 		t.Fatalf("apps: %#v", h.Modules["launch"])
 	}
-	_, out = b.do("GET", "/setup/hat?key=venom", nil)
+	_, out = b.do("GET", "/setup/hat?key=venom&tab=switch", nil)
 	if !strings.Contains(out, ">firefox\nthunderbird</textarea>") || !strings.Contains(out, "firefox, thunderbird") {
 		t.Fatal("the list comes back one per line, and in the summary on one line")
 	}

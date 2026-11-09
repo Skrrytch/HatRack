@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -442,7 +443,8 @@ func (s *Server) base(r *http.Request, page string, acc access) view {
 			v.Nav = append(v.Nav, navItem{n.href, i18n.In(lang, n.key), n.page == page})
 		}
 		if acc == fullAccess {
-			v.Nav = append(v.Nav, navItem{"/setup", i18n.In(lang, "web.nav.setup"), strings.HasPrefix(page, "set")})
+			v.Nav = append(v.Nav, navItem{"/setup", i18n.In(lang, "web.nav.setup"), strings.HasPrefix(page, "set") ||
+				slices.Contains([]string{"devices", "detection", "grants", "tickets", "ai"}, page)})
 		}
 	}
 	if m := r.URL.Query().Get("e"); m != "" {

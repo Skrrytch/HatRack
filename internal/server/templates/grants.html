@@ -1,7 +1,5 @@
 {{define "content"}}
-<nav class="crumbs"><a href="/setup">{{template "icon" "back"}} {{t $.Lang "web.nav.setup"}}</a> <span class="dim">/</span> <span>{{t $.Lang "web.grants.title"}}</span></nav>
-<h1>{{t $.Lang "web.grants.title"}}</h1>
-<p class="lead">{{t $.Lang "web.grants.lead"}}</p>
+{{template "pagehead" (dict "Lang" $.Lang "Title" (t $.Lang "web.grants.title") "Lead" (t $.Lang "web.grants.lead"))}}
 
 <div class="card never">
   <span class="shield" aria-hidden="true">✓</span>
@@ -9,11 +7,12 @@
   <span class="t">{{t $.Lang "web.grants.never_text"}}</span></div>
 </div>
 
-<h1>{{t $.Lang "web.grants.basics"}}</h1>
+{{template "subtabs" .Grants.Tabs}}
+{{if eq .Grants.Tab "basics"}}
 <p class="sub">{{t $.Lang "web.grants.basics_sub"}}</p>
 {{with .Detection}}
 <form method="post" action="/setup/grants" class="card" id="basics">
-  <input type="hidden" name="op" value="sensors">
+  <input type="hidden" name="op" value="sensors"><input type="hidden" name="tab" value="basics">
   <input type="hidden" name="devices" value="{{.DeviceIDs}}">
   <input type="hidden" name="sensors" value="{{.SensorIDs}}">
   <table class="matrix">
@@ -32,7 +31,7 @@
 
 {{with .Observe}}
 <form method="post" action="/setup/grants" class="card privacy" id="privacy">
-  <input type="hidden" name="op" value="observe">
+  <input type="hidden" name="op" value="observe"><input type="hidden" name="tab" value="basics">
   <p class="note">{{t $.Lang "web.observe.note"}}</p>
   <div class="grid">
     <div>
@@ -55,23 +54,16 @@
 {{end}}
 
 {{end}}
+{{end}}
 
-<h1>{{t $.Lang "web.grants.more"}}</h1>
-<p class="sub">{{t $.Lang "web.grants.more_sub"}}</p>
 {{with .Grants}}
+{{if eq .Tab "more"}}
+<p class="sub">{{t $.Lang "web.grants.more_sub"}}</p>
 {{if .Cards}}
-<div class="card allgrants">
-  <b>{{t $.Lang "web.grants.common_title"}}</b>
-  <ul>
-    <li>{{t $.Lang "web.grants.common_local"}}</li>
-    <li>{{t $.Lang "web.grants.common_visible"}}</li>
-    <li>{{t $.Lang "web.grants.common_stored"}}</li>
-    <li>{{t $.Lang "web.grants.common_revoke"}}</li>
-  </ul>
-</div>
+<div class="card allgrants"><b>{{t $.Lang "web.grants.common_title"}}</b> <span class="dim">{{t $.Lang "web.grants.common_line"}}</span></div>
 {{range .Cards}}
 {{$g := .ID}}<form method="post" action="/setup/grants" class="card grant" id="{{.ID}}">
-  <input type="hidden" name="op" value="grant">
+  <input type="hidden" name="op" value="grant"><input type="hidden" name="tab" value="more">
   <input type="hidden" name="grant" value="{{.ID}}">
   <input type="hidden" name="devices" value="{{.DeviceIDs}}">
   <div class="head">
@@ -99,7 +91,7 @@
     <b>{{.Title}}</b>
     <label><input type="radio" name="delete" value="1" checked> {{t $.Lang "web.grants.revoke_delete"}} <span class="dim">{{.Affected}}</span></label>
     <label><input type="radio" name="delete" value="0"> {{t $.Lang "web.grants.revoke_keep"}}</label>
-    <div class="row"><button class="danger">{{t $.Lang "web.grants.revoke_ok"}}</button><a class="btn" href="/setup/grants">{{t $.Lang "web.grants.cancel"}}</a></div>
+    <div class="row"><button class="danger">{{t $.Lang "web.grants.revoke_ok"}}</button><a class="btn" href="/setup/grants?tab=more">{{t $.Lang "web.grants.cancel"}}</a></div>
   </div>
   {{end}}
   <div class="foot">
@@ -112,8 +104,9 @@
 {{else}}
 <div class="card"><p class="dim" style="margin:0">{{t $.Lang "web.grants.none"}}</p></div>
 {{end}}
+{{end}}
 
-<h1>{{t $.Lang "web.grants.history"}}</h1>
+{{if eq .Tab "history"}}
 <div class="card">
   {{if .History}}
   <table class="hist">
@@ -124,5 +117,6 @@
   {{else}}<p class="dim" style="margin:0">{{t $.Lang "web.grants.history_empty"}}</p>{{end}}
   <p class="dim small" style="margin:.5rem 0 0">{{t $.Lang "web.grants.history_note"}}</p>
 </div>
+{{end}}
 {{end}}
 {{end}}

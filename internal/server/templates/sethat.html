@@ -1,68 +1,70 @@
 {{define "content"}}
 {{with .Hat}}
 <div class="hatpage" style="--c:{{.Color}}">
-<nav class="crumbs"><a href="/setup">{{template "icon" "back"}} {{t $.Lang "web.nav.setup"}}</a> <span class="dim">/</span> <span>{{t $.Lang "web.setup.hats_crumb"}}</span></nav>
+<nav class="crumbs"><a href="/setup">{{template "icon" "back"}} {{t $.Lang "web.nav.setup"}}</a> <span class="dim">/</span> <span>{{if .Name}}{{.Name}}{{else}}{{.Key}}{{end}}</span></nav>
 <section class="head">
   <div class="bighat">{{template "hat" .Color}}</div>
   <div><div class="kicker">{{t $.Lang "web.setup.editing"}}</div>
   <div class="title">{{if .Name}}{{.Name}}{{else}}{{.Key}}{{end}}</div></div>
 </section>
 {{if .Saved}}<div class="ok">{{t $.Lang "web.setup.saved"}}</div>{{end}}
-<form method="post" action="/setup/hat">
-  <input type="hidden" name="key" value="{{.Key}}">
+{{template "subtabs" .Tabs}}
+{{if eq .Tab "general"}}
+<form method="post" action="/setup/hat" class="card mod">
+  <input type="hidden" name="key" value="{{.Key}}"><input type="hidden" name="part" value="basics"><input type="hidden" name="tab" value="general">
   <button name="op" value="save" class="defaultbtn" tabindex="-1" aria-hidden="true"></button>
-  <div class="card">
-    <div class="namerow">
-      <label class="grow">{{t $.Lang "web.setup.name"}}<input type="text" name="name" value="{{.Name}}" placeholder="{{.Key}}"></label>
-      <div class="colorpick"><span class="dim">{{t $.Lang "web.setup.color"}}</span>
-        <span class="row">{{template "swatches" (dict "Lang" $.Lang "Color" .Color)}}<input type="color" name="color" value="{{.Color}}" title="{{t $.Lang "web.setup.own_color"}}" aria-label="{{t $.Lang "web.setup.own_color"}}"></span></div>
-    </div>
-    <label class="inline"><input type="checkbox" name="work" value="1"{{if .Work}} checked{{end}}> {{t $.Lang "web.setup.work"}}</label>
-    <label class="inline"><input type="checkbox" name="observe" value="1"{{if .Observe}} checked{{end}}> {{t $.Lang "web.hat.observe"}} <span class="dim">{{t $.Lang "web.hat.observe_hint"}}</span></label>
-    {{template "resumeradios" (dict "Lang" $.Lang "Opts" .Resume)}}
+  <h3>{{t $.Lang "web.hat.basics"}}</h3>
+  <div class="namerow">
+    <label class="grow">{{t $.Lang "web.setup.name"}}<input type="text" name="name" value="{{.Name}}" placeholder="{{.Key}}"></label>
+    <div class="colorpick"><span class="dim">{{t $.Lang "web.setup.color"}}</span>
+      <span class="row">{{template "swatches" (dict "Lang" $.Lang "Color" .Color)}}<input type="color" name="color" value="{{.Color}}" title="{{t $.Lang "web.setup.own_color"}}" aria-label="{{t $.Lang "web.setup.own_color"}}"></span></div>
   </div>
+  <label class="inline"><input type="checkbox" name="work" value="1"{{if .Work}} checked{{end}}> {{t $.Lang "web.setup.work"}}</label>
+  <label class="inline"><input type="checkbox" name="observe" value="1"{{if .Observe}} checked{{end}}> {{t $.Lang "web.hat.observe"}} <span class="dim">{{t $.Lang "web.hat.observe_hint"}}</span></label>
+  {{template "resumeradios" (dict "Lang" $.Lang "Opts" .Resume)}}
+  <div class="foot"><span class="grow"></span><button name="op" value="save" class="primary">{{t $.Lang "web.setup.save"}}</button></div>
+</form>
 
-  <h1>{{t $.Lang "web.setup.activities"}}</h1>
-  <div class="card">
-    {{range .Activities}}
-    <div class="row actrow">
-      <input type="text" name="act.{{.Index}}" value="{{.Name}}" class="grow">
-      <button name="op" value="up:{{.Index}}" title="{{t $.Lang "web.setup.up"}}"{{if .First}} disabled{{end}} class="iconbtn">{{template "icon" "up"}}</button>
-      <button name="op" value="down:{{.Index}}" title="{{t $.Lang "web.setup.down"}}"{{if .Last}} disabled{{end}} class="iconbtn">{{template "icon" "down"}}</button>
-      <button name="op" value="archive:{{.Index}}" class="archbtn" title="{{t $.Lang "web.setup.archive"}}">{{template "icon" "archive"}}<span>{{t $.Lang "web.setup.archive"}}</span></button>
-    </div>
-    {{end}}
-    <div class="row actrow"><input type="text" name="newact" placeholder="{{t $.Lang "web.setup.newacts"}}" class="grow"><button name="op" value="add">{{t $.Lang "web.setup.add"}}</button></div>
-    <p class="dim">{{t $.Lang "web.setup.rename_note"}}</p>
-    {{if .Archived}}
-      <details class="archived"><summary class="dim">{{t $.Lang "web.setup.archived"}} ({{len .Archived}})</summary>
-      <p>{{range .Archived}}<button name="op" value="restore:{{.}}" title="{{t $.Lang "web.setup.restore"}}">{{template "icon" "restore"}} {{.}}</button> {{end}}</p>
-      </details>
-    {{end}}
-  </div>
-
-  {{with .Rules}}
-  <h1>{{t $.Lang "web.hat.rules"}}</h1>
-  <div class="card">
-    <p class="sub" style="margin:0 0 .4rem">{{t $.Lang "web.hat.rules_sub" .Name}}</p>
-    {{if .Lines}}<ul class="rules">{{range .Lines}}{{template "ruleline" dict "L" . "Lang" $.Lang "CanWrite" $.CanWrite}}{{end}}</ul>
-    {{else}}<p class="dim">{{t $.Lang "web.hat.rules_empty" .Name}}</p>{{end}}
-    <p class="row" style="margin:.5rem 0 0">{{if $.CanWrite}}<a class="btn" href="{{.AddHref}}">{{t $.Lang "web.rules.add"}}</a>{{end}}<span class="dim small">{{t $.Lang "web.hat.rules_where"}}</span></p>
-    <div class="also"><span class="dim">{{t $.Lang "web.hat.also" .Name}}</span>
-      {{if or .Projects .Learned}}
-      {{range .Projects}}<span class="src ticket">{{t $.Lang "web.rules.src_ticket"}} <span class="f">{{t $.Lang "web.hat.also_project"}}</span> {{.}}</span>{{end}}
-      {{if .Learned}}<span class="src learned">{{t $.Lang "web.rules.src_learned"}} <span class="f">{{.Learned}}</span></span>{{end}}
-      {{else}}<span class="dim">{{t $.Lang "web.hat.also_none"}}</span>{{end}}
-      <span class="grow"></span><a class="small" href="/setup/detection?tab=rules">{{t $.Lang "web.hat.to_rules"}}</a></div>
+<form method="post" action="/setup/hat" class="card mod">
+  <input type="hidden" name="key" value="{{.Key}}"><input type="hidden" name="part" value="activities"><input type="hidden" name="tab" value="general">
+  <button name="op" value="save" class="defaultbtn" tabindex="-1" aria-hidden="true"></button>
+  <h3>{{t $.Lang "web.setup.activities"}}</h3>
+  {{range .Activities}}
+  <div class="row actrow">
+    <input type="text" name="act.{{.Index}}" value="{{.Name}}" class="grow">
+    <button name="op" value="up:{{.Index}}" title="{{t $.Lang "web.setup.up"}}"{{if .First}} disabled{{end}} class="iconbtn">{{template "icon" "up"}}</button>
+    <button name="op" value="down:{{.Index}}" title="{{t $.Lang "web.setup.down"}}"{{if .Last}} disabled{{end}} class="iconbtn">{{template "icon" "down"}}</button>
+    <button name="op" value="archive:{{.Index}}" class="archbtn" title="{{t $.Lang "web.setup.archive"}}">{{template "icon" "archive"}}<span>{{t $.Lang "web.setup.archive"}}</span></button>
   </div>
   {{end}}
-
-  <h1>{{t $.Lang "web.setup.modules"}}</h1>
-  <p class="dim">{{t $.Lang "web.setup.modules_hat_note"}}</p>
-  {{template "modforms" .Modules}}
-
-  <p class="row"><span class="grow"></span><button name="op" value="save" class="primary">{{t $.Lang "web.setup.save"}}</button></p>
+  <div class="row actrow"><input type="text" name="newact" placeholder="{{t $.Lang "web.setup.newacts"}}" class="grow"><button name="op" value="add">{{t $.Lang "web.setup.add"}}</button></div>
+  {{if .Archived}}
+    <details class="archived"><summary class="dim">{{t $.Lang "web.setup.archived"}} ({{len .Archived}})</summary>
+    <p>{{range .Archived}}<button name="op" value="restore:{{.}}" title="{{t $.Lang "web.setup.restore"}}">{{template "icon" "restore"}} {{.}}</button> {{end}}</p>
+    </details>
+  {{end}}
+  <div class="foot"><details class="more"><summary>{{t $.Lang "web.setup.more"}}</summary><p class="dim">{{t $.Lang "web.setup.rename_note"}}</p></details><span class="grow"></span><button name="op" value="save" class="primary">{{t $.Lang "web.setup.save"}}</button></div>
 </form>
+
+{{with .Rules}}
+<div class="card mod">
+  <h3>{{t $.Lang "web.hat.rules"}}</h3>
+  <p class="why1">{{t $.Lang "web.hat.rules_sub" .Name}}</p>
+  {{if .Lines}}<ul class="rules">{{range .Lines}}{{template "ruleline" dict "L" . "Lang" $.Lang "CanWrite" $.CanWrite}}{{end}}</ul>
+  {{else}}<p class="dim">{{t $.Lang "web.hat.rules_empty" .Name}}</p>{{end}}
+  <p class="row" style="margin:.5rem 0 0">{{if $.CanWrite}}<a class="btn" href="{{.AddHref}}">{{t $.Lang "web.rules.add"}}</a>{{end}}<span class="dim small">{{t $.Lang "web.hat.rules_where"}}</span></p>
+  <div class="also"><span class="dim">{{t $.Lang "web.hat.also" .Name}}</span>
+    {{if or .Projects .Learned}}
+    {{range .Projects}}<span class="src ticket">{{t $.Lang "web.rules.src_ticket"}} <span class="f">{{t $.Lang "web.hat.also_project"}}</span> {{.}}</span>{{end}}
+    {{if .Learned}}<span class="src learned">{{t $.Lang "web.rules.src_learned"}} <span class="f">{{.Learned}}</span></span>{{end}}
+    {{else}}<span class="dim">{{t $.Lang "web.hat.also_none"}}</span>{{end}}
+    <span class="grow"></span><a class="small" href="/setup/detection?tab=rules">{{t $.Lang "web.hat.to_rules"}}</a></div>
+</div>
+{{end}}
+{{else}}
+<p class="sub">{{t $.Lang "web.setup.modules_hat_note"}}</p>
+{{template "modcards" (dict "Lang" $.Lang "Mods" .Shown "Action" "/setup/hat" "Key" .Key "Tab" .Tab)}}
+{{end}}
 </div>
 {{end}}
 {{end}}

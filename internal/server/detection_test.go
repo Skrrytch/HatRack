@@ -93,7 +93,7 @@ func TestSensorsSave(t *testing.T) {
 			f.Set("on."+o, "1")
 		}
 		r, _ := b.do("POST", "/setup/grants", f)
-		if r.StatusCode != 303 || r.Header.Get("Location") != "/setup/grants#basics" {
+		if r.StatusCode != 303 || r.Header.Get("Location") != "/setup/grants?tab=basics&saved=1" {
 			t.Fatalf("save: %d %s", r.StatusCode, r.Header.Get("Location"))
 		}
 	}
@@ -138,7 +138,7 @@ func TestDetectionTabs(t *testing.T) {
 		}
 	}
 	// old links lead to the page Freigaben
-	for q, want := range map[string]string{"?tab=sensors": "/setup/grants#basics", "?tab=privacy": "/setup/grants#privacy"} {
+	for q, want := range map[string]string{"?tab=sensors": "/setup/grants?tab=basics", "?tab=privacy": "/setup/grants?tab=basics#privacy"} {
 		r, _ := b.do("GET", "/setup/detection"+q, nil)
 		if r.StatusCode != http.StatusMovedPermanently || r.Header.Get("Location") != want {
 			t.Errorf("%s: %d %s", q, r.StatusCode, r.Header.Get("Location"))

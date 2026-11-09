@@ -29,14 +29,9 @@ var detTabs = []struct{ ID, Key string }{
 	{"rules", "web.detection.tab_rules"},
 }
 
-type detTab struct {
-	ID, Title string
-	On        bool
-}
-
 type detectionView struct {
 	Tab       string // the tab shown
-	Tabs      []detTab
+	Tabs      []pageTab
 	Devices   []detDevice // the matrix columns
 	Rows      []detRow    // the matrix rows
 	DeviceIDs string      // the columns, comma-separated
@@ -164,10 +159,10 @@ func detectionOverview(lang string, o core.Observe, devs []store.Device) string 
 func (s *Server) detectionPage(w http.ResponseWriter, r *http.Request, acc access) {
 	switch r.URL.Query().Get("tab") {
 	case "sensors": // moved to the page Freigaben; old links still work
-		http.Redirect(w, r, "/setup/grants#basics", http.StatusMovedPermanently)
+		http.Redirect(w, r, "/setup/grants?tab=basics", http.StatusMovedPermanently)
 		return
 	case "privacy":
-		http.Redirect(w, r, "/setup/grants#privacy", http.StatusMovedPermanently)
+		http.Redirect(w, r, "/setup/grants?tab=basics#privacy", http.StatusMovedPermanently)
 		return
 	}
 	ctx := r.Context()
@@ -181,7 +176,7 @@ func (s *Server) detectionPage(w http.ResponseWriter, r *http.Request, acc acces
 		}
 	}
 	for _, t := range detTabs {
-		d.Tabs = append(d.Tabs, detTab{t.ID, i18n.In(lang, t.Key), t.ID == d.Tab})
+		d.Tabs = append(d.Tabs, pageTab{ID: t.ID, Href: "/setup/detection?tab=" + t.ID, Title: i18n.In(lang, t.Key), On: t.ID == d.Tab})
 	}
 	cfg, _, err := s.st.GetConfig(ctx)
 	if err != nil {

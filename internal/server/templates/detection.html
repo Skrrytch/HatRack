@@ -1,9 +1,7 @@
 {{define "content"}}
 {{with .Detection}}
-<nav class="crumbs"><a href="/setup">{{template "icon" "back"}} {{t $.Lang "web.nav.setup"}}</a> <span class="dim">/</span> <span>{{t $.Lang "web.sensor.title"}}</span></nav>
-<h1>{{t $.Lang "web.sensor.title"}}</h1>
-<p class="lead">{{t $.Lang "web.detection.lead"}}</p>
-<nav class="subtabs">{{range .Tabs}}<a href="/setup/detection?tab={{.ID}}"{{if .On}} class="on" aria-current="page"{{end}}>{{.Title}}</a>{{end}}</nav>
+{{template "pagehead" (dict "Lang" $.Lang "Title" (t $.Lang "web.sensor.title") "Lead" (t $.Lang "web.detection.lead"))}}
+{{template "subtabs" .Tabs}}
 
 {{if eq .Tab "idle"}}
 {{with .Idle}}

@@ -20,6 +20,8 @@ import (
 // (docs/auto-detection.md, 1b).
 
 type grantsView struct {
+	Tab     string // basics, more, history
+	Tabs    []pageTab
 	Cards   []grantCard
 	History []grantLogRow
 }
@@ -100,6 +102,10 @@ func (s *Server) grantsView(r *http.Request, acc access, pending *pendingRevoke)
 	lang := s.langOf(r)
 	loc := s.locOf(r)
 	v := s.base(r, "grants", acc)
+	v.Grants.Tab = pickTab(r.URL.Query(), "basics", "more", "history")
+	if pending != nil {
+		v.Grants.Tab = "more"
+	}
 	if r.URL.Query().Get("saved") != "" {
 		v.Msg = i18n.In(lang, "web.grants.saved")
 	}
@@ -159,6 +165,34 @@ func (s *Server) grantsView(r *http.Request, acc access, pending *pendingRevoke)
 			Change:  levelLabel(lang, e.Grant, e.Old) + " → " + levelLabel(lang, e.Grant, e.New),
 			Deleted: e.Deleted,
 		})
+	}
+	// tabs with their state
+	var basics []string
+	for _, id := range sensorIDsOf(devs) {
+		for _, dv := range devs {
+			if cfg.Observe.Enabled(dv.Name, id) {
+				basics = append(basics, tr(lang, "web.sensor."+id, id))
+				break
+			}
+		}
+	}
+	if len(basics) == 0 {
+		basics = []string{i18n.In(lang, "web.detection.sum_off")}
+	}
+	granted := 0
+	for _, c := range v.Grants.Cards {
+		if c.On {
+			granted++
+		}
+	}
+	g := &v.Grants
+	g.Tabs = []pageTab{
+		{ID: "basics", Href: "/setup/grants?tab=basics", Title: i18n.In(lang, "web.grants.basics"), Stat: strings.Join(basics, ", ")},
+		{ID: "more", Href: "/setup/grants?tab=more", Title: i18n.In(lang, "web.grants.more"), Stat: i18n.In(lang, "web.grants.tab_granted", strconv.Itoa(granted))},
+		{ID: "history", Href: "/setup/grants?tab=history", Title: i18n.In(lang, "web.grants.history"), Stat: i18n.In(lang, "web.grants.tab_changes", strconv.Itoa(len(g.History)))},
+	}
+	for i := range g.Tabs {
+		g.Tabs[i].On = g.Tabs[i].ID == g.Tab
 	}
 	return v, nil
 }
@@ -245,13 +279,13 @@ func ago(lang string, d time.Duration) string {
 
 func (s *Server) grantsAction(w http.ResponseWriter, r *http.Request, acc access) {
 	fail := func(msg string) {
-		http.Redirect(w, r, "/setup/grants?e="+url.QueryEscape(msg), http.StatusSeeOther)
+		http.Redirect(w, r, "/setup/grants?tab="+url.QueryEscape(r.PostFormValue("tab"))+"&e="+url.QueryEscape(msg), http.StatusSeeOther)
 	}
 	switch r.PostFormValue("op") {
 	case "sensors":
-		s.sensorsSave(w, r, "/setup/grants#basics", fail)
+		s.sensorsSave(w, r, "/setup/grants?tab=basics&saved=1", fail)
 	case "observe":
-		s.observeSave(w, r, "/setup/grants#privacy", fail)
+		s.observeSave(w, r, "/setup/grants?tab=basics&saved=1#privacy", fail)
 	case "grant":
 		s.grantSave(w, r, acc, fail)
 	default:
@@ -323,7 +357,7 @@ func (s *Server) grantSave(w http.ResponseWriter, r *http.Request, acc access, f
 		}
 	}
 	if len(changes) == 0 {
-		http.Redirect(w, r, "/setup/grants?saved=1#"+g.ID, http.StatusSeeOther)
+		http.Redirect(w, r, "/setup/grants?tab=more&saved=1#"+g.ID, http.StatusSeeOther)
 		return
 	}
 	next := cfg.Observe
@@ -397,10 +431,10 @@ func (s *Server) grantSave(w http.ResponseWriter, r *http.Request, acc access, f
 		}
 	}
 	if cleaned > 0 {
-		http.Redirect(w, r, "/setup/grants?cleaned="+strconv.Itoa(cleaned)+"#"+g.ID, http.StatusSeeOther)
+		http.Redirect(w, r, "/setup/grants?tab=more&cleaned="+strconv.Itoa(cleaned)+"#"+g.ID, http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/setup/grants?saved=1#"+g.ID, http.StatusSeeOther)
+	http.Redirect(w, r, "/setup/grants?tab=more&saved=1#"+g.ID, http.StatusSeeOther)
 }
 
 // applyGrantChanges returns a copy of the grants with the changes; empty

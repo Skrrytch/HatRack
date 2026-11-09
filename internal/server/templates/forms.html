@@ -9,10 +9,20 @@
 <span class="swatches" role="group" aria-label="{{t .Lang "web.setup.palette"}}">{{range palette .Lang}}<button type="button" class="swatch{{if eq .Hex $.Color}} on{{end}}" style="--s:{{.Hex}}" data-color="{{.Hex}}" data-name="{{.Name}}" title="{{.Label}}" aria-label="{{.Label}}"></button>{{end}}</span>
 {{end}}
 
-{{define "modforms"}}
-{{range .}}
-<details class="card mod">
-  <summary><strong>{{.Title}}</strong> <span class="dim">– {{.Summary}}</span>{{if .Desc}}<br><small class="dim desc">{{.Desc}}</small>{{end}}</summary>
+{{define "pagehead"}}<nav class="crumbs"><a href="/setup">{{template "icon" "back"}} {{t .Lang "web.nav.setup"}}</a> <span class="dim">/</span> <span>{{.Title}}</span></nav>
+<h1>{{.Title}}</h1>{{if .Lead}}
+<p class="lead">{{.Lead}}</p>{{end}}{{end}}
+
+{{define "subtabs"}}<nav class="subtabs">{{range .}}<a href="{{.Href}}"{{if .On}} class="on" aria-current="page"{{end}}>{{.Title}}{{if .Stat}}<span class="cnt">{{.Stat}}</span>{{end}}</a>{{end}}</nav>{{end}}
+
+{{/* modcards: one card and form per module. Expects dict Lang, Mods, Action, Key (hat key or ""), Tab. */}}
+{{define "modcards"}}{{$d := .}}
+{{range .Mods}}
+<form method="post" action="{{$d.Action}}" class="card mod" id="mod-{{.ID}}">
+  <input type="hidden" name="part" value="mods"><input type="hidden" name="mods" value="{{.ID}}"><input type="hidden" name="tab" value="{{$d.Tab}}">
+  {{if $d.Key}}<input type="hidden" name="key" value="{{$d.Key}}"><input type="hidden" name="op" value="save">{{end}}
+  <h3>{{.Title}} <span class="state{{if .Set}} on{{end}}">{{.Summary}}</span></h3>
+  {{if .Desc}}<p class="why1">{{.Desc}}</p>{{end}}
   <div class="fields">
   {{range .Fields}}
     <label>{{.Label}}{{if .Required}} *{{end}}
@@ -36,8 +46,8 @@
     {{end}}
   {{end}}
   </div>
-  {{if .Extra}}<p class="dim">{{.ExtraNote}}</p><pre>{{.Extra}}</pre>{{end}}
-</details>
+  <div class="foot">{{if .Extra}}<details class="more"><summary>{{t $d.Lang "web.setup.more"}}</summary><p class="dim">{{.ExtraNote}}</p><pre>{{.Extra}}</pre></details>{{end}}<span class="grow"></span><button class="primary">{{t $d.Lang "web.setup.save"}}</button></div>
+</form>
 {{end}}
 {{end}}
 

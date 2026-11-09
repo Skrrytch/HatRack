@@ -1040,7 +1040,7 @@ func (s *Server) renderRulesFailure(w http.ResponseWriter, r *http.Request, acc 
 	d := &v.Detection
 	d.Tab = "rules"
 	for _, t := range detTabs {
-		d.Tabs = append(d.Tabs, detTab{t.ID, i18n.In(v.Lang, t.Key), t.ID == d.Tab})
+		d.Tabs = append(d.Tabs, pageTab{ID: t.ID, Href: "/setup/detection?tab=" + t.ID, Title: i18n.In(v.Lang, t.Key), On: t.ID == d.Tab})
 	}
 	cur, _, err := s.st.GetConfig(r.Context())
 	if err != nil {

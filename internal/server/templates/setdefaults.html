@@ -1,25 +1,28 @@
 {{define "content"}}
 {{with .Defaults}}
-<p class="nav2"><a class="btn" href="/setup">{{template "icon" "back"}} {{t $.Lang "web.nav.setup"}}</a><span class="t">{{t $.Lang "web.setup.defaults"}}</span><span style="width:5rem"></span></p>
+{{template "pagehead" (dict "Lang" $.Lang "Title" (t $.Lang "web.setup.defaults") "Lead" (t $.Lang "web.setup.defaults_lead"))}}
 {{if .Saved}}<div class="ok">{{t $.Lang "web.setup.saved"}}</div>{{end}}
-<form method="post" action="/setup/defaults">
-  <button class="defaultbtn" tabindex="-1" aria-hidden="true"></button>
-  <div class="card">
-    {{template "resumeradios" (dict "Lang" $.Lang "Opts" .Resume)}}
-  </div>
-  <h1>{{t $.Lang "web.setup.workhours"}}</h1>
-  <div class="card">
-    <div class="namerow">
-      <label>{{t $.Lang "web.day.from"}}<input type="time" name="work_start" value="{{.WorkStart}}" required></label>
-      <label>{{t $.Lang "web.day.to"}}<input type="time" name="work_end" value="{{.WorkEnd}}" required></label>
-    </div>
-    <div class="days">{{range .WorkDays}}<label><input type="checkbox" name="work_day" value="{{.Value}}"{{if .Selected}} checked{{end}}> {{.Label}}</label>{{end}}</div>
-    <p class="dim small">{{t $.Lang "web.setup.workhours_note"}}</p>
-  </div>
-  <h1>{{t $.Lang "web.setup.modules_def"}}</h1>
-  <p class="dim">{{t $.Lang "web.setup.modules_def_note"}}</p>
-  {{template "modforms" .Modules}}
-  <p class="row"><span class="grow"></span><button class="primary">{{t $.Lang "web.setup.save"}}</button></p>
+{{template "subtabs" .Tabs}}
+{{if eq .Tab "general"}}
+<form method="post" action="/setup/defaults" class="card mod">
+  <input type="hidden" name="part" value="resume"><input type="hidden" name="tab" value="general">
+  <h3>{{t $.Lang "web.setup.resume_title"}}</h3>
+  {{template "resumeradios" (dict "Lang" $.Lang "Opts" .Resume)}}
+  <div class="foot"><span class="grow"></span><button class="primary">{{t $.Lang "web.setup.save"}}</button></div>
 </form>
+<form method="post" action="/setup/defaults" class="card mod">
+  <input type="hidden" name="part" value="work"><input type="hidden" name="tab" value="general">
+  <h3>{{t $.Lang "web.setup.workhours"}}</h3>
+  <p class="why1">{{t $.Lang "web.setup.workhours_note"}}</p>
+  <div class="namerow">
+    <label>{{t $.Lang "web.day.from"}}<input type="time" name="work_start" value="{{.WorkStart}}" required></label>
+    <label>{{t $.Lang "web.day.to"}}<input type="time" name="work_end" value="{{.WorkEnd}}" required></label>
+  </div>
+  <div class="days">{{range .WorkDays}}<label><input type="checkbox" name="work_day" value="{{.Value}}"{{if .Selected}} checked{{end}}> {{.Label}}</label>{{end}}</div>
+  <div class="foot"><span class="grow"></span><button class="primary">{{t $.Lang "web.setup.save"}}</button></div>
+</form>
+{{else}}
+{{template "modcards" (dict "Lang" $.Lang "Mods" .Shown "Action" "/setup/defaults" "Key" "" "Tab" .Tab)}}
+{{end}}
 {{end}}
 {{end}}

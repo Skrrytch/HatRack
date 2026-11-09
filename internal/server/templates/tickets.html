@@ -1,7 +1,5 @@
 {{define "content"}}
-<nav class="crumbs"><a href="/setup">{{template "icon" "back"}} {{t $.Lang "web.nav.setup"}}</a> <span class="dim">/</span> <span>{{t $.Lang "web.tickets.title"}}</span></nav>
-<h1>{{t $.Lang "web.tickets.title"}}</h1>
-<p class="lead">{{t $.Lang "web.setup.t_tickets"}}</p>
+{{template "pagehead" (dict "Lang" $.Lang "Title" (t $.Lang "web.tickets.title") "Lead" (t $.Lang "web.setup.t_tickets"))}}
 {{with .Setup}}
 <div class="card">
   <p class="dim small" style="margin-top:0">{{t $.Lang "web.tickets.intro"}}</p>

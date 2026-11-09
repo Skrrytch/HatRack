@@ -489,3 +489,18 @@ table.hist th{font-weight:600;border-bottom:1px solid var(--line)}
 .tile .need{display:inline-block;margin-top:.5rem;font-size:.76rem;font-weight:700;color:#a5531a;background:color-mix(in srgb,#f0a050 16%,transparent);border-radius:1rem;padding:.05rem .55rem}
 @media (max-width:760px){.tiles.flowtiles,.tiles.two{grid-template-columns:1fr}.tiles .arrow{display:none}.stepsub{margin-left:0}}
 .step + details.yaml{margin-top:.5rem}
+
+/* ---- one pattern for setup pages: tabs with state, a card per thing ---- */
+.subtabs a .cnt{font-weight:500;color:var(--dim);font-size:.8rem;margin-left:.35rem}
+.card.mod{margin-bottom:1rem}
+.card.mod h3{margin:0;font-size:1rem}
+.card.mod .why1{color:var(--dim);font-size:.88rem;margin:.15rem 0 .6rem}
+.card.mod .state{font-size:.74rem;font-weight:600;border-radius:1rem;padding:.05rem .55rem;background:var(--soft);color:var(--dim);margin-left:.4rem;vertical-align:middle}
+.card.mod .state.on{background:color-mix(in srgb,#3a3 15%,transparent);color:#2a7a2a}
+.card.mod .fields{margin:.6rem 0}
+.card.mod .foot{display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;border-top:1px dashed var(--perf);padding-top:.6rem;margin-top:.6rem}
+.card.mod .foot .grow{flex:1}
+.card.mod details.more summary{cursor:pointer;color:var(--dim);font-weight:600;font-size:.88rem}
+.card.mod details.more pre{white-space:pre-wrap}
+.allgrants .dim{font-size:.88rem}
+.never + .subtabs{margin-top:1.2rem}

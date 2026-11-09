@@ -52,14 +52,14 @@ func TestGrantTexts(t *testing.T) {
 
 func TestGrantsPageShowsReadyGrantsOnly(t *testing.T) {
 	_, b := setupBrowser(t)
-	_, out := b.do("GET", "/setup/grants", nil)
+	_, out := b.do("GET", "/setup/grants?tab=more", nil)
 	if !strings.Contains(out, `id="workdir"`) {
 		t.Error("the ready grant workdir is missing")
 	}
 	if strings.Contains(out, `id="ai_sessions"`) {
 		t.Error("a grant without its reader is shown")
 	}
-	if !strings.Contains(out, "No changes to permissions yet") {
+	if _, out := b.do("GET", "/setup/grants?tab=history", nil); !strings.Contains(out, "No changes to permissions yet") {
 		t.Error("history")
 	}
 	// the setup overview links both pages
@@ -128,14 +128,14 @@ func TestGrantSave(t *testing.T) {
 		r, out := b.do("POST", "/setup/grants", f)
 		return r.Header.Get("Location"), out
 	}
-	_, out := b.do("GET", "/setup/grants", nil)
+	_, out := b.do("GET", "/setup/grants?tab=more", nil)
 	for _, want := range []string{`id="workdir"`, "Working directory and branch", "For every permission", "needs “Working directory and branch”", "Active window is off there",
 		`<p class="risk"><b>Risk:</b>`, `<details class="more">`, "What does HatRack read, what for, what is stored?"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("page lacks %q", want)
 		}
 	}
-	if loc, _ := save(core.GrantWorkdir, core.LevelKnownKeys, nil, laptop); !strings.HasPrefix(loc, "/setup/grants?saved=1") {
+	if loc, _ := save(core.GrantWorkdir, core.LevelKnownKeys, nil, laptop); !strings.HasPrefix(loc, "/setup/grants?tab=more&saved=1") {
 		t.Fatalf("grant: %s", loc)
 	}
 	if g := config(t, e).Observe.Grants; g["laptop"][core.GrantWorkdir] != core.LevelKnownKeys || g["desk"] != nil {
@@ -144,7 +144,7 @@ func TestGrantSave(t *testing.T) {
 	save(core.GrantAISessions, core.LevelOn, nil, laptop)
 	// data that the grants allow
 	e.postObs(e.obs("window", -10, core.Attrs{"app": "kitty", core.AttrRepo: "shop", core.AttrBranch: "feature/ACME-1", core.AttrBranchSrc: "proc"}))
-	_, out = b.do("GET", "/setup/grants", nil)
+	_, out = b.do("GET", "/setup/grants?tab=more", nil)
 	if !strings.Contains(out, "given · 1 of 2 computers") || !strings.Contains(out, "last used 10 min ago") {
 		t.Errorf("status or last use missing:\n%s", out)
 	}
@@ -162,7 +162,7 @@ func TestGrantSave(t *testing.T) {
 	}
 	// keep: the grant goes, the data stays; ai_sessions goes with workdir
 	loc, _ = save(core.GrantWorkdir, core.LevelKnownKeys, url.Values{"delete": {"0"}})
-	if !strings.HasPrefix(loc, "/setup/grants?saved=1") || config(t, e).Observe.Grants != nil {
+	if !strings.HasPrefix(loc, "/setup/grants?tab=more&saved=1") || config(t, e).Observe.Grants != nil {
 		t.Fatalf("keep: %s %v", loc, config(t, e).Observe.Grants)
 	}
 	obs, _ := e.st.ObservationsBetween(context.Background(), time.Time{}, time.Time{}, "laptop", "window")
@@ -181,7 +181,7 @@ func TestGrantSave(t *testing.T) {
 	}
 	// nothing stored any more: switching off again does not ask
 	save(core.GrantWorkdir, core.LevelAll, nil, laptop)
-	if loc, _ := save(core.GrantWorkdir, core.LevelAll, nil); !strings.HasPrefix(loc, "/setup/grants?saved=1") {
+	if loc, _ := save(core.GrantWorkdir, core.LevelAll, nil); !strings.HasPrefix(loc, "/setup/grants?tab=more&saved=1") {
 		t.Fatalf("asked without data: %s", loc)
 	}
 	// the history names every change, newest first
@@ -193,7 +193,7 @@ func TestGrantSave(t *testing.T) {
 	if !log[2].Deleted || log[2].Old != core.LevelAll || log[2].New != "" {
 		t.Errorf("delete not recorded: %+v", log[2])
 	}
-	_, out = b.do("GET", "/setup/grants", nil)
+	_, out = b.do("GET", "/setup/grants?tab=history", nil)
 	if !strings.Contains(out, "all branches → off") || !strings.Contains(out, ">deleted<") {
 		t.Errorf("history not shown:\n%s", out)
 	}
