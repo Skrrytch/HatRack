@@ -77,19 +77,24 @@
 {{end}}
 </div>
 
-<h1>{{t $.Lang "web.rules.global"}}</h1>
-<p class="sub">{{t $.Lang "web.rules.global_sub"}}</p>
+<h1 id="regeln">{{t $.Lang "web.rules.all"}}</h1>
+<p class="sub">{{t $.Lang "web.rules.all_sub"}}</p>
 <div class="card">
-  {{if .Global}}
-  <ul class="rules">{{range .Global}}{{template "ruleline" dict "L" . "Lang" $.Lang "CanWrite" $.CanWrite}}{{end}}</ul>
-  {{else}}<p class="dim">{{t $.Lang "web.rules.global_empty"}}</p>{{end}}
+  <div class="rulesbar">
+    <div class="filters">{{range .RuleChips}}<a href="{{.Href}}"{{if .On}} class="on"{{end}}>{{.Label}} {{.N}}</a>{{end}}</div>
+    <form method="get" action="/setup/detection" class="sortform">
+      <input type="hidden" name="tab" value="rules">
+      <input type="hidden" name="day" value="{{.Day}}">
+      <input type="hidden" name="device" value="{{.Device}}">
+      <input type="hidden" name="rf" value="{{.RuleFilter}}">
+      <label class="small dim">{{t $.Lang "web.rules.sort"}} <select name="rs" data-submit>{{range .RuleSorts}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+      <noscript><button>{{t $.Lang "web.rules.show"}}</button></noscript>
+    </form>
+  </div>
+  {{if .RuleList}}
+  <ul class="rules">{{range .RuleList}}{{template "ruleline" dict "L" . "Lang" $.Lang "CanWrite" $.CanWrite}}{{end}}</ul>
+  {{else}}<p class="dim">{{t $.Lang "web.rules.all_empty"}}</p>{{end}}
   <p class="row" style="margin:.6rem 0 0">{{if $.CanWrite}}<a class="btn" href="{{.GlobalAdd}}">{{t $.Lang "web.rules.add"}}</a>{{end}}<button type="button" disabled title="{{t $.Lang "web.rules.templates_soon"}}">{{t $.Lang "web.rules.templates"}}</button></p>
-</div>
-
-<h1>{{t $.Lang "web.rules.hats"}}</h1>
-<div class="card row" style="gap:1.3rem">
-  {{range .HatLinks}}<a href="{{.Href}}"><span class="hatdot" style="--c:{{.Color}}"></span>{{.Name}} <span class="dim">{{.Count}}</span></a>{{end}}
-  <span class="grow dim small" style="text-align:right">{{t $.Lang "web.rules.hats_hint"}}</span>
 </div>
 
 <h1>{{t $.Lang "web.rules.learned"}}</h1>

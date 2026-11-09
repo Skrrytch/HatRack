@@ -49,11 +49,14 @@ type rulesView struct {
 	AddHref  string
 	Editor   *editorView
 
-	Global    []ruleLine
-	GlobalAdd string
-	HatLinks  []hatRuleLink
-	Learned   learnedView
-	Filter    string
+	RuleList   []ruleLine // all rules in one list, filtered and sorted
+	RuleChips  []filterLink
+	RuleSorts  []option
+	RuleSortBy string
+	RuleFilter string
+	GlobalAdd  string
+	Learned    learnedView
+	Filter     string
 }
 
 type coverPart struct {
@@ -85,20 +88,23 @@ type whyChip struct {
 type ruleLine struct {
 	Conds         []ruleCond
 	Then          string
-	Hits          string
-	Zero          bool
+	Stat          string // short label: time in the last days
+	StatHead      string // popover
+	StatBody      string
+	StatZero      bool
 	NoAct         string
 	Mode, ModeCls string
 	Edit          string // link
 	HatName       string
 	HatColor      string
+	Scope         string // hat key, or core.RulesScopeDefaults
+	Noise         bool
+	Minutes       int64 // time in the last days, for sorting
+	App, Title    string
+	Act           string
 }
 
 type ruleCond struct{ Word, Value string }
-
-type hatRuleLink struct {
-	Href, Name, Color, Count string
-}
 
 type learnedView struct {
 	Parts, Details, Projects []learnedItem
@@ -463,20 +469,35 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 	}
 
 	// rules for all hats
+	// one list of all rules: rules for all hats first, then each hat's
 	rv.GlobalAdd = base + "&ed_new=1&ed_scope=" + core.RulesScopeDefaults + "#try"
+	var all []ruleLine
 	for n, rule := range cfg.Defaults.Rules {
-		rv.Global = append(rv.Global, s.ruleLineOf(lang, cfg, nm, pal, stats, core.RulesScopeDefaults, n, rule, base))
+		all = append(all, s.ruleLineOf(lang, cfg, nm, pal, stats, core.RulesScopeDefaults, n, rule, base))
 	}
 	for _, h := range cfg.ActiveHats() {
-		c := i18n.In(lang, "web.rules.no_rules")
-		switch n := len(h.Rules); n {
-		case 0:
-		case 1:
-			c = i18n.In(lang, "web.rules.one_rule")
-		default:
-			c = i18n.In(lang, "web.rules.n_rules", strconv.Itoa(n))
+		for n, rule := range h.Rules {
+			all = append(all, s.ruleLineOf(lang, cfg, nm, pal, stats, h.Key, n, rule, base))
 		}
-		rv.HatLinks = append(rv.HatLinks, hatRuleLink{Href: "/setup/hat?key=" + url.QueryEscape(h.Key), Name: h.DisplayName(), Color: pal.color(h.Key), Count: c})
+	}
+	rv.RuleSortBy = q.Get("rs")
+	if !slices.Contains(ruleSortKeys, rv.RuleSortBy) {
+		rv.RuleSortBy = ruleSortKeys[0]
+	}
+	rv.RuleSorts = ruleSorts(lang, rv.RuleSortBy)
+	chips := ruleChips(lang, cfg, all)
+	rv.RuleFilter = q.Get("rf")
+	if !slices.ContainsFunc(chips, func(c ruleChip) bool { return c.Value == rv.RuleFilter }) {
+		rv.RuleFilter = ""
+	}
+	for _, c := range chips {
+		rv.RuleChips = append(rv.RuleChips, filterLink{Href: ruleHref(base, c.Value, rv.RuleSortBy), Label: c.Label, N: c.N, On: c.Value == rv.RuleFilter})
+	}
+	sortRules(all, rv.RuleSortBy)
+	for _, l := range all {
+		if ruleShown(l, rv.RuleFilter) {
+			rv.RuleList = append(rv.RuleList, l)
+		}
 	}
 	s.fillLearned(rv, lang, cfg, nm, pal, k)
 	return nil
@@ -916,11 +937,20 @@ func (s *Server) ruleLineOf(lang string, cfg core.Config, nm map[string]string, 
 		l.HatName, l.HatColor = nameOf(nm, scope), pal.color(scope)
 	}
 	l.Then = thenOf(lang, nm, hat, r)
-	if d := stats[core.RuleID(scope, r)]; d >= time.Minute {
-		l.Hits = i18n.In(lang, "web.rules.hits7", core.FormatDuration(d))
+	days := strconv.Itoa(ruleStatsDays)
+	d := stats[core.RuleID(scope, r)]
+	l.Minutes = int64(d / time.Minute)
+	l.StatHead = i18n.In(lang, "web.rules.stat_head", days)
+	if d >= time.Minute {
+		l.Stat = i18n.In(lang, "web.rules.stat_chip", core.FormatDuration(d), days)
+		l.StatBody = i18n.In(lang, "web.rules.stat_time", core.FormatDuration(d))
 	} else {
-		l.Hits, l.Zero = i18n.In(lang, "web.rules.hits7_none"), true
+		l.Stat, l.StatZero = i18n.In(lang, "web.rules.stat_none"), true
+		l.StatBody = i18n.In(lang, "web.rules.stat_none_body", days)
 	}
+	l.Scope, l.Noise = scope, r.Ignore
+	l.App, l.Title = r.Match[core.MatchApp], r.Match[core.MatchTitle]
+	l.Act = strings.Join(r.Activity, ", ")
 	if !r.Ignore {
 		switch r.Mode {
 		case core.ModeAuto:
@@ -949,6 +979,97 @@ func (s *Server) ruleLineOf(lang string, cfg core.Config, nm map[string]string, 
 		}
 	}
 	return l
+}
+
+// ruleSortKeys are the orders of the rule list; the first one is the default.
+var ruleSortKeys = []string{"use", "app", "title", "hat", "act"}
+
+// ruleSorts are the orders for the select, the one in use marked.
+func ruleSorts(lang, cur string) []option {
+	labels := map[string]string{"use": "web.rules.sort_use", "app": "web.rules.sort_app",
+		"title": "web.rules.sort_title", "hat": "web.rules.sort_hat", "act": "web.rules.sort_act"}
+	var out []option
+	for _, k := range ruleSortKeys {
+		out = append(out, option{Value: k, Label: i18n.In(lang, labels[k]), Selected: k == cur})
+	}
+	return out
+}
+
+// ruleChip is a filter above the rule list; Value is what ruleShown takes.
+type ruleChip struct {
+	Value, Label string
+	N            int
+}
+
+// ruleChips are: all rules, rules for all hats, noise, and one per hat that
+// has rules.
+func ruleChips(lang string, cfg core.Config, all []ruleLine) []ruleChip {
+	out := []ruleChip{{Label: i18n.In(lang, "web.rules.flt_all"), N: len(all)}}
+	ohne, noise := 0, 0
+	for _, l := range all {
+		if l.Scope == core.RulesScopeDefaults {
+			ohne++
+		}
+		if l.Noise {
+			noise++
+		}
+	}
+	out = append(out, ruleChip{"ohne", i18n.In(lang, "web.rules.flt_ohne"), ohne},
+		ruleChip{"noise", i18n.In(lang, "web.rules.flt_noise"), noise})
+	for _, h := range cfg.ActiveHats() {
+		n := 0
+		for _, l := range all {
+			if l.Scope == h.Key {
+				n++
+			}
+		}
+		if n > 0 {
+			out = append(out, ruleChip{"hat:" + h.Key, h.DisplayName(), n})
+		}
+	}
+	return out
+}
+
+// ruleShown tells whether a rule is in the filter f ("" for all).
+func ruleShown(l ruleLine, f string) bool {
+	switch {
+	case f == "ohne":
+		return l.Scope == core.RulesScopeDefaults
+	case f == "noise":
+		return l.Noise
+	case strings.HasPrefix(f, "hat:"):
+		return l.Scope == strings.TrimPrefix(f, "hat:")
+	}
+	return true
+}
+
+// sortRules orders the rules by key; the most used first comes second.
+func sortRules(rs []ruleLine, key string) {
+	text := map[string]func(ruleLine) string{
+		"app":   func(l ruleLine) string { return l.App },
+		"title": func(l ruleLine) string { return l.Title },
+		"hat": func(l ruleLine) string {
+			if l.HatName == "" {
+				return "\U0010ffff" // rules for all hats last
+			}
+			return l.HatName
+		},
+		"act": func(l ruleLine) string { return l.Act },
+	}
+	f, byText := text[key]
+	sort.SliceStable(rs, func(i, j int) bool {
+		if byText {
+			if x, y := strings.ToLower(f(rs[i])), strings.ToLower(f(rs[j])); x != y {
+				return x < y
+			}
+		}
+		return rs[i].Minutes > rs[j].Minutes
+	})
+}
+
+// ruleHref keeps the day and device of the tab and sets filter and order.
+func ruleHref(base, filter, sortKey string) string {
+	return base + "&rf=" + url.QueryEscape(filter) + "&rs=" + url.QueryEscape(sortKey) + "#regeln"
 }
 
 func (s *Server) fillLearned(rv *rulesView, lang string, cfg core.Config, nm map[string]string, pal palette, k core.Knowledge) {

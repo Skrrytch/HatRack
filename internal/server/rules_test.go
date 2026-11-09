@@ -3,6 +3,7 @@ package server
 import (
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -110,7 +111,7 @@ func TestRulesTab(t *testing.T) {
 	}
 	// lists below
 	_, out = b.do("GET", "/setup/detection?tab=rules&day=2026-11-04", nil)
-	for _, want := range []string{"If</span>", "activity development", "noise, never a suggestion", "last 7 days:", "Nothing learned yet"} {
+	for _, want := range []string{"WHEN</span>", "activity development", "noise, never a suggestion", "Last 7 days", "Nothing learned yet"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("rules list: missing %q", want)
 		}
@@ -196,7 +197,7 @@ func TestRulesEmptyStates(t *testing.T) {
 	e, b := setupBrowser(t)
 	// no window sensor on any device
 	_, out := b.do("GET", "/setup/detection?tab=rules", nil)
-	for _, want := range []string{"No windows observed yet", "To the sensors", "None yet. Typical", "Nothing learned yet"} {
+	for _, want := range []string{"No windows observed yet", "To the sensors", "No rules yet. Add the first one.", "Nothing learned yet"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q", want)
 		}
@@ -220,7 +221,7 @@ func TestHatPageRules(t *testing.T) {
 	}
 	_, out := b.do("GET", "/setup/hat?key=venom", nil)
 	for _, want := range []string{"How HatRack tells you are working on VENOM", `<code>venom</code>`, "VENOM</span>",
-		"last 7 days:", "ed_edit=venom%3A0#try", "ed_scope=venom#try", "HatRack also finds VENOM by:", "See assignment"} {
+		"Last 7 days", "ed_edit=venom%3A0#try", "ed_scope=venom#try", "HatRack also finds VENOM by:", "See assignment"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q", want)
 		}
@@ -232,5 +233,52 @@ func TestHatPageRules(t *testing.T) {
 	_, out = b.do("GET", "/setup/hat?key=tag", nil)
 	if !strings.Contains(out, "No rule yet. HatRack still finds TAG by") || !strings.Contains(out, "ed_scope=tag#try") || strings.Contains(out, "%!") {
 		t.Errorf("empty hat:\n%s", out)
+	}
+}
+
+func TestRuleListFilterAndSort(t *testing.T) {
+	all := []ruleLine{
+		{Scope: core.RulesScopeDefaults, App: "spotify", Minutes: 100},
+		{Scope: "venom", HatName: "VENOM", App: "code", Title: "billing", Act: "Implementierung", Minutes: 5},
+		{Scope: "atlas", HatName: "Atlas", App: "firefox", Title: "Confluence", Act: "Dokumentation", Minutes: 50},
+		{Scope: core.RulesScopeDefaults, Noise: true, App: "keepassxc", Minutes: 1},
+	}
+	count := func(f string) int {
+		n := 0
+		for _, l := range all {
+			if ruleShown(l, f) {
+				n++
+			}
+		}
+		return n
+	}
+	for f, want := range map[string]int{"": 4, "ohne": 2, "noise": 1, "hat:venom": 1, "hat:none": 0} {
+		if got := count(f); got != want {
+			t.Errorf("filter %q: %d rules, want %d", f, got, want)
+		}
+	}
+	order := func(key string) []string {
+		rs := append([]ruleLine(nil), all...)
+		sortRules(rs, key)
+		var out []string
+		for _, l := range rs {
+			out = append(out, l.App)
+		}
+		return out
+	}
+	if got := order("use"); !slices.Equal(got, []string{"spotify", "firefox", "code", "keepassxc"}) {
+		t.Errorf("by use: %v", got)
+	}
+	if got := order("app"); !slices.Equal(got, []string{"code", "firefox", "keepassxc", "spotify"}) {
+		t.Errorf("by app: %v", got)
+	}
+	// the rules for all hats come last when sorted by hat
+	rs := append([]ruleLine(nil), all...)
+	sortRules(rs, "hat")
+	if rs[0].HatName != "Atlas" || rs[len(rs)-1].Scope != core.RulesScopeDefaults {
+		t.Errorf("by hat: %+v", rs)
+	}
+	if ruleSorts("en", "app")[1].Selected != true {
+		t.Error("selected sort order")
 	}
 }

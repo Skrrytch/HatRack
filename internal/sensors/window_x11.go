@@ -76,11 +76,39 @@ func uint32s(b []byte) []uint32 {
 
 // windowWatch is the state of one Run.
 type windowWatch struct {
-	c      *xgb.Conn
-	root   xproto.Window
-	active xproto.Window // currently watched window, 0 for none
+	c    *xgb.Conn
+	root xproto.Window
+	// active is the window whose app and title are reported and watched:
+	// the focused window, or the window it is transient for (see ownerOf).
+	// 0 for none.
+	active xproto.Window
 
 	netActive, netWMName, utf8String, netWMPid xproto.Atom
+}
+
+// ownerOf returns the window that a focused window n is attributed to. A
+// transient window (a progress or other dialog of an application) belongs to
+// the window it is transient for, so its changing title does not split the
+// time of that window. Without a parent n stays. Chains are followed up to a
+// fixed depth; the root window and cycles end the walk.
+func ownerOf(n, root xproto.Window, transientFor func(xproto.Window) xproto.Window) xproto.Window {
+	for i := 0; i < 8 && n != 0 && n != root; i++ {
+		p := transientFor(n)
+		if p == 0 || p == root || p == n {
+			return n
+		}
+		n = p
+	}
+	return n
+}
+
+// transientFor reads WM_TRANSIENT_FOR of a window; 0 if it has none.
+func (w *windowWatch) transientFor(n xproto.Window) xproto.Window {
+	p, err := xproto.GetProperty(w.c, false, n, xproto.AtomWmTransientFor, xproto.AtomWindow, 0, 1).Reply()
+	if err != nil || p == nil || p.Format != 32 || len(p.Value) < 4 {
+		return 0
+	}
+	return xproto.Window(xgb.Get32(p.Value))
 }
 
 func (b *x11WindowBackend) Run(ctx context.Context, emit func(time.Time, core.Attrs)) error {
@@ -172,11 +200,13 @@ func (w *windowWatch) readActive() xproto.Window {
 	return xproto.Window(xgb.Get32(p.Value))
 }
 
-// setActive moves the PropertyChange selection to the new active window.
+// setActive moves the PropertyChange selection to the window the new active
+// window is attributed to (see ownerOf).
 func (w *windowWatch) setActive(n xproto.Window) {
 	if n == w.root {
 		n = 0 // unselecting on root would stop the _NET_ACTIVE_WINDOW events
 	}
+	n = ownerOf(n, w.root, w.transientFor)
 	if n == w.active {
 		return
 	}

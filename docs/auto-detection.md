@@ -82,7 +82,7 @@ its other capabilities today.
 
 | Sensor | Observes | Backends (first ones in bold) |
 |---|---|---|
-| `window` | focused window: app (`WM_CLASS` or app id), title | **X11 via `xgb`** (`_NET_ACTIVE_WINDOW`, `_NET_WM_NAME`, `WM_CLASS`; event-driven through `PropertyNotify`); GNOME Wayland via a small Shell extension that `hat setup` installs; KWin script over D-Bus; sway and Hyprland IPC |
+| `window` | focused window: app (`WM_CLASS` or app id), title | **X11 via `xgb`** (`_NET_ACTIVE_WINDOW`, `_NET_WM_NAME`, `WM_CLASS`; event-driven through `PropertyNotify`; a window with `WM_TRANSIENT_FOR`, such as a progress dialog, counts as its parent, see [decisions](decisions.md)); GNOME Wayland via a small Shell extension that `hat setup` installs; KWin script over D-Bus; sway and Hyprland IPC |
 | `idle` | inactive since, screen locked | **logind `LockedHint`**, **`org.freedesktop.ScreenSaver`/Cinnamon/GNOME screensaver signals**, **X11 MIT-SCREEN-SAVER**, Mutter `IdleMonitor`, KDE `GetSessionIdleTime`; wlroots `ext-idle-notify` later |
 | `media` | microphone capture stream active, camera open, and by which app | PipeWire (`pw-dump` JSON), PulseAudio (`pactl -f json`); camera: own processes holding `/dev/video*` (read from `/proc`, no root) |
 | `notify` | desktop notifications matching a rule | D-Bus monitor on `org.freedesktop.Notifications.Notify`; text stays in memory, only a rule's result becomes an observation |

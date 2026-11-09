@@ -234,6 +234,19 @@ func TestWindowX11(t *testing.T) {
 	expect("root", nil)
 	wm.setActive(bw)
 	expect("B after root", core.Attrs{"app": "Firefox", "title": "Postfächer"})
+	// a progress dialog transient for B belongs to B: focusing it and its
+	// changing title (the percentage) emit nothing, B's own title still counts
+	dlg := wm.newWindow()
+	tb := make([]byte, 4)
+	xgb.Put32(tb, uint32(bw))
+	wm.set(dlg, "WM_TRANSIENT_FOR", xproto.AtomWindow, 32, tb)
+	wm.setStr(dlg, "WM_NAME", xproto.AtomString, "Kopieren 37 %")
+	wm.setActive(dlg)
+	quiet("progress dialog of B")
+	wm.setStr(dlg, "WM_NAME", xproto.AtomString, "Kopieren 38 %")
+	quiet("progress dialog title")
+	wm.setStr(bw, "_NET_WM_NAME", utf8s, "Inbox 2")
+	expect("B while dialog focused", core.Attrs{"app": "Firefox", "title": "Inbox 2"})
 	wm.setActive(0)
 	expect("none", nil)
 	wm.setActive(a)
@@ -258,7 +271,7 @@ func TestWindowX11(t *testing.T) {
 	go func() {
 		result <- b.Run(ctx, func(at time.Time, a core.Attrs) { emits <- windowEmit{at, a} })
 	}()
-	expect("active at start", core.Attrs{"app": "Firefox", "title": "Postfächer"})
+	expect("active at start", core.Attrs{"app": "Firefox", "title": "Inbox 2"})
 	kill()
 	select {
 	case err := <-result:
@@ -267,5 +280,31 @@ func TestWindowX11(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("Run did not return after the server died")
+	}
+}
+
+func TestOwnerOf(t *testing.T) {
+	const root = xproto.Window(1)
+	// parent links: 10 is transient for 20, 20 for 30; 40 is transient for
+	// root (a group hint, no parent); 50 and 60 point at each other.
+	parents := map[xproto.Window]xproto.Window{10: 20, 20: 30, 40: root, 50: 60, 60: 50, 70: 70}
+	transient := func(n xproto.Window) xproto.Window { return parents[n] }
+	for _, c := range []struct {
+		name string
+		in   xproto.Window
+		want xproto.Window
+	}{
+		{"no parent stays", 30, 30},
+		{"dialog goes to its parent", 20, 30},
+		{"chain goes to the top", 10, 30},
+		{"transient for root stays", 40, 40},
+		{"cycle ends", 50, 50},
+		{"self parent stays", 70, 70},
+		{"root stays", root, root},
+		{"none", 0, 0},
+	} {
+		if got := ownerOf(c.in, root, transient); got != c.want {
+			t.Errorf("%s: ownerOf(%d) = %d, want %d", c.name, c.in, got, c.want)
+		}
 	}
 }
