@@ -188,11 +188,129 @@ only if it contains a ticket key of a known project (decided, see
 first: an `ignore` or `redact`
 app gets neither, a hat with `observe: false` neither, and folders on the new
 list `observe.ignore_paths` (e.g. `~/privat`) are never looked up. The
-sensor is off until enabled per device, like `window`.
+sensor is off until its grant is given per device (1b); it needs `window`.
 
 The classifier treats `branch` like a title from a working tool: rules may
 match it, a ticket key in it outranks one from the browser (3a), and `repo`
 counts as a title part for learning.
+
+### 1b. Grants and the security area (#19)
+
+Design note for #19, before #18. It follows product.md 7 and 8: HatRack
+reads app, title and absence once a sensor is on; everything beyond is a
+**grant**, off by default, per device, revocable. Mockup:
+[`19-security.png`](mockups/19-security.png).
+
+**Page.** Setup gets a page **Sicherheit** (`/setup/security`). It takes over
+the tabs Sensoren and Datenschutz of the page Erkennung, which keeps
+Abwesenheit and Zuordnung; old links (`?tab=sensors`, `?tab=privacy`)
+redirect. From top to bottom:
+
+1. **Privacy first:** HatRack never records what you type, say or see on
+   the screen (keystrokes, sound, screen images), and says why: assigning
+   time needs to know which program is in front, not what you do in it. The
+   message is that privacy matters to HatRack, not that a switch is missing;
+   no grant changes it.
+2. **Basics:** the sensor table (window, idle) and the lists and retention, as
+   they are today, moved unchanged.
+3. **Grants:** first, once for all, what holds for every grant: what is read
+   goes only to the own server (never the internet, MQTT or Home Assistant),
+   is visible in the Day view and the tab Zuordnung, over MCP only with a
+   token of scope `observe`, is stored only as the card says and only as long
+   as all observations, and can be revoked with deletion. Then one card per
+   grant, sorted by benefit and intrusion.
+4. **History:** the last changes to grants (when, device, from → to, data
+   deleted or kept).
+
+**One switch per thing.** A sensor whose data needs a grant has no row in the
+sensor table; the grant's switch is its only switch. `workdir` is not a
+sensor of its own but enriches window spans with `repo` and `branch`, so it
+needs the window sensor on that device; the card says so if it is off.
+
+**Catalog in the core.** `core.Grants` lists every grant: id, levels (the
+first is the default once granted), the observation attributes or sensors it
+governs, and what it needs (`workdir` needs `window`). Its card texts come
+from the catalogs, keys `grant.<id>.{title,lead,what,why,stores,risk,not_needed}`
+in both languages; a test fails if a grant lacks one. The texts explain in
+plain words what is read and what for, without naming one terminal, IDE or
+project as the case (examples use neutral keys such as `ACME-101`); a tool is
+named only where the grant is about that tool (Claude Code's session files). A grant appears on the
+page only once a ticket ships its reader; the framework does not show cards
+for sensors that do not exist.
+
+| Grant | Id | Levels | Governs | Ticket |
+|---|---|---|---|---|
+| Working directory and branch | `workdir` | `known_keys` (default), `all` | attributes `repo`, `branch` of window spans | #18 |
+| Session files of Claude Code | `ai_sessions` | `on` | `repo`, `branch` taken from the session file, only where `workdir` cannot decide | #18 |
+| Microphone and camera | `media` | `on` | sensor `media` | #5 |
+| Notification texts | `notify_text` | `calendar`, `all` | sensor `notify` (only the rule's result is stored) | #12 |
+
+`ai_sessions` needs `workdir` on the same device. "Subject lines" from the
+first list in #19 is left out: `redact` is the user's own list and starts
+empty, so a grant to lift it has no value over taking the app off the list.
+
+**Configuration.** `observe.grants`, per device, the level as text; a missing
+entry is off:
+
+```yaml
+observe:
+  grants:
+    laptop: { workdir: known_keys, ai_sessions: on }
+```
+
+It is part of the configuration, so export and import carry it.
+Validation: known grant, known level, the required grant or sensor named
+in the error if missing. `Observe.Granted(device, id) string` returns the
+level or "".
+
+**Enforcement, twice.**
+
+- *Agent:* a reader runs only while its grant is set for this device (no
+  `/proc` walk, no `HEAD` read, no D-Bus match without it). The recorder also
+  drops governed attributes in `effective()`, so a reader started in a race
+  with a revoke sends nothing.
+- *Server:* `POST /api/observations` strips governed attributes, and drops
+  spans of governed sensors, when the device has no grant; for `known_keys`
+  it keeps `branch` only if it holds a key of a registered or learned ticket
+  project. Stripped fields are counted in `skipped`. An agent that sends
+  more than its grant allows is thus never stored, also an old or broken one.
+
+**Revoke.** Switching a grant off asks one thing: delete what it stored
+(preselected) or keep it until the retention ends. Delete removes the
+governed attributes from all observations of that device
+(`store.StripObservations(device, attrs)`), or the spans of a governed
+sensor. Learned clues are computed from observations, so nothing else holds
+the data. Lowering a level (`all` → `known_keys`) applies the stricter rule
+to stored spans the same way.
+
+**History.** Grant changes are written to a small table `grant_log` (time,
+device, grant, old and new level, deleted yes/no), shown at the bottom of the
+page and kept a year. It is not part of the configuration export, because it
+describes this server, not the setup.
+
+**What the card shows.** Title, a level choice, switches per device (like the
+sensor table: also for devices that never connected, with "not available"
+where the agent reports no reader), a lead sentence, what is read, what for,
+what is stored, the risk in one line and when it helps nothing ("not needed
+if"); who sees it and how long it is kept are said once above the cards, last used per device (newest span with a
+governed attribute) and an estimate from the own data of the last 7 days,
+computed from existing observations only, nothing read in advance:
+
+| Grant | Estimate |
+|---|---|
+| `workdir` | time in terminals and IDEs (tool list of 3a) whose title has no known ticket key |
+| `ai_sessions` | time in terminal windows titled "Claude Code" or by a topic, where `workdir` found no unique result (only once `workdir` runs) |
+| `media` | time in windows of meeting apps |
+| `notify_text` | none; the card says so instead of guessing |
+
+**Not tied to one tool.** `workdir` works with any terminal, IDE or
+assistant: it follows the process of the focused window, whatever its name.
+Only two things depend on the tool and are kept apart: terminals that run
+all tabs in one process (Guake, Yakuake, GNOME Terminal, tmux and others)
+give a result only when it is unambiguous (1a), and IDEs whose child
+processes say nothing need their list of recent projects (JetBrains and VS
+Code first, others as they are found). The card texts speak of "terminals
+with several tabs" and "development environments", not of single products.
 
 ### 2. Observations
 
@@ -822,7 +940,7 @@ Following the three layers (default → hat → device):
 |---|---|
 | defaults | `rules` (ignore rules, global activity and detail rules), `prompt.*`, `reconstruct.noise`; from 6a `reconstruct.window` (60 min), `reconstruct.min_entry` (5 min), `reconstruct.memory` (15 min, also live), `live.dwell` (10 of 15 min), replacing `reconstruct.block` |
 | hat | `rules`, `observe: true \| false` |
-| device | sensors on or off (`window`, `workdir`, `media`, `notify`; `idle` on by default), in `observe.devices` |
+| device | sensors on or off (`window`; `idle` on by default), in `observe.devices`; grants with their level (`workdir`, `ai_sessions`, `media`, `notify_text`), in `observe.grants` (1b) |
 | all devices | `observe.ignore` and `observe.redact` app lists, `observe.ignore_paths` (folders `workdir` never looks up), `observe.retention_days` (default 28), `observe.idle` (`after` 5, `ask_after` 10, `stop_after` 15 min, `ask`) |
 
 Setup gets its own page **"Erkennung"** with tabs, so the settings do not
@@ -830,8 +948,8 @@ pile up on other pages; each later ticket adds a tab instead of a block:
 
 | Tab | From | Holds |
 |---|---|---|
-| Sensoren | #6 | one table, sensors × devices: switch, backend, today's numbers |
-| Datenschutz | #6 | `ignore` and `redact` lists, retention |
+| Sensoren | #6 | one table, sensors × devices: switch, backend, today's numbers; moves to the page Sicherheit with #19 (1b) |
+| Datenschutz | #6 | `ignore` and `redact` lists, retention; moves to the page Sicherheit with #19 (1b) |
 | Abwesenheit | #2 | `idle.*` thresholds, the return question |
 | Rückfragen | #3 | `prompt.*`, end of day |
 | Zuordnung | #8, #15 | how assignment works (observed → clues → suggestion, sources in three colours), the **rule test** on a real day with the reason for every row, the rule editor right above it (rules are edited only here, so every change is seen on the day at once), rules for all hats, an overview of the hats' rules, and what was learned; "Add from template" (#15) |
@@ -849,7 +967,7 @@ works without observations, nothing afterwards without rules.
 | Stage | Name | What you get | Issues |
 |---|---|---|---|
 | **MVP 7** | Observe | Idle and lock handled, return question; window titles recorded on X11; an "observed" band in the Day view and the raw spans over MCP. Booking stays manual, but you can see what you did. | #6, #2, #1, #7 |
-| **MVP 8** | Assign | Rules per hat and global, learned details and title parts, rule test in Setup, rule templates for common work tools, a toolbox of how-tos for setting tools up; repository and branch of the focused terminal or IDE. | #8, #15, new toolbox, new `workdir` sensor |
+| **MVP 8** | Assign | Rules per hat and global, learned details and title parts, rule test in Setup, rule templates for common work tools, a toolbox of how-tos for setting tools up; a security area with grants; repository and branch of the focused terminal or IDE. | #8, #15, #17, #19, #18 |
 | **MVP 9** | The reliable day | Condensing per hour with parallel entries and proposals, review in the Day view, live switching of the main task, calls for help, MCP window summary and AI proposals, day report by phases. | #4, #10, #9, #3, #11, new day report |
 | **MVP 10** | Meetings | Microphone and camera as signals, meeting rules shipped as examples, meeting names from reminder notifications. | #5, #12 |
 | **MVP 11** | More desktops | The `window` sensor on GNOME Wayland, KDE, sway, Hyprland; idle on wlroots. | #13 |
@@ -909,6 +1027,7 @@ fails its check goes to Sonnet, not back to Haiku.
 | #10 Review in Day view | Check of proposal → correction mapping | Ghost entries, accept/reject, "accept all gaps" | CSS, i18n |
 | #3 Calls for help | – (Sonnet reviews; Opus in the MVP 9 pass) | Prompt scheduling, panel review mode | Settings, i18n, docs |
 | #11 MCP blocks and proposals | Security review of the `propose` scope | Tools, scopes, Setup | Tool descriptions, tests from given cases |
+| #19 Security area, grants | Design note (1b: catalog, enforcement in agent and server, revoke and delete); security review | Page Sicherheit, move of the two tabs, `observe.grants`, server stripping, `grant_log` | Card texts from the note, i18n, tests from the acceptance list |
 | new `workdir` sensor | Short design note (what is read and stored, tab rule); privacy review | `/proc` walk, `HEAD` parsing (worktree, detached), IDE project lists, X11 pid, classifier fields `branch`, `repo` | Fake `/proc` and repository fixtures, i18n, docs |
 | new toolbox | Privacy review of the snippets (no hook that sees prompts) | Pages checked against recorded titles, link from the rule test, `setup` link in templates | Page skeletons from the table in 3c, i18n of the hints, docs |
 | new day report | – (Sonnet reviews) | Phases from the log, rounding with `Apportion`, view after a mockup | i18n, docs |
