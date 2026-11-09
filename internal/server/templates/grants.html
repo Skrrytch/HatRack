@@ -1,0 +1,121 @@
+{{define "content"}}
+<nav class="crumbs"><a href="/setup">{{template "icon" "back"}} {{t $.Lang "web.nav.setup"}}</a> <span class="dim">/</span> <span>{{t $.Lang "web.grants.title"}}</span></nav>
+<h1>{{t $.Lang "web.grants.title"}}</h1>
+<p class="lead">{{t $.Lang "web.grants.lead"}}</p>
+
+<div class="card never">
+  <span class="shield" aria-hidden="true">✓</span>
+  <div><b>{{t $.Lang "web.grants.never_title"}}</b>
+  <span class="t">{{t $.Lang "web.grants.never_text"}}</span></div>
+</div>
+
+<h1>{{t $.Lang "web.grants.basics"}}</h1>
+<p class="sub">{{t $.Lang "web.grants.basics_sub"}}</p>
+{{with .Detection}}
+<form method="post" action="/setup/grants" class="card" id="basics">
+  <input type="hidden" name="op" value="sensors">
+  <input type="hidden" name="devices" value="{{.DeviceIDs}}">
+  <input type="hidden" name="sensors" value="{{.SensorIDs}}">
+  <table class="matrix">
+    <tr><th>{{t $.Lang "web.detection.tab_sensors"}}</th>{{range .Devices}}<th>{{.Name}} <span class="dim small">{{if .Online}}{{t $.Lang "web.online"}}{{else}}{{t $.Lang "web.offline"}}{{end}}</span></th>{{end}}</tr>
+    {{range .Rows}}{{$id := .ID}}
+    <tr><td><strong>{{.Title}}</strong>{{if .Sub}}<span class="st">{{.Sub}}</span>{{end}}</td>
+      {{range .Cells}}<td class="cell"><input type="checkbox" class="sw" name="on.{{.Device}}.{{$id}}" value="1"{{if .On}} checked{{end}}{{if .Disabled}} disabled{{end}} aria-label="{{.Device}} {{$id}}">
+        {{if not .Reported}}<span class="dim">{{t $.Lang "web.detection.unknown"}}</span>
+        {{else if .OK}}<span class="okmark">✓</span> {{.Backend}}{{if .Reason}}<span class="st">{{.Reason}}</span>{{else if .Today}}<span class="st">{{.Today}}</span>{{end}}
+        {{else}}<span class="dim">{{t $.Lang "web.sensor.unavailable"}}</span>{{if .Reason}}<span class="st">{{.Reason}}</span>{{end}}{{end}}</td>{{end}}
+    </tr>
+    {{end}}
+  </table>
+  <p class="dim small row" style="margin:.6rem 0 0">{{t $.Lang "web.detection.matrix_hint"}} <button class="small">{{t $.Lang "web.setup.save"}}</button></p>
+</form>
+
+{{with .Observe}}
+<form method="post" action="/setup/grants" class="card privacy" id="privacy">
+  <input type="hidden" name="op" value="observe">
+  <p class="note">{{t $.Lang "web.observe.note"}}</p>
+  <div class="grid">
+    <div>
+      <label for="obs-ignore">{{t $.Lang "web.observe.ignore"}} <span class="dim small">{{t $.Lang "web.observe.ignore_hint"}}</span></label>
+      <textarea id="obs-ignore" name="ignore">{{.Ignore}}</textarea>
+      {{if .Recent}}<span class="chips"><span class="dim small">{{t $.Lang "web.observe.recent"}}</span>{{range .Recent}}<button type="button" class="chip" data-add="{{.}}">+ {{.}}</button>{{end}}</span>{{end}}
+    </div>
+    <div>
+      <label for="obs-redact">{{t $.Lang "web.observe.redact"}} <span class="dim small">{{t $.Lang "web.observe.redact_hint"}}</span></label>
+      <textarea id="obs-redact" name="redact">{{.Redact}}</textarea>
+    </div>
+  </div>
+  <div class="ret"><label for="obs-ret">{{t $.Lang "web.observe.retention"}}</label><input type="number" id="obs-ret" name="retention" min="1" max="365" value="{{.Retention}}"><span>{{t $.Lang "web.observe.days"}}</span><span class="dim small">{{t $.Lang "web.observe.retention_hint"}}</span></div>
+  <button class="primary">{{t $.Lang "web.setup.save"}}</button>
+</form>
+{{end}}
+
+{{end}}
+
+<h1>{{t $.Lang "web.grants.more"}}</h1>
+<p class="sub">{{t $.Lang "web.grants.more_sub"}}</p>
+{{with .Grants}}
+{{if .Cards}}
+<div class="card allgrants">
+  <b>{{t $.Lang "web.grants.common_title"}}</b>
+  <ul>
+    <li>{{t $.Lang "web.grants.common_local"}}</li>
+    <li>{{t $.Lang "web.grants.common_visible"}}</li>
+    <li>{{t $.Lang "web.grants.common_stored"}}</li>
+    <li>{{t $.Lang "web.grants.common_revoke"}}</li>
+  </ul>
+</div>
+{{range .Cards}}
+{{$g := .ID}}<form method="post" action="/setup/grants" class="card grant" id="{{.ID}}">
+  <input type="hidden" name="op" value="grant">
+  <input type="hidden" name="grant" value="{{.ID}}">
+  <input type="hidden" name="devices" value="{{.DeviceIDs}}">
+  <div class="head">
+    <div class="grow">
+      <h3>{{.Title}} <span class="pill{{if .On}} on{{end}}">{{.Status}}</span></h3>
+      <p class="why1">{{.Lead}}</p>
+    </div>
+    <div class="devs">
+      {{range .Devices}}<input type="checkbox" class="sw" name="on.{{.ID}}" value="1" id="g-{{$g}}-{{.ID}}"{{if .On}} checked{{end}}{{if .Disabled}} disabled{{end}} aria-label="{{.Name}}"><label for="g-{{$g}}-{{.ID}}"{{if .Disabled}} class="dim"{{end}}>{{.Name}}</label>
+      {{if .Note}}<span class="st">{{.Note}}</span>{{end}}{{end}}
+    </div>
+  </div>
+  <dl class="parts">
+    <dt>{{t $.Lang "web.grants.what"}}</dt><dd>{{.What}}</dd>
+    <dt>{{t $.Lang "web.grants.why"}}</dt><dd>{{.Why}}</dd>
+    <dt>{{t $.Lang "web.grants.stores"}}</dt><dd>{{.Stores}}</dd>
+    <dt>{{t $.Lang "web.grants.risk"}}</dt><dd class="risk">{{.Risk}}</dd>
+    <dt>{{t $.Lang "web.grants.not_needed"}}</dt><dd>{{.NotNeeded}}</dd>
+  </dl>
+  {{with .Revoke}}
+  <div class="revoke">
+    <b>{{.Title}}</b>
+    <label><input type="radio" name="delete" value="1" checked> {{t $.Lang "web.grants.revoke_delete"}} <span class="dim">{{.Affected}}</span></label>
+    <label><input type="radio" name="delete" value="0"> {{t $.Lang "web.grants.revoke_keep"}}</label>
+    <div class="row"><button class="danger">{{t $.Lang "web.grants.revoke_ok"}}</button><a class="btn" href="/setup/grants">{{t $.Lang "web.grants.cancel"}}</a></div>
+  </div>
+  {{end}}
+  <div class="foot">
+    {{if .Levels}}<label>{{t $.Lang "web.grants.level"}} <select name="level">{{range .Levels}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>{{end}}
+    <span class="grow"></span>
+    {{if not .Revoke}}<button>{{t $.Lang "web.setup.save"}}</button>{{end}}
+  </div>
+</form>
+{{end}}
+{{else}}
+<div class="card"><p class="dim" style="margin:0">{{t $.Lang "web.grants.none"}}</p></div>
+{{end}}
+
+<h1>{{t $.Lang "web.grants.history"}}</h1>
+<div class="card">
+  {{if .History}}
+  <table class="hist">
+    <tr><th>{{t $.Lang "web.grants.h_when"}}</th><th>{{t $.Lang "web.grants.h_device"}}</th><th>{{t $.Lang "web.grants.h_grant"}}</th><th>{{t $.Lang "web.grants.h_change"}}</th><th>{{t $.Lang "web.grants.h_data"}}</th></tr>
+    {{range .History}}<tr><td>{{.When}}</td><td>{{.Device}}</td><td>{{.Grant}}</td><td>{{.Change}}</td><td>{{if .Deleted}}{{t $.Lang "web.grants.h_deleted"}}{{else}}<span class="dim">–</span>{{end}}</td></tr>
+    {{end}}
+  </table>
+  {{else}}<p class="dim" style="margin:0">{{t $.Lang "web.grants.history_empty"}}</p>{{end}}
+  <p class="dim small" style="margin:.5rem 0 0">{{t $.Lang "web.grants.history_note"}}</p>
+</div>
+{{end}}
+{{end}}

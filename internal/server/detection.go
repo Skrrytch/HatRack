@@ -17,14 +17,14 @@ import (
 	"hatrack/internal/store"
 )
 
-// The Detection setup page: what HatRack may observe on the devices. One tab
-// per topic; a new topic is one entry in detTabs plus one template block.
+// The Detection setup page: how HatRack detects what you work on. One tab per
+// topic; a new topic is one entry in detTabs plus one template block. What it
+// may see (sensors, lists, grants) is on the page Freigaben (grants.go).
 
 // detTabs are the tabs of the page, in order (id, message key). The first one
 // is the default.
+// The sensor table and the privacy lists moved to the page Freigaben (#19).
 var detTabs = []struct{ ID, Key string }{
-	{"sensors", "web.detection.tab_sensors"},
-	{"privacy", "web.detection.tab_privacy"},
 	{"idle", "web.detection.tab_idle"},
 	{"rules", "web.detection.tab_rules"},
 }
@@ -161,6 +161,14 @@ func detectionOverview(lang string, o core.Observe, devs []store.Device) string 
 }
 
 func (s *Server) detectionPage(w http.ResponseWriter, r *http.Request, acc access) {
+	switch r.URL.Query().Get("tab") {
+	case "sensors": // moved to the page Freigaben; old links still work
+		http.Redirect(w, r, "/setup/grants#basics", http.StatusMovedPermanently)
+		return
+	case "privacy":
+		http.Redirect(w, r, "/setup/grants#privacy", http.StatusMovedPermanently)
+		return
+	}
 	ctx := r.Context()
 	lang := s.langOf(r)
 	v := s.base(r, "detection", acc)
@@ -180,16 +188,6 @@ func (s *Server) detectionPage(w http.ResponseWriter, r *http.Request, acc acces
 		return
 	}
 	switch d.Tab {
-	case "sensors":
-		err = s.fillMatrix(ctx, lang, s.locOf(r), d, cfg.Observe)
-	case "privacy":
-		now := s.Now()
-		d.Observe = observeView{
-			Ignore:    strings.Join(cfg.Observe.Ignore, "\n"),
-			Redact:    strings.Join(cfg.Observe.Redact, "\n"),
-			Retention: int(cfg.Observe.Retention() / (24 * time.Hour)),
-			Recent:    s.recentApps(ctx, cfg.Observe, now),
-		}
 	case "rules":
 		err = s.rulesTab(r, &v, cfg, r.URL.Query(), nil)
 	case "idle":
@@ -258,24 +256,18 @@ func (s *Server) detectionAction(w http.ResponseWriter, r *http.Request, acc acc
 	switch r.PostFormValue("op") {
 	case "rule.save", "rule.delete":
 		s.ruleAction(w, r, acc)
-	case "sensors":
-		tab = "sensors"
-		s.sensorsSave(w, r, tab, fail)
-	case "observe":
-		tab = "privacy"
-		s.observeSave(w, r, tab, fail)
 	case "idle":
 		tab = "idle"
-		s.idleSave(w, r, tab, fail)
+		s.idleSave(w, r, "/setup/detection?tab=idle", fail)
 	default:
-		tab = "sensors"
+		tab = detTabs[0].ID
 		fail("unknown action")
 	}
 }
 
 // sensorsSave stores the matrix. The config stays minimal: idle is stored
 // only when off, every other sensor only when on.
-func (s *Server) sensorsSave(w http.ResponseWriter, r *http.Request, tab string, fail func(string)) {
+func (s *Server) sensorsSave(w http.ResponseWriter, r *http.Request, back string, fail func(string)) {
 	ctx := r.Context()
 	devs, err := s.st.Devices(ctx)
 	if err != nil {
@@ -320,7 +312,7 @@ func (s *Server) sensorsSave(w http.ResponseWriter, r *http.Request, tab string,
 		s.configFailed(w, r, err, fail)
 		return
 	}
-	http.Redirect(w, r, "/setup/detection?tab="+tab, http.StatusSeeOther)
+	http.Redirect(w, r, back, http.StatusSeeOther)
 }
 
 // maxRecentApps is how many "recently seen" apps are offered.
@@ -368,7 +360,7 @@ func (s *Server) recentApps(ctx context.Context, o core.Observe, now time.Time) 
 }
 
 // observeSave stores the settings that apply to all devices.
-func (s *Server) observeSave(w http.ResponseWriter, r *http.Request, tab string, fail func(string)) {
+func (s *Server) observeSave(w http.ResponseWriter, r *http.Request, back string, fail func(string)) {
 	lang := s.langOf(r)
 	days, err := strconv.Atoi(strings.TrimSpace(r.PostFormValue("retention")))
 	if err != nil || days < 1 || days > core.MaxRetentionDays {
@@ -388,12 +380,12 @@ func (s *Server) observeSave(w http.ResponseWriter, r *http.Request, tab string,
 		s.configFailed(w, r, err, fail)
 		return
 	}
-	http.Redirect(w, r, "/setup/detection?tab="+tab, http.StatusSeeOther)
+	http.Redirect(w, r, back, http.StatusSeeOther)
 }
 
 // idleSave stores the absence settings. Values equal to the default are
 // stored as 0, a checked "ask" as nil, so the config stays minimal.
-func (s *Server) idleSave(w http.ResponseWriter, r *http.Request, tab string, fail func(string)) {
+func (s *Server) idleSave(w http.ResponseWriter, r *http.Request, back string, fail func(string)) {
 	lang := s.langOf(r)
 	var mins [3]int
 	for i, name := range []string{"after", "ask_after", "stop_after"} {
@@ -425,7 +417,7 @@ func (s *Server) idleSave(w http.ResponseWriter, r *http.Request, tab string, fa
 		s.configFailed(w, r, err, fail)
 		return
 	}
-	http.Redirect(w, r, "/setup/detection?tab="+tab, http.StatusSeeOther)
+	http.Redirect(w, r, back, http.StatusSeeOther)
 }
 
 func (s *Server) configFailed(w http.ResponseWriter, r *http.Request, err error, fail func(string)) {

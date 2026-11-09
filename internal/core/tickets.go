@@ -345,6 +345,33 @@ func (t Tickets) Find(text string) []TicketRef {
 	return out
 }
 
+// branchKeyRe finds key candidates in a branch name, in any case.
+var branchKeyRe = regexp.MustCompile(`(?i)\b([a-z][a-z0-9]{1,9})-([1-9][0-9]{0,6})\b`)
+
+// BranchKeys returns the keys of known projects in a branch name, upper
+// case, in order, each once. Branches join words with '/', '-' and '_' and
+// are often lower case ("feature/acme-101-login"), so the rules for titles,
+// which skip keys after '/' or before '-', do not fit.
+func (t Tickets) BranchKeys(branch string) []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(k string) {
+		if !seen[k] {
+			seen[k] = true
+			out = append(out, k)
+		}
+	}
+	for _, m := range branchKeyRe.FindAllStringSubmatch(strings.ReplaceAll(branch, "_", " "), -1) {
+		if p := strings.ToUpper(m[1]); t.Known(p) {
+			add(p + "-" + m[2])
+		}
+	}
+	for _, r := range t.Find(branch) { // pattern systems
+		add(r.Key)
+	}
+	return out
+}
+
 func overlaps(refs []TicketRef, s, e int) bool {
 	for _, r := range refs {
 		if s < r.End && r.Start < e {

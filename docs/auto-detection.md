@@ -277,7 +277,9 @@ level or "".
 - *Server:* `POST /api/observations` strips governed attributes, and drops
   spans of governed sensors, when the device has no grant; for `known_keys`
   it keeps `branch` only if it holds a key of a registered or learned ticket
-  project. Stripped fields are counted in `skipped`. An agent that sends
+  project (`Tickets.BranchKeys`: branches join words with `/`, `-` and `_`
+  and are often lower case, so the key rules for titles do not fit). Spans
+  that lost fields are counted as `stripped` in the answer. An agent that sends
   more than its grant allows is thus never stored, also an old or broken one.
 
 **Revoke.** Switching a grant off asks one thing: delete what it stored
@@ -307,6 +309,16 @@ computed from existing observations only, nothing read in advance:
 | `ai_sessions` | time in terminal windows titled "Claude Code" or by a topic, where `workdir` found no unique result (only once `workdir` runs) |
 | `media` | time in windows of meeting apps |
 | `notify_text` | none; the card says so instead of guessing |
+
+The estimates need the tool list of 3a and come with the reader of each
+grant (#18 for the first two); #19 ships the card without them.
+
+**Status (2026-11-09):** built: catalog and `observe.grants` with
+validation, filtering in the recorder and in `POST /api/observations`,
+`Tickets.BranchKeys`, the page with basics, cards, the revoke question and
+history, the old tab links redirected. Both grants have `Ready: false` until
+#18 ships the reader, so the page shows no card yet. Open: an imported
+configuration changes grants without a history entry; the estimates (#18).
 
 **Not tied to one tool.** `workdir` works with any terminal, IDE or
 assistant: it follows the process of the focused window, whatever its name.

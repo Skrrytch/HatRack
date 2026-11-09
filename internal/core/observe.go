@@ -46,6 +46,9 @@ type Observe struct {
 	Redact []string `yaml:"redact,omitempty" json:"redact,omitempty"`
 	// Devices switches sensors on or off per device.
 	Devices map[string]map[string]bool `yaml:"devices,omitempty" json:"devices,omitempty"`
+	// Grants gives a device more than app, title and absence: grant id ->
+	// level (grants.go). A missing entry is off.
+	Grants map[string]map[string]string `yaml:"grants,omitempty" json:"grants,omitempty"`
 	// Idle sets when an absence stops the clock and when it is asked about.
 	Idle Idle `yaml:"idle,omitempty" json:"idle,omitzero"`
 }
@@ -174,7 +177,7 @@ func (o Observe) Validate() error {
 			}
 		}
 	}
-	return nil
+	return o.validateGrants()
 }
 
 // Observation limits.

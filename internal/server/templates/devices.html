@@ -35,7 +35,7 @@
       {{range .Modules}}<tr><td>{{.Title}}</td><td>{{if .OK}}<span class="okmark">✓</span> {{.Backend}}{{else}}<span class="dim">{{t $.Lang "web.dev.unavailable"}}</span>{{end}}</td><td class="dim small">{{.Choices}}</td></tr>{{end}}
     </table>
     {{else}}<p class="dim small">{{t $.Lang "web.dev.nocaps"}}</p>{{end}}
-    <p class="devline"><span>{{t $.Lang "web.detection.devline" .Detection}}</span><a href="/setup/detection">{{t $.Lang "web.detection.settings"}}</a></p>
+    <p class="devline"><span>{{t $.Lang "web.detection.devline" .Detection}}</span><a href="/setup/grants">{{t $.Lang "web.detection.settings"}}</a></p>
     {{if .Errors}}
     <details class="errs"><summary>{{t $.Lang "web.dev.errors" (len .Errors)}}</summary>
       <ul>{{range .Errors}}<li><span class="ivtime">{{.When}}</span> {{.Text}}</li>{{end}}</ul>

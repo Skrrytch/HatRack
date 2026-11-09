@@ -433,3 +433,32 @@ button.link{border:0;background:none;color:var(--dim)}
 button.link:hover{color:var(--ink)}
 @media (max-width:760px){.flow{grid-template-columns:1fr}.flow .arrow{display:none}.ruleedit .line{grid-template-columns:1fr}.ruleedit .line > span{padding-top:0}.learnbox{grid-template-columns:1fr}
   table.test tr{display:grid;grid-template-columns:1fr auto;gap:.2rem .5rem;padding:.4rem 0;border-bottom:1px dashed var(--perf)}table.test td{border:0;padding:.1rem 0}table.test th{display:none}}
+
+/* ---- page Freigaben (grants) ---- */
+#privacy{margin-top:1rem}
+.never{display:flex;gap:.9rem;align-items:flex-start;border-left:4px solid #3a3}
+.never .shield{flex:none;width:2rem;height:2rem;border-radius:50%;background:color-mix(in srgb,#3a3 15%,transparent);color:#3a3;display:grid;place-items:center;font-weight:800}
+.never b{display:block}
+.never .t{color:var(--dim);font-size:.88rem}
+.allgrants{margin-bottom:1rem;font-size:.9rem}
+.allgrants ul{margin:.4rem 0 0;padding-left:1.2rem}
+.allgrants li{margin:.2rem 0}
+.grant{margin-bottom:1rem}
+.grant .head{display:flex;gap:1rem;align-items:flex-start}
+.grant h3{margin:0;font-size:1.05rem}
+.grant .why1{color:var(--dim);font-size:.9rem;margin:.1rem 0 0}
+.grant .devs{display:grid;grid-template-columns:auto auto;gap:.3rem .6rem;align-items:center;font-size:.86rem;white-space:nowrap}
+.grant .devs .st{color:var(--dim);font-size:.76rem;grid-column:2;margin-top:-.3rem}
+.grant .pill{font-size:.74rem;font-weight:700;border-radius:1rem;padding:.05rem .55rem;white-space:nowrap;background:var(--soft);color:var(--dim)}
+.grant .pill.on{background:color-mix(in srgb,#3a3 18%,transparent);color:#2a7a2a}
+dl.parts{display:grid;grid-template-columns:9.5rem 1fr;gap:.35rem 1rem;margin:.9rem 0 .6rem;font-size:.88rem}
+dl.parts dt{color:var(--dim);font-weight:600}
+dl.parts dd{margin:0}
+dl.parts dd.risk{color:#a5531a}
+.grant .foot{display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;font-size:.86rem;border-top:1px dashed var(--perf);padding-top:.6rem}
+.revoke{background:color-mix(in srgb,#f0a050 12%,var(--card));border:1px solid color-mix(in srgb,#f0a050 45%,transparent);border-radius:.7rem;padding:.7rem .9rem;font-size:.88rem;margin:.4rem 0 .7rem}
+.revoke label{display:block;margin:.25rem 0}
+table.hist{width:100%;border-collapse:collapse;font-size:.86rem}
+table.hist td,table.hist th{text-align:left;padding:.35rem .5rem;border-bottom:1px dashed var(--perf)}
+table.hist th{font-weight:600;border-bottom:1px solid var(--line)}
+@media (max-width:760px){.grant .head{flex-direction:column}dl.parts{grid-template-columns:1fr}dl.parts dd{margin-bottom:.3rem}}

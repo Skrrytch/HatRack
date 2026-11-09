@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"net/http"
 	"net/url"
 	"strings"
 	"testing"
@@ -39,7 +40,7 @@ func TestSensorMatrix(t *testing.T) {
 	e.do("POST", "/api/devices/hello", sensorCaps)
 	desk := addDevice(t, e, "desk")
 	laptop := deviceID(t, e, "laptop")
-	_, out := b.do("GET", "/setup/detection", nil)
+	_, out := b.do("GET", "/setup/grants", nil)
 	if strings.Count(out, "<th>")-1 != 2 || !strings.Contains(out, "laptop") || !strings.Contains(out, "desk") {
 		t.Fatalf("two columns:\n%s", out)
 	}
@@ -62,8 +63,8 @@ func TestSensorMatrix(t *testing.T) {
 		t.Error("backend shown")
 	}
 	// enabled but unavailable can be switched off
-	b.do("POST", "/setup/detection", url.Values{"op": {"sensors"}, "devices": {laptop}, "sensors": {"idle,window"}, "on." + laptop + ".window": {"1"}})
-	_, out = b.do("GET", "/setup/detection", nil)
+	b.do("POST", "/setup/grants", url.Values{"op": {"sensors"}, "devices": {laptop}, "sensors": {"idle,window"}, "on." + laptop + ".window": {"1"}})
+	_, out = b.do("GET", "/setup/grants", nil)
 	if strings.Contains(out, `name="on.`+laptop+`.window" value="1" checked disabled`) || strings.Contains(out, `name="on.`+laptop+`.window" value="1" disabled`) {
 		t.Error("an enabled sensor is never disabled")
 	}
@@ -71,12 +72,12 @@ func TestSensorMatrix(t *testing.T) {
 
 func TestSensorMatrixRows(t *testing.T) {
 	e, b := setupBrowser(t)
-	_, out := b.do("GET", "/setup/detection", nil)
+	_, out := b.do("GET", "/setup/grants", nil)
 	if !strings.Contains(out, "Away") || !strings.Contains(out, "Active window") || strings.Contains(out, "Microphone") {
 		t.Error("without reports: idle and window")
 	}
 	e.do("POST", "/api/devices/hello", `{"capabilities":{"sensor:media":{"available":false,"reason":"no pw-dump"}}}`)
-	_, out = b.do("GET", "/setup/detection", nil)
+	_, out = b.do("GET", "/setup/grants", nil)
 	if !strings.Contains(out, "Microphone &amp; camera") || !strings.Contains(out, "only whether, never what") {
 		t.Errorf("reported sensors join the rows:\n%s", out)
 	}
@@ -91,8 +92,8 @@ func TestSensorsSave(t *testing.T) {
 		for _, o := range on {
 			f.Set("on."+o, "1")
 		}
-		r, _ := b.do("POST", "/setup/detection", f)
-		if r.StatusCode != 303 || r.Header.Get("Location") != "/setup/detection?tab=sensors" {
+		r, _ := b.do("POST", "/setup/grants", f)
+		if r.StatusCode != 303 || r.Header.Get("Location") != "/setup/grants#basics" {
 			t.Fatalf("save: %d %s", r.StatusCode, r.Header.Get("Location"))
 		}
 	}
@@ -110,29 +111,44 @@ func TestSensorsSave(t *testing.T) {
 		t.Fatalf("defaults leave no devices map: %v", got)
 	}
 	// unknown device ids are ignored
-	r, _ := b.do("POST", "/setup/detection", url.Values{"op": {"sensors"}, "devices": {"nope"}, "sensors": {"window"}, "on.nope.window": {"1"}})
+	r, _ := b.do("POST", "/setup/grants", url.Values{"op": {"sensors"}, "devices": {"nope"}, "sensors": {"window"}, "on.nope.window": {"1"}})
 	if r.StatusCode != 303 || config(t, e).Observe.Devices != nil {
 		t.Error("unknown device")
 	}
-	if r, _ := b.do("POST", "/setup/detection", url.Values{"op": {"nope"}}); !strings.Contains(r.Header.Get("Location"), "e=") {
-		t.Error("unknown action")
+	for _, page := range []string{"/setup/detection", "/setup/grants"} {
+		if r, _ := b.do("POST", page, url.Values{"op": {"nope"}}); !strings.Contains(r.Header.Get("Location"), "e=") {
+			t.Errorf("%s: unknown action", page)
+		}
+	}
+	// the old place takes no sensor settings any more
+	if r, _ := b.do("POST", "/setup/detection", url.Values{"op": {"sensors"}, "devices": {laptop}, "sensors": {"window"}, "on." + laptop + ".window": {"1"}}); !strings.Contains(r.Header.Get("Location"), "e=") {
+		t.Error("sensors saved on the detection page")
 	}
 }
 
 func TestDetectionTabs(t *testing.T) {
 	_, b := setupBrowser(t)
-	for _, q := range []string{"", "?tab=sensors", "?tab=nope"} {
+	for _, q := range []string{"", "?tab=nope"} {
 		_, out := b.do("GET", "/setup/detection"+q, nil)
-		if !strings.Contains(out, `class="matrix"`) || strings.Contains(out, "<textarea") {
-			t.Errorf("%q: sensors tab", q)
+		if strings.Contains(out, `class="matrix"`) || strings.Contains(out, "tab=sensors") || strings.Contains(out, "tab=privacy") {
+			t.Errorf("%q: sensors or privacy still on the detection page", q)
 		}
-		if !strings.Contains(out, `<a href="/setup/detection?tab=sensors" class="on"`) {
-			t.Errorf("%q: sensors tab is marked", q)
+		if !strings.Contains(out, `<a href="/setup/detection?tab=idle" class="on"`) {
+			t.Errorf("%q: absence is the first tab", q)
 		}
 	}
-	_, out := b.do("GET", "/setup/detection?tab=privacy", nil)
-	if !strings.Contains(out, "<textarea") || strings.Contains(out, `class="matrix"`) || !strings.Contains(out, `<a href="/setup/detection?tab=privacy" class="on"`) {
-		t.Errorf("privacy tab:\n%s", out)
+	// old links lead to the page Freigaben
+	for q, want := range map[string]string{"?tab=sensors": "/setup/grants#basics", "?tab=privacy": "/setup/grants#privacy"} {
+		r, _ := b.do("GET", "/setup/detection"+q, nil)
+		if r.StatusCode != http.StatusMovedPermanently || r.Header.Get("Location") != want {
+			t.Errorf("%s: %d %s", q, r.StatusCode, r.Header.Get("Location"))
+		}
+	}
+	_, out := b.do("GET", "/setup/grants", nil)
+	for _, want := range []string{`class="matrix"`, "<textarea", `id="basics"`, `id="privacy"`, "never records what you type"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("grants page lacks %s", want)
+		}
 	}
 }
 
@@ -144,13 +160,13 @@ func TestDetectionOverview(t *testing.T) {
 	if !strings.Contains(out, "laptop: Away") || !strings.Contains(out, "kept 28 days") || strings.Contains(out, "never recorded") {
 		t.Errorf("default summary:\n%s", out)
 	}
-	b.do("POST", "/setup/detection", url.Values{"op": {"observe"}, "retention": {"7"}, "ignore": {"a\nb"}})
-	b.do("POST", "/setup/detection", url.Values{"op": {"sensors"}, "devices": {laptop}, "sensors": {"idle,window"}, "on." + laptop + ".window": {"1"}})
+	b.do("POST", "/setup/grants", url.Values{"op": {"observe"}, "retention": {"7"}, "ignore": {"a\nb"}})
+	b.do("POST", "/setup/grants", url.Values{"op": {"sensors"}, "devices": {laptop}, "sensors": {"idle,window"}, "on." + laptop + ".window": {"1"}})
 	_, out = b.do("GET", "/setup", nil)
-	if !strings.Contains(out, "laptop: Active window") || !strings.Contains(out, "2 apps never recorded") || !strings.Contains(out, "kept 7 days") || !strings.Contains(out, `href="/setup/detection"`) {
+	if !strings.Contains(out, "laptop: Active window") || !strings.Contains(out, "2 apps never recorded") || !strings.Contains(out, "kept 7 days") || !strings.Contains(out, `href="/setup/grants"`) {
 		t.Errorf("summary:\n%s", out)
 	}
-	b.do("POST", "/setup/detection", url.Values{"op": {"sensors"}, "devices": {laptop}, "sensors": {"idle,window"}})
+	b.do("POST", "/setup/grants", url.Values{"op": {"sensors"}, "devices": {laptop}, "sensors": {"idle,window"}})
 	_, out = b.do("GET", "/setup", nil)
 	if !strings.Contains(out, "all off") {
 		t.Errorf("nothing on:\n%s", out)
@@ -161,7 +177,7 @@ func TestDevicesPageSlim(t *testing.T) {
 	e, b := setupBrowser(t)
 	e.do("POST", "/api/devices/hello", sensorCaps)
 	_, out := b.do("GET", "/setup/devices", nil)
-	if !strings.Contains(out, `class="devline"`) || !strings.Contains(out, "Detection: Away") || !strings.Contains(out, `href="/setup/detection"`) {
+	if !strings.Contains(out, `class="devline"`) || !strings.Contains(out, "Detection: Away") || !strings.Contains(out, `href="/setup/grants"`) {
 		t.Errorf("devline:\n%s", out)
 	}
 	for _, not := range []string{`class="sensors"`, `class="privacy"`, `class="sw"`, "sensor:idle"} {
@@ -175,7 +191,7 @@ func TestDevicesPageSlim(t *testing.T) {
 		}
 	}
 	laptop := deviceID(t, e, "laptop")
-	b.do("POST", "/setup/detection", url.Values{"op": {"sensors"}, "devices": {laptop}, "sensors": {"idle,window"}})
+	b.do("POST", "/setup/grants", url.Values{"op": {"sensors"}, "devices": {laptop}, "sensors": {"idle,window"}})
 	if _, out := b.do("GET", "/setup/devices", nil); !strings.Contains(out, "Detection: all off") {
 		t.Error("devline when all is off")
 	}
@@ -184,7 +200,7 @@ func TestDevicesPageSlim(t *testing.T) {
 func TestObserveSave(t *testing.T) {
 	e, b := setupBrowser(t)
 	post := func(ret, ignore, redact string) *url.URL {
-		r, _ := b.do("POST", "/setup/detection", url.Values{"op": {"observe"}, "retention": {ret}, "ignore": {ignore}, "redact": {redact}})
+		r, _ := b.do("POST", "/setup/grants", url.Values{"op": {"observe"}, "retention": {ret}, "ignore": {ignore}, "redact": {redact}})
 		u, _ := url.Parse(r.Header.Get("Location"))
 		return u
 	}
@@ -199,7 +215,7 @@ func TestObserveSave(t *testing.T) {
 	if o := config(t, e).Observe; o.RetentionDays != 7 || len(o.Redact) != 0 {
 		t.Fatalf("7 days: %+v", o)
 	}
-	_, out := b.do("GET", "/setup/detection?tab=privacy", nil)
+	_, out := b.do("GET", "/setup/grants", nil)
 	if !strings.Contains(out, `name="retention" min="1" max="365" value="7"`) || !strings.Contains(out, ">x</textarea>") {
 		t.Errorf("form is prefilled:\n%s", out)
 	}
@@ -218,20 +234,20 @@ func TestObserveSave(t *testing.T) {
 func enableWindow(t *testing.T, e *env, b *browser) {
 	t.Helper()
 	id := deviceID(t, e, "laptop")
-	b.do("POST", "/setup/detection", url.Values{"op": {"sensors"}, "devices": {id}, "sensors": {"idle,window"}, "on." + id + ".idle": {"1"}, "on." + id + ".window": {"1"}})
+	b.do("POST", "/setup/grants", url.Values{"op": {"sensors"}, "devices": {id}, "sensors": {"idle,window"}, "on." + id + ".idle": {"1"}, "on." + id + ".window": {"1"}})
 }
 
 func TestSensorToday(t *testing.T) {
 	e, b := setupBrowser(t)
 	e.do("POST", "/api/devices/hello", `{"capabilities":{"sensor:idle":{"backend":"logind","available":true},"sensor:window":{"backend":"x11","available":true}}}`)
-	_, out := b.do("GET", "/setup/detection", nil)
+	_, out := b.do("GET", "/setup/grants", nil)
 	if strings.Contains(out, "today ") {
 		t.Fatal("nothing today, nothing shown")
 	}
 	enableWindow(t, e, b)
 	// e.now is 12:00 UTC; spans of 5 minutes each
 	e.postObs(e.obs("idle", -10, nil), e.obs("idle", -30, nil), e.obs("window", -60, core.Attrs{"app": "firefox"}))
-	_, out = b.do("GET", "/setup/detection", nil)
+	_, out = b.do("GET", "/setup/grants", nil)
 	for _, want := range []string{"today 2 breaks, 10m", "today 5m, 1 changes"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("lacks %q", want)
@@ -247,8 +263,8 @@ func TestRecentApps(t *testing.T) {
 	old := win(-3*24*60, "oldapp")
 	priv := e.obs("window", -20, core.Attrs{core.AttrPrivate: "1"})
 	e.postObs(win(-10, "firefox"), win(-20, "firefox"), win(-40, "code"), win(-50, "Signal"), win(-60, "keepassxc"), win(-70, "mail"), old, priv)
-	b.do("POST", "/setup/detection", url.Values{"op": {"observe"}, "retention": {"28"}, "ignore": {"keepassxc"}, "redact": {"mail"}})
-	_, out := b.do("GET", "/setup/detection?tab=privacy", nil)
+	b.do("POST", "/setup/grants", url.Values{"op": {"observe"}, "retention": {"28"}, "ignore": {"keepassxc"}, "redact": {"mail"}})
+	_, out := b.do("GET", "/setup/grants", nil)
 	for _, want := range []string{`data-add="firefox"`, `data-add="code"`, `data-add="Signal"`, `data-add="oldapp"`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("lacks chip %s", want)
@@ -263,8 +279,8 @@ func TestRecentApps(t *testing.T) {
 		t.Error("most used first")
 	}
 	// listed in any case: no chip
-	b.do("POST", "/setup/detection", url.Values{"op": {"observe"}, "retention": {"28"}, "ignore": {"FIREFOX"}})
-	if _, out := b.do("GET", "/setup/detection?tab=privacy", nil); strings.Contains(out, `data-add="firefox"`) {
+	b.do("POST", "/setup/grants", url.Values{"op": {"observe"}, "retention": {"28"}, "ignore": {"FIREFOX"}})
+	if _, out := b.do("GET", "/setup/grants", nil); strings.Contains(out, `data-add="firefox"`) {
 		t.Error("case-insensitive")
 	}
 }

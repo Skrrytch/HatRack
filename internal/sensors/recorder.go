@@ -171,6 +171,11 @@ func (r *Recorder) effective(sensor string, s *state) core.Attrs {
 	if r.policy.Redacted(app) {
 		delete(a, "title")
 	}
+	// a reader started in a race with a revoke sends nothing ungranted
+	a, keep := r.policy.FilterGranted(r.device, sensor, a, nil)
+	if !keep {
+		return nil
+	}
 	if t, ok := a["title"]; ok {
 		if t = core.NormalizeTitle(t); t == "" {
 			delete(a, "title")

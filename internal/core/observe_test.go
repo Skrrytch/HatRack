@@ -131,6 +131,8 @@ observe:
   redact: [thunderbird]
   devices:
     laptop: {window: true}
+  grants:
+    laptop: {workdir: known_keys}
 hats:
   privat:
     activities: []
@@ -186,6 +188,9 @@ func TestObserveExportRoundTrip(t *testing.T) {
 	}
 	if !sameJSON(c.Observe, c2.Observe) {
 		t.Errorf("observe settings changed in round trip:\n%s", out)
+	}
+	if c2.Observe.Granted("laptop", GrantWorkdir) != LevelKnownKeys {
+		t.Errorf("grant lost in round trip:\n%s", out)
 	}
 	h, _ := c2.Hat("privat")
 	if h.Observes() {

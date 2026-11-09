@@ -41,4 +41,8 @@ func (s *Server) pruneObservations(ctx context.Context) {
 	if n > 0 {
 		log.Printf("observation retention: deleted %d spans", n)
 	}
+	// the history of grants is kept a year, independent of observations
+	if _, err := s.st.DeleteGrantLogBefore(ctx, s.Now().AddDate(-1, 0, 0)); err != nil {
+		log.Printf("grant history retention: %v", err)
+	}
 }

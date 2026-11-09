@@ -523,3 +523,20 @@ func TestRecorderCase16TitleNoise(t *testing.T) {
 	checkAttrs(t, "mail", got[1].Attrs, winAttrs("Firefox", "Mail"))
 	checkAttrs(t, "noise only", got[2].Attrs, core.Attrs{"app": "Firefox"})
 }
+
+// Case 17: attributes that need a grant are dropped while the device has
+// none, and kept once it is given (the agent's half of the enforcement).
+func TestRecorderCase17GrantsFilter(t *testing.T) {
+	raw := core.Attrs{"app": "kitty", "title": "zsh", core.AttrRepo: "shop", core.AttrBranch: "feature/ACME-1", core.AttrBranchSrc: "proc"}
+	r, s := newRecWith(laptopPolicy())
+	r.Emit("window", recBase, raw)
+	r.Close(recBase.Add(10 * time.Second))
+	checkAttrs(t, "without grant", s.spans()[0].Attrs, core.Attrs{"app": "kitty", "title": "zsh"})
+
+	p := laptopPolicy()
+	p.Grants = map[string]map[string]string{"laptop": {core.GrantWorkdir: core.LevelAll}}
+	r, s = newRecWith(p)
+	r.Emit("window", recBase, raw)
+	r.Close(recBase.Add(10 * time.Second))
+	checkAttrs(t, "with grant", s.spans()[0].Attrs, raw)
+}

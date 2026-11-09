@@ -80,6 +80,15 @@ CREATE TABLE IF NOT EXISTS observations (
   attrs  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS observations_start ON observations(start);
+CREATE TABLE IF NOT EXISTS grant_log (
+  ts      INTEGER NOT NULL,
+  device  TEXT NOT NULL,
+  grant_id TEXT NOT NULL,
+  old     TEXT NOT NULL DEFAULT '',
+  new     TEXT NOT NULL DEFAULT '',
+  deleted INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS grant_log_ts ON grant_log(ts);
 `
 
 // Open opens (and creates) the database file. ":memory:" is not supported;

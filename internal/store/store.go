@@ -42,6 +42,16 @@ type ObsStat struct {
 	Duration time.Duration
 }
 
+// GrantChange is one change of a grant on a device; Old and New are levels,
+// "" for off. Deleted tells whether stored data was removed with it.
+type GrantChange struct {
+	At       time.Time
+	Device   string
+	Grant    string
+	Old, New string
+	Deleted  bool
+}
+
 // Store is the storage interface of the core.
 type Store interface {
 	// AppendEvents inserts events; events whose ID exists are skipped.
@@ -99,6 +109,18 @@ type Store interface {
 	ObservationStats(ctx context.Context, from, to time.Time) (map[string]map[string]ObsStat, error)
 	// DeleteObservationsBefore removes spans that ended before t.
 	DeleteObservationsBefore(ctx context.Context, t time.Time) (int, error)
+	// FilterObservations runs f over every span of a device and stores what
+	// it returns: changed attributes are written, false deletes the span.
+	// It returns how many spans changed and how many were deleted.
+	FilterObservations(ctx context.Context, device string, f func(core.Observation) (core.Attrs, bool)) (changed, deleted int, err error)
+	// LastObservationWith returns the end of the newest span of a device that
+	// has one of the attributes, or belongs to the sensor (if not "").
+	LastObservationWith(ctx context.Context, device string, attrs []string, sensor string) (time.Time, error)
+	// AddGrantChange records a change of a grant; GrantLog returns the
+	// changes since a time, newest first; DeleteGrantLogBefore prunes.
+	AddGrantChange(ctx context.Context, c GrantChange) error
+	GrantLog(ctx context.Context, since time.Time) ([]GrantChange, error)
+	DeleteGrantLogBefore(ctx context.Context, t time.Time) (int, error)
 	// HatUsed reports whether any event (or correction) refers to the hat.
 	HatUsed(ctx context.Context, key string) (bool, error)
 	TouchDevice(ctx context.Context, id string, caps json.RawMessage) error
