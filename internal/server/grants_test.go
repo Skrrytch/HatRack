@@ -126,7 +126,8 @@ func TestGrantSave(t *testing.T) {
 		return r.Header.Get("Location"), out
 	}
 	_, out := b.do("GET", "/setup/grants", nil)
-	for _, want := range []string{`id="workdir"`, "Working directory and branch", "For every permission", "needs “Working directory and branch”", "Active window is off there"} {
+	for _, want := range []string{`id="workdir"`, "Working directory and branch", "For every permission", "needs “Working directory and branch”", "Active window is off there",
+		`<p class="risk"><b>Risk:</b>`, `<details class="more">`, "What does HatRack read, what for, what is stored?"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("page lacks %q", want)
 		}

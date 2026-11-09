@@ -454,7 +454,13 @@ button.link:hover{color:var(--ink)}
 dl.parts{display:grid;grid-template-columns:9.5rem 1fr;gap:.35rem 1rem;margin:.9rem 0 .6rem;font-size:.88rem}
 dl.parts dt{color:var(--dim);font-weight:600}
 dl.parts dd{margin:0}
-dl.parts dd.risk{color:#a5531a}
+.grant .risk{color:#a5531a;font-size:.88rem;margin:.7rem 0 .3rem}
+.grant .risk b{font-weight:600}
+.grant details.more{margin:0 0 .6rem;font-size:.88rem}
+.grant details.more summary{cursor:pointer;color:var(--dim);font-weight:600;padding:.2rem 0}
+.grant details.more summary:hover{color:var(--ink)}
+.grant details.more[open] summary{margin-bottom:.2rem}
+.grant details.more dl.parts{margin:.4rem 0 0}
 .grant .foot{display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;font-size:.86rem;border-top:1px dashed var(--perf);padding-top:.6rem}
 .revoke{background:color-mix(in srgb,#f0a050 12%,var(--card));border:1px solid color-mix(in srgb,#f0a050 45%,transparent);border-radius:.7rem;padding:.7rem .9rem;font-size:.88rem;margin:.4rem 0 .7rem}
 .revoke label{display:block;margin:.25rem 0}

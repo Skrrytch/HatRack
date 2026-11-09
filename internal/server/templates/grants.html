@@ -80,13 +80,16 @@
       {{if .Note}}<span class="st">{{.Note}}</span>{{end}}{{end}}
     </div>
   </div>
-  <dl class="parts">
-    <dt>{{t $.Lang "web.grants.what"}}</dt><dd>{{.What}}</dd>
-    <dt>{{t $.Lang "web.grants.why"}}</dt><dd>{{.Why}}</dd>
-    <dt>{{t $.Lang "web.grants.stores"}}</dt><dd>{{.Stores}}</dd>
-    <dt>{{t $.Lang "web.grants.risk"}}</dt><dd class="risk">{{.Risk}}</dd>
-    <dt>{{t $.Lang "web.grants.not_needed"}}</dt><dd>{{.NotNeeded}}</dd>
-  </dl>
+  <p class="risk"><b>{{t $.Lang "web.grants.risk"}}:</b> {{.Risk}}</p>
+  <details class="more">
+    <summary>{{t $.Lang "web.grants.details"}}</summary>
+    <dl class="parts">
+      <dt>{{t $.Lang "web.grants.what"}}</dt><dd>{{.What}}</dd>
+      <dt>{{t $.Lang "web.grants.why"}}</dt><dd>{{.Why}}</dd>
+      <dt>{{t $.Lang "web.grants.stores"}}</dt><dd>{{.Stores}}</dd>
+      <dt>{{t $.Lang "web.grants.not_needed"}}</dt><dd>{{.NotNeeded}}</dd>
+    </dl>
+  </details>
   {{with .Revoke}}
   <div class="revoke">
     <b>{{.Title}}</b>

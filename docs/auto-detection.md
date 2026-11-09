@@ -297,9 +297,12 @@ describes this server, not the setup.
 
 **What the card shows.** Title, a level choice, switches per device (like the
 sensor table: also for devices that never connected, with "not available"
-where the agent reports no reader), a lead sentence, what is read, what for,
-what is stored, the risk in one line and when it helps nothing ("not needed
-if"); who sees it and how long it is kept are said once above the cards, last used per device (newest span with a
+where the agent reports no reader), a lead sentence and the risk in one line,
+always visible; folded below them ("What does HatRack read, what for, what
+is stored?", a plain `<details>`) what is read, what for, what is stored and
+when it helps nothing ("not needed if"), so the page stays short and the
+explanation is one click away; who sees it and how long it is kept are said
+once above the cards, last used per device (newest span with a
 governed attribute) and an estimate from the own data of the last 7 days,
 computed from existing observations only, nothing read in advance:
 
