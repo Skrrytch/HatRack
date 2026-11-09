@@ -75,21 +75,14 @@ func (s *Server) knowledge(r *http.Request) (core.Knowledge, ruleStats, error) {
 // rule that is named in a reason.
 func statsOf(cfg core.Config, k core.Knowledge, tk core.Tickets, obs []core.Observation, now time.Time) ruleStats {
 	from := now.Add(-ruleStatsDays * 24 * time.Hour)
-	var window, idle []core.Observation
+	var recent []core.Observation
 	for _, o := range obs {
-		if !o.End.After(from) {
-			continue
-		}
-		switch o.Sensor {
-		case "window":
-			window = append(window, o)
-		case "idle":
-			idle = append(idle, o)
+		if o.End.After(from) {
+			recent = append(recent, o)
 		}
 	}
-	cls := core.NewClassifier(cfg, k, tk)
 	out := ruleStats{}
-	for _, o := range core.ActiveSpans(window, idle) {
+	for _, o := range core.ReadDay(recent, nil, core.NewClassifier(cfg, k, tk)) {
 		start := o.Start
 		if start.Before(from) {
 			start = from
@@ -98,7 +91,7 @@ func statsOf(cfg core.Config, k core.Knowledge, tk core.Tickets, obs []core.Obse
 			continue
 		}
 		seen := map[string]bool{}
-		for _, why := range cls.Classify(o.Attrs).Why {
+		for _, why := range o.Cand.Why {
 			if why.Source == core.SourceRule && !seen[why.Ref] {
 				seen[why.Ref] = true
 				out[why.Ref] += o.End.Sub(start)

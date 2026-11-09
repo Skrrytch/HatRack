@@ -309,6 +309,9 @@ func Intervals(events []Event, now time.Time) []Interval {
 // through (clicking through hats), not as work.
 const FleetingMax = time.Minute
 
+// Fleeting reports a closed entry shorter than FleetingMax.
+func (i Interval) Fleeting() bool { return !i.Open && i.Duration() < FleetingMax }
+
 // Settle hands the time of fleeting entries (closed, shorter than
 // FleetingMax) to the entry that directly follows; with a gap after them
 // they are dropped. Reports use it, so lists, totals, CSV and MCP agree. Edits

@@ -158,7 +158,7 @@ func obsClock(day, start, end time.Time) (string, string) {
 func obsWhat(iv []core.Interval, t time.Time) string {
 	prev := ""
 	for _, i := range iv {
-		if fleeting(i) {
+		if i.Fleeting() {
 			continue
 		}
 		if !i.Start.After(t) && (i.Open || i.End.After(t)) {
@@ -405,7 +405,7 @@ func obsHours(day time.Time, rows []obsRow, used [24]bool, iv []core.Interval, p
 		}
 		hr.Many = len(hr.Lines) > 1
 		for _, i := range iv {
-			if fleeting(i) {
+			if i.Fleeting() {
 				continue
 			}
 			if l, w, ok := place(i.Start, i.End); ok {

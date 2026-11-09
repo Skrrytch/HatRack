@@ -27,8 +27,6 @@ const (
 	maxLearned   = 8
 	testMergeGap = time.Minute
 	recentDays   = 7
-	surePct      = 0.9
-	likelyPct    = 0.6
 	editorFields = "ed_scope ed_app ed_title ed_act ed_acts ed_detail ed_ignore ed_mode ed_prio ed_edit ed_id ed_booked ed_notification ed_media ed_new"
 )
 
@@ -455,26 +453,17 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 		if err != nil {
 			return err
 		}
-		var window, idle []core.Observation
-		for _, o := range obsClip(day, next, obs) {
-			if o.Sensor == "window" {
-				window = append(window, o)
-			} else {
-				idle = append(idle, o)
-			}
-		}
-		spans := core.ActiveSpans(window, idle)
-		if len(spans) == 0 {
-			rv.EmptyDay = true
-		}
 		active := cls
 		if try != nil {
 			active = try
 		}
-		s.fillRows(rv, lang, loc, cfg, nm, pal, tk, k, spans, iv, cls, active, hitID, base, tried, d, try != nil)
+		reads := core.ReadDay(obsClip(day, next, obs), iv, active)
+		if len(reads) == 0 {
+			rv.EmptyDay = true
+		}
+		s.fillRows(rv, lang, loc, cfg, nm, pal, tk, k, reads, cls, hitID, base, tried, d, try != nil)
 	}
 
-	// rules for all hats
 	// one list of all rules: rules for all hats first, then each hat's
 	rv.GlobalAdd = base + "&ed_new=1&ed_scope=" + core.RulesScopeDefaults + "#try"
 	var all []ruleLine
@@ -528,58 +517,31 @@ func (s *Server) editorOf(lang string, cfg core.Config, nm map[string]string, d 
 	return e
 }
 
-// bookedHat is the hat booked at t, or "".
-func bookedHat(iv []core.Interval, t time.Time) string {
-	for _, i := range iv {
-		if fleeting(i) {
-			continue
-		}
-		if !i.Start.After(t) && (i.Open || i.End.After(t)) {
-			return i.Hat
-		}
-	}
-	return ""
-}
-
+// rawSpan is a read span of the rule test; base is its candidate without
+// the rule being tried.
 type rawSpan struct {
-	o      core.Observation
-	cand   core.Candidate
-	base   core.Candidate
-	booked string
+	o       core.Observation
+	cand    core.Candidate
+	base    core.Candidate
+	booked  string
+	differs bool
 }
 
 var ticketLike = regexp.MustCompile(`\b[A-Z][A-Z0-9]{1,9}-[0-9]+\b`)
 var fileTail = regexp.MustCompile(`\.[A-Za-z0-9]{1,5}$`)
 
 func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg core.Config, nm map[string]string, pal palette, tk core.Tickets, k core.Knowledge,
-	spans []core.Observation, iv []core.Interval, base, cls *core.Classifier, hitID, link string, tried core.Rule, d draft, trying bool) {
+	reads []core.ReadSpan, base *core.Classifier, hitID, link string, tried core.Rule, d draft, trying bool) {
 	var raw []rawSpan
-	for _, o := range spans {
-		mid := o.Start.Add(o.End.Sub(o.Start) / 2)
-		sp := rawSpan{o: o, cand: cls.Classify(o.Attrs), booked: bookedHat(iv, mid)}
-		sp.base = sp.cand
+	for _, r := range reads {
+		sp := rawSpan{o: r.Observation, cand: r.Cand, base: r.Cand, booked: r.Booked, differs: r.Differs()}
 		if trying {
-			sp.base = base.Classify(o.Attrs)
+			sp.base = base.Classify(r.Attrs)
 		}
 		raw = append(raw, sp)
 	}
 	// the cover
-	var dur [4]time.Duration // hat, part, unknown, noise
-	for _, sp := range raw {
-		n := o2(sp.o)
-		switch {
-		case sp.cand.Ignore:
-			dur[3] += n
-		case sp.cand.Hat != "":
-			dur[0] += n
-		case sp.cand.IsZero():
-			dur[2] += n
-		default:
-			dur[1] += n
-		}
-	}
-	if dur[0]+dur[1]+dur[2]+dur[3] > 0 {
-		pct := core.ApportionTo(dur[:], 100)
+	if pct := core.CoverageOf(reads).Percent(core.KindHat, core.KindPart, core.KindUnknown, core.KindNoise); pct != nil {
 		for i, c := range []struct{ cls, key, color string }{
 			{"hat", "web.rules.cov_hat", "#5b8db8"}, {"part", "web.rules.cov_part", "#a9c4dc"},
 			{"unk", "web.rules.cov_unknown", "#d9d6cf"}, {"noise", "web.rules.cov_noise", "#c3c6ca"}} {
@@ -618,18 +580,18 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 		row := testRow{When: g.start.In(loc).Format("15:04") + "–" + g.end.In(loc).Format("15:04"), Dur: core.FormatDuration(g.end.Sub(g.start)),
 			App: sp.o.Attrs["app"], Title: core.NormalizeTitle(sp.o.Attrs["title"])}
 		var classes []string
-		switch {
-		case c.Ignore:
+		switch c.Kind() {
+		case core.KindNoise:
 			classes = append(classes, "noise")
 			row.Noise = true
-		case c.Hat == "" && c.IsZero():
+		case core.KindUnknown:
 			classes = append(classes, "unk")
 			row.Unknown = true
-		case c.Hat == "":
+		case core.KindPart:
 			classes = append(classes, "unk")
 			row.NoHat = true
 		}
-		if c.Hat != "" && sp.booked != "" && sp.booked != c.Hat {
+		if sp.differs {
 			classes = append(classes, "diff")
 		}
 		hit := false
@@ -653,14 +615,8 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 		row.Class = strings.Join(classes, " ")
 		if c.Hat != "" {
 			row.HatName, row.Color = nameOf(nm, c.Hat), pal.color(c.Hat)
-			switch {
-			case c.Conf >= surePct:
-				row.Conf = i18n.In(lang, "web.rules.conf_sure")
-			case c.Conf >= likelyPct:
-				row.Conf = i18n.In(lang, "web.rules.conf_likely")
-			default:
-				row.Conf = i18n.In(lang, "web.rules.conf_maybe")
-			}
+			row.Conf = i18n.In(lang, map[string]string{core.LevelSure: "web.rules.conf_sure",
+				core.LevelLikely: "web.rules.conf_likely", core.LevelMaybe: "web.rules.conf_maybe"}[c.Level()])
 		}
 		var rest []string
 		act := c.Activity
@@ -690,7 +646,7 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 				row.WhyNone = i18n.In(lang, "web.rules.why_unknown_ticket", m)
 			}
 		}
-		if !c.Ignore && (strings.Contains(row.Class, "unk") || strings.Contains(row.Class, "diff") || (c.Hat != "" && c.Conf < surePct)) {
+		if !c.Ignore && (strings.Contains(row.Class, "unk") || strings.Contains(row.Class, "diff") || (c.Hat != "" && c.Level() != core.LevelSure)) {
 			scope := sp.booked
 			if scope == "" {
 				scope = c.Hat
@@ -746,8 +702,6 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 		}
 	}
 }
-
-func o2(o core.Observation) time.Duration { return o.End.Sub(o.Start) }
 
 func hatsHave(cfg core.Config, activity string) bool {
 	for _, h := range cfg.ActiveHats() {
