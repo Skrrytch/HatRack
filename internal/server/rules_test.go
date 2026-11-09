@@ -282,3 +282,50 @@ func TestRuleListFilterAndSort(t *testing.T) {
 		t.Error("selected sort order")
 	}
 }
+
+func TestRuleSortText(t *testing.T) {
+	for in, want := range map[string]string{
+		"^code$": "code", "spotify|keepassxc": "spotify keepassxc", `- Confluence\b`: "confluence",
+		"Firefox": "firefox", "^$": lastSort, "": lastSort,
+	} {
+		if got := sortText(in); got != want {
+			t.Errorf("sortText(%q) = %q, want %q", in, got, want)
+		}
+	}
+	rs := []ruleLine{{App: "firefox"}, {App: ""}, {App: "^code$"}}
+	sortRules(rs, "app")
+	if rs[0].App != "^code$" || rs[2].App != "" {
+		t.Errorf("by app: %+v", rs)
+	}
+}
+
+func TestRulesKeepState(t *testing.T) {
+	e, b := setupBrowser(t)
+	rulesDay(t, e)
+	_, out := b.do("GET", "/setup/detection?tab=rules&day=2026-11-04&filter=unknown&rf=noise&rs=app&ed_new=1&ed_app=firefox", nil)
+	href := func(re string) string {
+		t.Helper()
+		m := regexp.MustCompile(`href="([^"]*` + re + `[^"]*)"`).FindStringSubmatch(out)
+		if m == nil {
+			t.Fatalf("no link matching %s", re)
+		}
+		return m[1]
+	}
+	// a chip of the rule list keeps the day-list filter, the order and the draft
+	if h := href(`rf=ohne`); !strings.Contains(h, "filter=unknown") || !strings.Contains(h, "rs=app") || !strings.Contains(h, "ed_app=firefox") {
+		t.Errorf("rule chip: %s", h)
+	}
+	// a filter of the day list keeps filter and order of the rule list and the draft
+	if h := href(`filter=diff`); !strings.Contains(h, "rf=noise") || !strings.Contains(h, "rs=app") || !strings.Contains(h, "ed_app=firefox") {
+		t.Errorf("day filter: %s", h)
+	}
+	// the day form keeps the rule list, the order form keeps the day-list filter
+	for _, want := range []string{`name="rf" value="noise"`, `name="rs" value="app"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("day form: missing %s", want)
+		}
+	}
+	if n := strings.Count(out, `name="filter" value="unknown"`); n < 2 {
+		t.Errorf("order form does not keep the day-list filter (%d)", n)
+	}
+}

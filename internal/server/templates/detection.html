@@ -42,6 +42,8 @@
   <form method="get" action="/setup/detection" class="row" style="margin:0 0 .5rem">
     <input type="hidden" name="tab" value="rules">
     <input type="hidden" name="filter" value="{{.Filter}}">
+    <input type="hidden" name="rf" value="{{.RuleFilter}}">
+    <input type="hidden" name="rs" value="{{.RuleSortBy}}">
     {{range .Carry}}<input type="hidden" name="{{index . 0}}" value="{{index . 1}}">{{end}}
     <label>{{t $.Lang "web.rules.f_day"}} <select name="day" data-submit>{{range .Days}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
     <label>{{t $.Lang "web.rules.f_device"}} <select name="device" data-submit>{{range .Devices}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
@@ -87,6 +89,8 @@
       <input type="hidden" name="day" value="{{.Day}}">
       <input type="hidden" name="device" value="{{.Device}}">
       <input type="hidden" name="rf" value="{{.RuleFilter}}">
+      <input type="hidden" name="filter" value="{{.Filter}}">
+      {{range .Carry}}<input type="hidden" name="{{index . 0}}" value="{{index . 1}}">{{end}}
       <label class="small dim">{{t $.Lang "web.rules.sort"}} <select name="rs" data-submit>{{range .RuleSorts}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
       <noscript><button>{{t $.Lang "web.rules.show"}}</button></noscript>
     </form>

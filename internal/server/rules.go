@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"hatrack/internal/core"
 	"hatrack/internal/i18n"
@@ -324,6 +325,11 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 	if !slices.Contains([]string{"unknown", "diff", "noise"}, rv.Filter) {
 		rv.Filter = ""
 	}
+	rv.RuleSortBy = q.Get("rs")
+	if !slices.Contains(ruleSortKeys, rv.RuleSortBy) {
+		rv.RuleSortBy = ruleSortKeys[0]
+	}
+	rv.RuleFilter = q.Get("rf") // checked against the chips of the rule list below
 
 	// the sensor
 	devs, err := s.st.Devices(ctx)
@@ -480,18 +486,14 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 			all = append(all, s.ruleLineOf(lang, cfg, nm, pal, stats, h.Key, n, rule, base))
 		}
 	}
-	rv.RuleSortBy = q.Get("rs")
-	if !slices.Contains(ruleSortKeys, rv.RuleSortBy) {
-		rv.RuleSortBy = ruleSortKeys[0]
-	}
 	rv.RuleSorts = ruleSorts(lang, rv.RuleSortBy)
 	chips := ruleChips(lang, cfg, all)
-	rv.RuleFilter = q.Get("rf")
 	if !slices.ContainsFunc(chips, func(c ruleChip) bool { return c.Value == rv.RuleFilter }) {
 		rv.RuleFilter = ""
 	}
 	for _, c := range chips {
-		rv.RuleChips = append(rv.RuleChips, filterLink{Href: ruleHref(base, c.Value, rv.RuleSortBy), Label: c.Label, N: c.N, On: c.Value == rv.RuleFilter})
+		rv.RuleChips = append(rv.RuleChips, filterLink{Href: base + rv.stateQuery(rv.Filter, c.Value, rv.RuleSortBy) + "#regeln",
+			Label: c.Label, N: c.N, On: c.Value == rv.RuleFilter})
 	}
 	sortRules(all, rv.RuleSortBy)
 	for _, l := range all {
@@ -729,10 +731,7 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 		if f.id != "" {
 			n = counts[f.id]
 		}
-		href := link + "&filter=" + f.id
-		for _, kv := range rv.Carry {
-			href += "&" + kv[0] + "=" + url.QueryEscape(kv[1])
-		}
+		href := link + rv.stateQuery(f.id, rv.RuleFilter, rv.RuleSortBy)
 		rv.Filters = append(rv.Filters, filterLink{Href: href + "#rules-day", Label: i18n.In(lang, f.key), N: n, On: f.id == rv.Filter})
 	}
 	if rv.Editor != nil && trying {
@@ -1046,20 +1045,20 @@ func ruleShown(l ruleLine, f string) bool {
 // sortRules orders the rules by key; the most used first comes second.
 func sortRules(rs []ruleLine, key string) {
 	text := map[string]func(ruleLine) string{
-		"app":   func(l ruleLine) string { return l.App },
-		"title": func(l ruleLine) string { return l.Title },
+		"app":   func(l ruleLine) string { return sortText(l.App) },
+		"title": func(l ruleLine) string { return sortText(l.Title) },
 		"hat": func(l ruleLine) string {
 			if l.HatName == "" {
-				return "\U0010ffff" // rules for all hats last
+				return lastSort // rules for all hats last
 			}
-			return l.HatName
+			return strings.ToLower(l.HatName)
 		},
-		"act": func(l ruleLine) string { return l.Act },
+		"act": func(l ruleLine) string { return sortText(l.Act) },
 	}
 	f, byText := text[key]
 	sort.SliceStable(rs, func(i, j int) bool {
 		if byText {
-			if x, y := strings.ToLower(f(rs[i])), strings.ToLower(f(rs[j])); x != y {
+			if x, y := f(rs[i]), f(rs[j]); x != y {
 				return x < y
 			}
 		}
@@ -1067,10 +1066,46 @@ func sortRules(rs []ruleLine, key string) {
 	})
 }
 
-// ruleHref keeps the day and device of the tab and sets filter and order.
-func ruleHref(base, filter, sortKey string) string {
-	return base + "&rf=" + url.QueryEscape(filter) + "&rs=" + url.QueryEscape(sortKey) + "#regeln"
+// stateQuery is the state of the tab a link keeps, to be appended to a link
+// with day and device: the filter of the day list, filter and order of the
+// rule list, and an open draft.
+func (rv *rulesView) stateQuery(dayFilter, ruleFilter, sortKey string) string {
+	q := "&filter=" + url.QueryEscape(dayFilter) + "&rf=" + url.QueryEscape(ruleFilter) + "&rs=" + url.QueryEscape(sortKey)
+	for _, kv := range rv.Carry {
+		q += "&" + kv[0] + "=" + url.QueryEscape(kv[1])
+	}
+	return q
 }
+
+// sortText is a pattern as it reads, for sorting: without the signs of a
+// regular expression and leading punctuation, in lower case; empty sorts last.
+func sortText(s string) string {
+	var b strings.Builder
+	rs := []rune(s)
+	for i := 0; i < len(rs); i++ {
+		switch r := rs[i]; r {
+		case '\\':
+			// \b, \d, \s and the like stand for no text; \. is a dot
+			if i+1 < len(rs) && !unicode.IsLetter(rs[i+1]) {
+				b.WriteRune(rs[i+1])
+			}
+			i++
+		case '^', '$', '(', ')', '[', ']', '{', '}', '*', '+', '?':
+		case '|':
+			b.WriteByte(' ')
+		default:
+			b.WriteRune(r)
+		}
+	}
+	s = strings.TrimSpace(strings.TrimLeftFunc(b.String(), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }))
+	if s == "" {
+		return lastSort
+	}
+	return strings.ToLower(s)
+}
+
+// lastSort sorts after any text.
+const lastSort = "\U0010ffff"
 
 func (s *Server) fillLearned(rv *rulesView, lang string, cfg core.Config, nm map[string]string, pal palette, k core.Knowledge) {
 	l := &rv.Learned
