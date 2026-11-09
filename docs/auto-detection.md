@@ -194,14 +194,19 @@ The classifier treats `branch` like a title from a working tool: rules may
 match it, a ticket key in it outranks one from the browser (3a), and `repo`
 counts as a title part for learning.
 
-### 1b. Grants and the security area (#19)
+### 1b. Grants and the page Freigaben (#19)
 
 Design note for #19, before #18. It follows product.md 7 and 8: HatRack
 reads app, title and absence once a sensor is on; everything beyond is a
 **grant**, off by default, per device, revocable. Mockup:
-[`19-security.png`](mockups/19-security.png).
+[`19-grants.png`](mockups/19-grants.png).
 
-**Page.** Setup gets a page **Sicherheit** (`/setup/security`). It takes over
+**Page.** Setup gets a page **Freigaben** (English "Permissions", `/setup/grants`).
+The name says what the page decides: what HatRack may see on which
+computer, both to assign time well and to keep what is sensitive switched
+off; "Sicherheit" was too narrow (it suggested passwords and tokens, which
+stay on the pages Geräte and KI). Erkennung says how HatRack detects,
+Freigaben what it may see. It takes over
 the tabs Sensoren and Datenschutz of the page Erkennung, which keeps
 Abwesenheit and Zuordnung; old links (`?tab=sensors`, `?tab=privacy`)
 redirect. From top to bottom:
@@ -213,7 +218,7 @@ redirect. From top to bottom:
    no grant changes it.
 2. **Basics:** the sensor table (window, idle) and the lists and retention, as
    they are today, moved unchanged.
-3. **Grants:** first, once for all, what holds for every grant: what is read
+3. **Further grants:** first, once for all, what holds for every grant: what is read
    goes only to the own server (never the internet, MQTT or Home Assistant),
    is visible in the Day view and the tab Zuordnung, over MCP only with a
    token of scope `observe`, is stored only as the card says and only as long
@@ -948,8 +953,8 @@ pile up on other pages; each later ticket adds a tab instead of a block:
 
 | Tab | From | Holds |
 |---|---|---|
-| Sensoren | #6 | one table, sensors × devices: switch, backend, today's numbers; moves to the page Sicherheit with #19 (1b) |
-| Datenschutz | #6 | `ignore` and `redact` lists, retention; moves to the page Sicherheit with #19 (1b) |
+| Sensoren | #6 | one table, sensors × devices: switch, backend, today's numbers; moves to the page Freigaben with #19 (1b) |
+| Datenschutz | #6 | `ignore` and `redact` lists, retention; moves to the page Freigaben with #19 (1b) |
 | Abwesenheit | #2 | `idle.*` thresholds, the return question |
 | Rückfragen | #3 | `prompt.*`, end of day |
 | Zuordnung | #8, #15 | how assignment works (observed → clues → suggestion, sources in three colours), the **rule test** on a real day with the reason for every row, the rule editor right above it (rules are edited only here, so every change is seen on the day at once), rules for all hats, an overview of the hats' rules, and what was learned; "Add from template" (#15) |
@@ -967,7 +972,7 @@ works without observations, nothing afterwards without rules.
 | Stage | Name | What you get | Issues |
 |---|---|---|---|
 | **MVP 7** | Observe | Idle and lock handled, return question; window titles recorded on X11; an "observed" band in the Day view and the raw spans over MCP. Booking stays manual, but you can see what you did. | #6, #2, #1, #7 |
-| **MVP 8** | Assign | Rules per hat and global, learned details and title parts, rule test in Setup, rule templates for common work tools, a toolbox of how-tos for setting tools up; a security area with grants; repository and branch of the focused terminal or IDE. | #8, #15, #17, #19, #18 |
+| **MVP 8** | Assign | Rules per hat and global, learned details and title parts, rule test in Setup, rule templates for common work tools, a toolbox of how-tos for setting tools up; a page Freigaben (grants); repository and branch of the focused terminal or IDE. | #8, #15, #17, #19, #18 |
 | **MVP 9** | The reliable day | Condensing per hour with parallel entries and proposals, review in the Day view, live switching of the main task, calls for help, MCP window summary and AI proposals, day report by phases. | #4, #10, #9, #3, #11, new day report |
 | **MVP 10** | Meetings | Microphone and camera as signals, meeting rules shipped as examples, meeting names from reminder notifications. | #5, #12 |
 | **MVP 11** | More desktops | The `window` sensor on GNOME Wayland, KDE, sway, Hyprland; idle on wlroots. | #13 |
@@ -1027,7 +1032,7 @@ fails its check goes to Sonnet, not back to Haiku.
 | #10 Review in Day view | Check of proposal → correction mapping | Ghost entries, accept/reject, "accept all gaps" | CSS, i18n |
 | #3 Calls for help | – (Sonnet reviews; Opus in the MVP 9 pass) | Prompt scheduling, panel review mode | Settings, i18n, docs |
 | #11 MCP blocks and proposals | Security review of the `propose` scope | Tools, scopes, Setup | Tool descriptions, tests from given cases |
-| #19 Security area, grants | Design note (1b: catalog, enforcement in agent and server, revoke and delete); security review | Page Sicherheit, move of the two tabs, `observe.grants`, server stripping, `grant_log` | Card texts from the note, i18n, tests from the acceptance list |
+| #19 Page Freigaben, grants | Design note (1b: catalog, enforcement in agent and server, revoke and delete); security review | Page Freigaben, move of the two tabs, `observe.grants`, server stripping, `grant_log` | Card texts from the note, i18n, tests from the acceptance list |
 | new `workdir` sensor | Short design note (what is read and stored, tab rule); privacy review | `/proc` walk, `HEAD` parsing (worktree, detached), IDE project lists, X11 pid, classifier fields `branch`, `repo` | Fake `/proc` and repository fixtures, i18n, docs |
 | new toolbox | Privacy review of the snippets (no hook that sees prompts) | Pages checked against recorded titles, link from the rule test, `setup` link in templates | Page skeletons from the table in 3c, i18n of the hints, docs |
 | new day report | – (Sonnet reviews) | Phases from the log, rounding with `Apportion`, view after a mockup | i18n, docs |

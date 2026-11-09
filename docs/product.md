@@ -103,8 +103,8 @@ UI and through MCP.
 - **Privacy by default, permission by choice.** HatRack may read what helps
   its purpose and what the system allows, but only what the user has
   granted. Sensors are off until switched on per device. Everything beyond
-  the basics (app, window title, absence) is a **grant** in the security
-  area: off by default, explained in plain words (what is read, why it
+  the basics (app, window title, absence) is a **grant** on the page
+  Freigaben: off by default, explained in plain words (what is read, why it
   helps, what is stored, for how long, who can see it), revocable at any
   time. Read data is used locally and stored as sparingly as the function
   allows (a rule's result rather than the raw text). Nothing leaves the
@@ -136,7 +136,7 @@ kind can be switched off; a quiet time (meetings, outside working hours,
   treated as data, never as instructions.
 - **No recording of keystrokes, sound or screen images, ever.** No grant
   unlocks it. The purpose is assigning time, not reconstructing what was
-  typed, said or shown. The security area states this limit explicitly.
+  typed, said or shown. The page Freigaben states this limit first.
 - **No cloud.** No service of ours, no login to ticket systems, no fetching
   of ticket data. Links to tickets are built from known patterns.
 - **No guessing for completeness.** It does not fill a day just to make it
@@ -169,7 +169,7 @@ kind can be switched off; a quiet time (meetings, outside working hours,
 |---|---|
 | MVP 1 to 6 (done) | hats, activities, details, log, look, server, web UI, MCP, absence: the frame and the record by hand |
 | MVP 7 (done) | observation as evidence, privacy settings |
-| MVP 8 | assignment: rules, tickets, learned clues, toolbox, security area with grants, working directory and branch |
+| MVP 8 | assignment: rules, tickets, learned clues, toolbox, page Freigaben (grants), working directory and branch |
 | MVP 9 | the reliable day: condensed blocks, end of tasks, review, live switching, calls for help, MCP, day report |
 | later | exports to time sheets, more sensors (meetings), Wayland, standalone mode |
 
