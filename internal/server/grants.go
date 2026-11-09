@@ -115,10 +115,11 @@ func (s *Server) grantsView(r *http.Request, acc access, pending *pendingRevoke)
 		return v, err
 	}
 	d.Observe = observeView{
-		Ignore:    strings.Join(cfg.Observe.Ignore, "\n"),
-		Redact:    strings.Join(cfg.Observe.Redact, "\n"),
-		Retention: int(cfg.Observe.Retention() / (24 * time.Hour)),
-		Recent:    s.recentApps(ctx, cfg.Observe, s.Now()),
+		Ignore:      strings.Join(cfg.Observe.Ignore, "\n"),
+		Redact:      strings.Join(cfg.Observe.Redact, "\n"),
+		IgnorePaths: strings.Join(cfg.Observe.IgnorePaths, "\n"),
+		Retention:   int(cfg.Observe.Retention() / (24 * time.Hour)),
+		Recent:      s.recentApps(ctx, cfg.Observe, s.Now()),
 	}
 	devs, err := s.st.Devices(ctx)
 	if err != nil {

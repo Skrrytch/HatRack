@@ -294,7 +294,7 @@ table.matrix .st { display: block; font-size: .78rem; color: var(--dim); margin-
 .sw:checked::after { left: 1.1rem; }
 .sw:disabled { opacity: .4; cursor: default; }
 .sw:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 2px; }
-.privacy .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: .6rem 0; }
+.privacy .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; margin: .6rem 0; }
 .privacy label { display: block; font-size: .9rem; }
 .privacy textarea { height: 6.2rem; margin-top: .25rem; }
 .chips { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; margin-top: .3rem; }

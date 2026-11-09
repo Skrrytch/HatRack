@@ -194,6 +194,34 @@ The classifier treats `branch` like a title from a working tool: rules may
 match it, a ticket key in it outranks one from the browser (3a), and `repo`
 counts as a title part for learning.
 
+**First reader: the active Claude Code session (built 2026-11-09).** Bert's
+observed days put most work into Claude: Claude Desktop (title always
+"Claude") and Guake tabs titled by the session's topic, rarely with a key;
+IntelliJ did not appear. So the first reader follows the session, from
+metadata only, and never opens a session file:
+
+1. The session file written to last under `~/.claude*/projects/*/*.jsonl`
+   (both `~/.claude` and `~/.claude-private`) is the active one, if written
+   within 10 minutes and no other project within 2 minutes of it (else
+   unclear, nothing). Only modification times are read.
+2. Its folder name is the project path with every character that is not a
+   letter or digit replaced by `-`. A running `claude` process whose working
+   directory (`/proc/<pid>/cwd`) encodes to the same name confirms the path;
+   without one, nothing.
+3. It counts for the focused window if that `claude` process descends from
+   the window's process (`_NET_WM_PID`, read by the x11 backend and removed
+   before anything is recorded), which settles terminals with tabs, or if
+   Claude itself is in front (app matching `claude`: its own sessions or
+   remote control of this one).
+4. `repo` and `branch` come from `.git` (or the `gitdir:` it names) and
+   `HEAD`; detached gives `repo` only. Folders on `observe.ignore_paths` are
+   never looked into. Spans carry `branch_src: claude`.
+
+It runs with the grant `workdir`, looked up on every window change and every
+30 s. The `/proc` walk for plain shells and the IDE project lists stay open
+in #18. Because nothing is opened, the grant `ai_sessions` is not needed for
+this; it stays in the catalog, not ready, until a case needs the content.
+
 ### 1b. Grants and the page Freigaben (#19)
 
 Design note for #19, before #18. It follows product.md 7 and 8: HatRack
@@ -319,8 +347,8 @@ grant (#18 for the first two); #19 ships the card without them.
 **Status (2026-11-09):** built: catalog and `observe.grants` with
 validation, filtering in the recorder and in `POST /api/observations`,
 `Tickets.BranchKeys`, the page with basics, cards, the revoke question and
-history, the old tab links redirected. Both grants have `Ready: false` until
-#18 ships the reader, so the page shows no card yet. Open: an imported
+history, the old tab links redirected. `workdir` is ready since the reader of
+the active Claude Code session (1a); `ai_sessions` stays not ready. Open: an imported
 configuration changes grants without a history entry; the estimates (#18).
 
 **Not tied to one tool.** `workdir` works with any terminal, IDE or

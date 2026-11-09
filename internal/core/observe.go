@@ -44,6 +44,9 @@ type Observe struct {
 	Ignore []string `yaml:"ignore,omitempty" json:"ignore,omitempty"`
 	// Redact lists apps whose window title is not recorded.
 	Redact []string `yaml:"redact,omitempty" json:"redact,omitempty"`
+	// IgnorePaths are folders (and everything below) the workdir reader
+	// never looks into; "~" is the home folder.
+	IgnorePaths []string `yaml:"ignore_paths,omitempty" json:"ignore_paths,omitempty"`
 	// Devices switches sensors on or off per device.
 	Devices map[string]map[string]bool `yaml:"devices,omitempty" json:"devices,omitempty"`
 	// Grants gives a device more than app, title and absence: grant id ->
@@ -155,7 +158,7 @@ func (o Observe) Validate() error {
 	for _, l := range []struct {
 		name string
 		list []string
-	}{{"ignore", o.Ignore}, {"redact", o.Redact}} {
+	}{{"ignore", o.Ignore}, {"redact", o.Redact}, {"ignore_paths", o.IgnorePaths}} {
 		for _, a := range l.list {
 			if strings.TrimSpace(a) == "" {
 				return fmt.Errorf("config: observe.%s: empty entry", l.name)

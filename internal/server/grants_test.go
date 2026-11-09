@@ -50,11 +50,14 @@ func TestGrantTexts(t *testing.T) {
 	}
 }
 
-func TestGrantsPageWithoutReadyGrants(t *testing.T) {
+func TestGrantsPageShowsReadyGrantsOnly(t *testing.T) {
 	_, b := setupBrowser(t)
 	_, out := b.do("GET", "/setup/grants", nil)
-	if !strings.Contains(out, "No further permissions yet") || strings.Contains(out, `class="card grant"`) {
-		t.Errorf("a grant without its reader is shown:\n%s", out)
+	if !strings.Contains(out, `id="workdir"`) {
+		t.Error("the ready grant workdir is missing")
+	}
+	if strings.Contains(out, `id="ai_sessions"`) {
+		t.Error("a grant without its reader is shown")
 	}
 	if !strings.Contains(out, "No changes to permissions yet") {
 		t.Error("history")
@@ -228,8 +231,8 @@ func TestGrantNarrowAsks(t *testing.T) {
 }
 
 func TestGrantRejectsUnknown(t *testing.T) {
-	_, b := setupBrowser(t) // no grant is ready
-	r, _ := b.do("POST", "/setup/grants", url.Values{"op": {"grant"}, "grant": {core.GrantWorkdir}})
+	_, b := setupBrowser(t) // ai_sessions has no reader yet
+	r, _ := b.do("POST", "/setup/grants", url.Values{"op": {"grant"}, "grant": {core.GrantAISessions}})
 	if !strings.Contains(r.Header.Get("Location"), "e=") {
 		t.Error("a grant without its reader was saved")
 	}

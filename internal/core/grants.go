@@ -61,6 +61,7 @@ var Grants = []Grant{
 		Attrs:       []string{AttrRepo, AttrBranch, AttrBranchSrc},
 		KeyAttr:     AttrBranch,
 		NeedsSensor: "window",
+		Ready:       true, // reader: active Claude Code session (sensors/workdir.go)
 	},
 	{
 		ID:     GrantAISessions,

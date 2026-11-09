@@ -15,6 +15,7 @@ const (
 	MaxSpansPerDay = 5000        // per sensor and local day
 	MaxValueRunes  = 512         // per attribute value
 	IdleSensor     = "idle"
+	WindowSensor   = "window"
 )
 
 const statusLimited = "too many changes today"
@@ -164,6 +165,7 @@ func (r *Recorder) effective(sensor string, s *state) core.Attrs {
 		return nil
 	}
 	a := copyAttrs(s.raw)
+	delete(a, AttrPID) // internal to the agent, never recorded
 	app := a["app"]
 	if r.policy.Ignored(app) {
 		return core.Attrs{core.AttrPrivate: "1"}

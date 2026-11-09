@@ -94,6 +94,7 @@ func (a *Agent) observeNow() bool {
 // applyObserve hands the observe settings to the recorder and starts or stops
 // sensors to match. Caller holds a.mu.
 func (a *Agent) applyObserve(ctx context.Context) {
+	a.wdPolicy.Store(&wdPolicy{obs: a.config.Observe, device: a.deviceName()})
 	a.rec.SetPolicy(a.config.Observe, a.deviceName(), a.Now())
 	a.syncSensors(ctx)
 }
@@ -236,6 +237,9 @@ func (a *Agent) runSensor(ctx context.Context, s sensors.Sensor, r *runner) {
 		}
 	}
 	emit := emitRec
+	if s.ID == sensors.WindowSensor {
+		emit = a.workdirEmit(ctx, emitRec)
+	}
 	if s.ID == sensors.IdleSensor {
 		emit = func(at time.Time, attrs core.Attrs) {
 			r.emitMu.Lock()
@@ -303,6 +307,10 @@ func (a *Agent) sensorCaps(ctx context.Context, caps map[string]modules.Capabili
 			c.Reason += st
 		}
 		caps["sensor:"+s.ID] = c
+		if s.ID == sensors.WindowSensor && backend == "x11" {
+			// the x11 backend gives the window's process
+			caps["grant:"+core.GrantWorkdir] = modules.Capability{Backend: "claude", Available: true}
+		}
 	}
 }
 

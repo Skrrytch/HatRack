@@ -54,7 +54,11 @@ type Agent struct {
 	// never take mu; they use the locks below.
 	sensors *sensors.Registry // set by SetSensors before Run
 	rec     *sensors.Recorder
-	obsKick chan struct{}
+	// workdir reads repository and branch for window spans (workdir.go);
+	// wdPolicy is the part of the settings it needs, set with the policy.
+	workdir  sensors.Workdir
+	wdPolicy atomic.Pointer[wdPolicy]
+	obsKick  chan struct{}
 
 	devMu        sync.Mutex // guards serverDevice
 	serverDevice string     // the device name the server knows, from the hello
@@ -121,6 +125,7 @@ func New(cfg Config, db *DB, reg *modules.Registry) *Agent {
 		}
 	}
 	a.rec = sensors.NewRecorder(time.Minute, a.enqueueObs)
+	a.workdir = sensors.NewWorkdir()
 	return a
 }
 

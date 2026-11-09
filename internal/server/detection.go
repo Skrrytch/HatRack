@@ -69,6 +69,7 @@ type detCell struct {
 // observeView is the privacy tab.
 type observeView struct {
 	Ignore, Redact string   // one app per line
+	IgnorePaths    string   // one folder per line
 	Recent         []string // apps seen lately, not yet listed
 	Retention      int      // days
 }
@@ -373,6 +374,7 @@ func (s *Server) observeSave(w http.ResponseWriter, r *http.Request, back string
 	_, err = s.editConfig(r.Context(), false, func(c *core.Config) error {
 		c.Observe.Ignore = splitLines(r.PostFormValue("ignore"))
 		c.Observe.Redact = splitLines(r.PostFormValue("redact"))
+		c.Observe.IgnorePaths = splitLines(r.PostFormValue("ignore_paths"))
 		c.Observe.RetentionDays = days
 		return nil
 	})

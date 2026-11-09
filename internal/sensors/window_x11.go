@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -79,7 +80,7 @@ type windowWatch struct {
 	root   xproto.Window
 	active xproto.Window // currently watched window, 0 for none
 
-	netActive, netWMName, utf8String xproto.Atom
+	netActive, netWMName, utf8String, netWMPid xproto.Atom
 }
 
 func (b *x11WindowBackend) Run(ctx context.Context, emit func(time.Time, core.Attrs)) error {
@@ -103,7 +104,7 @@ func (b *x11WindowBackend) Run(ctx context.Context, emit func(time.Time, core.At
 	for _, a := range []struct {
 		dst  *xproto.Atom
 		name string
-	}{{&w.netActive, "_NET_ACTIVE_WINDOW"}, {&w.netWMName, "_NET_WM_NAME"}, {&w.utf8String, "UTF8_STRING"}} {
+	}{{&w.netActive, "_NET_ACTIVE_WINDOW"}, {&w.netWMName, "_NET_WM_NAME"}, {&w.utf8String, "UTF8_STRING"}, {&w.netWMPid, "_NET_WM_PID"}} {
 		if *a.dst, err = internAtom(c, a.name); err != nil {
 			return lostOr(ctx, err)
 		}
@@ -222,6 +223,13 @@ func (w *windowWatch) attrs() core.Attrs {
 	}
 	if len(a) == 0 {
 		return nil
+	}
+	// the process, for the workdir reader; the agent removes it before
+	// anything is recorded
+	if p := get(w.netWMPid); p != nil && p.Format == 32 && len(p.Value) >= 4 {
+		if pid := xgb.Get32(p.Value); pid > 0 {
+			a[AttrPID] = strconv.FormatUint(uint64(pid), 10)
+		}
 	}
 	return a
 }

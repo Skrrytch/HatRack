@@ -772,3 +772,5 @@ grant.ai_sessions.stores: "The same as for “Working directory and branch”. C
 grant.ai_sessions.risk: "The file holds confidential conversations. HatRack has to open it to find the two values; a test makes sure nothing else is taken."
 grant.ai_sessions.not_needed: "Claude Code runs in its own terminal window without tabs. Then “Working directory and branch” is enough."
 grant.ai_sessions.level.on: "on"
+web.observe.ignore_paths: "Folders never looked into"
+web.observe.ignore_paths_hint: "(one folder per line, with everything below; ~ is your home folder; applies to “Working directory and branch”)"

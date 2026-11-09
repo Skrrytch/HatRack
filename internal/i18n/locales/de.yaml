@@ -772,3 +772,5 @@ grant.ai_sessions.stores: "Dasselbe wie bei „Arbeitsverzeichnis und Branch“.
 grant.ai_sessions.risk: "Die Datei enthält vertrauliche Gespräche. HatRack muss sie öffnen, um die zwei Angaben zu finden; ein Test stellt sicher, dass nichts anderes übernommen wird."
 grant.ai_sessions.not_needed: "Claude Code in einem eigenen Terminalfenster ohne Tabs läuft. Dann reicht „Arbeitsverzeichnis und Branch“."
 grant.ai_sessions.level.on: "an"
+web.observe.ignore_paths: "Ordner nie ansehen"
+web.observe.ignore_paths_hint: "(ein Ordner pro Zeile, mit allem darunter; ~ ist dein Home-Ordner; gilt für „Arbeitsverzeichnis und Branch“)"
