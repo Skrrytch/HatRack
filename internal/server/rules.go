@@ -22,8 +22,10 @@ import (
 // assigned on a day of the user's own, why, and the rules and learned clues
 // behind it. Rules are edited here and only here.
 
+// maxTestRows is the most rows the day list shows at once; a test may lower it.
+var maxTestRows = 300
+
 const (
-	maxTestRows  = 300
 	maxLearned   = 8
 	testMergeGap = time.Minute
 	recentDays   = 7
@@ -45,6 +47,10 @@ type rulesView struct {
 	Filters  []filterLink
 	Rows     []testRow
 	More     int
+	Hour     string       // "all", "0".."23", or "" for the default
+	Hours    []filterLink // the hours with rows, and the whole day
+	NextHref string       // the next hour with rows
+	NextHour string
 	AddHref  string
 	Editor   *editorView
 
@@ -328,6 +334,11 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 		rv.RuleSortBy = ruleSortKeys[0]
 	}
 	rv.RuleFilter = q.Get("rf") // checked against the chips of the rule list below
+	if h := q.Get("hour"); h == "all" {
+		rv.Hour = h
+	} else if n, err := strconv.Atoi(h); err == nil && n >= 0 && n < 24 {
+		rv.Hour = h
+	}
 
 	// the sensor
 	devs, err := s.st.Devices(ctx)
@@ -389,7 +400,7 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 	}
 
 	base := "/setup/detection?tab=rules&day=" + url.QueryEscape(pick) + "&device=" + url.QueryEscape(rv.Device)
-	rv.AddHref = base + "&filter=" + rv.Filter + "&ed_new=1#try"
+	rv.AddHref = base + rv.stateQuery(rv.Filter, rv.RuleFilter, rv.RuleSortBy, rv.Hour, false) + "&ed_new=1#try"
 
 	// the draft
 	var try *core.Classifier
@@ -481,7 +492,7 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 		rv.RuleFilter = ""
 	}
 	for _, c := range chips {
-		rv.RuleChips = append(rv.RuleChips, filterLink{Href: base + rv.stateQuery(rv.Filter, c.Value, rv.RuleSortBy) + "#regeln",
+		rv.RuleChips = append(rv.RuleChips, filterLink{Href: base + rv.stateQuery(rv.Filter, c.Value, rv.RuleSortBy, rv.Hour, true) + "#regeln",
 			Label: c.Label, N: c.N, On: c.Value == rv.RuleFilter})
 	}
 	sortRules(all, rv.RuleSortBy)
@@ -571,6 +582,7 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 	}
 
 	var rows []testRow
+	var rowHour []int
 	counts := map[string]int{}
 	var hitN, hitNew int
 	var hitDur time.Duration
@@ -664,7 +676,7 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 					break
 				}
 			}
-			row.Plus = link + "&filter=" + rv.Filter + "&" + f.Encode() + "#try"
+			row.Plus = link + rv.stateQuery(rv.Filter, rv.RuleFilter, rv.RuleSortBy, rv.Hour, false) + "&" + f.Encode() + "#try"
 		}
 		counts["all"]++
 		for _, cl := range classes {
@@ -676,7 +688,9 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 			continue
 		}
 		rows = append(rows, row)
+		rowHour = append(rowHour, g.start.In(loc).Hour())
 	}
+	rows = rv.pickHour(lang, link, rows, rowHour)
 	if len(rows) > maxTestRows {
 		rv.More = len(rows) - maxTestRows
 		rows = rows[:maxTestRows]
@@ -687,7 +701,7 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 		if f.id != "" {
 			n = counts[f.id]
 		}
-		href := link + rv.stateQuery(f.id, rv.RuleFilter, rv.RuleSortBy)
+		href := link + rv.stateQuery(f.id, rv.RuleFilter, rv.RuleSortBy, rv.Hour, true)
 		rv.Filters = append(rv.Filters, filterLink{Href: href + "#rules-day", Label: i18n.In(lang, f.key), N: n, On: f.id == rv.Filter})
 	}
 	if rv.Editor != nil && trying {
@@ -1021,15 +1035,69 @@ func sortRules(rs []ruleLine, key string) {
 }
 
 // stateQuery is the state of the tab a link keeps, to be appended to a link
-// with day and device: the filter of the day list, filter and order of the
-// rule list, and an open draft.
-func (rv *rulesView) stateQuery(dayFilter, ruleFilter, sortKey string) string {
-	q := "&filter=" + url.QueryEscape(dayFilter) + "&rf=" + url.QueryEscape(ruleFilter) + "&rs=" + url.QueryEscape(sortKey)
-	for _, kv := range rv.Carry {
-		q += "&" + kv[0] + "=" + url.QueryEscape(kv[1])
+// with day and device: filter and hour of the day list, filter and order of
+// the rule list, and with draft an open draft.
+func (rv *rulesView) stateQuery(dayFilter, ruleFilter, sortKey, hour string, draft bool) string {
+	q := "&filter=" + url.QueryEscape(dayFilter) + "&rf=" + url.QueryEscape(ruleFilter) +
+		"&rs=" + url.QueryEscape(sortKey) + "&hour=" + url.QueryEscape(hour)
+	if draft {
+		for _, kv := range rv.Carry {
+			q += "&" + kv[0] + "=" + url.QueryEscape(kv[1])
+		}
 	}
 	return q
 }
+
+// pickHour keeps the rows of the chosen hour (hours[i] is the hour of
+// rows[i]) and builds the hour chips. Without a choice the list shows the
+// whole day when it fits, else the first hour with rows.
+func (rv *rulesView) pickHour(lang, link string, rows []testRow, hours []int) []testRow {
+	per := map[int]int{}
+	var order []int
+	for _, h := range hours {
+		if per[h] == 0 {
+			order = append(order, h)
+		}
+		per[h]++
+	}
+	sel := -1
+	switch {
+	case rv.Hour == "all":
+	case rv.Hour != "":
+		sel, _ = strconv.Atoi(rv.Hour)
+	case len(rows) > maxTestRows && len(order) > 0:
+		sel = order[0]
+		rv.Hour = strconv.Itoa(sel)
+	}
+	if len(order) > 1 || sel >= 0 {
+		href := func(h string) string {
+			return link + rv.stateQuery(rv.Filter, rv.RuleFilter, rv.RuleSortBy, h, true) + "#rules-day"
+		}
+		rv.Hours = append(rv.Hours, filterLink{Href: href("all"), Label: i18n.In(lang, "web.rules.hour_all"), N: len(rows), On: sel < 0})
+		for _, h := range order {
+			rv.Hours = append(rv.Hours, filterLink{Href: href(strconv.Itoa(h)), Label: hourLabel(h), N: per[h], On: h == sel})
+		}
+		for _, h := range order {
+			if sel >= 0 && h > sel {
+				rv.NextHref, rv.NextHour = href(strconv.Itoa(h)), hourLabel(h)
+				break
+			}
+		}
+	}
+	if sel < 0 {
+		return rows
+	}
+	var out []testRow
+	for i, r := range rows {
+		if hours[i] == sel {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// hourLabel names an hour of the day as a range, "09–10".
+func hourLabel(h int) string { return fmt.Sprintf("%02d–%02d", h, h+1) }
 
 // sortText is a pattern as it reads, for sorting: without the signs of a
 // regular expression and leading punctuation, in lower case; empty sorts last.
@@ -1106,7 +1174,8 @@ func (s *Server) ruleAction(w http.ResponseWriter, r *http.Request, acc access) 
 	day, device := r.PostFormValue("day"), r.PostFormValue("device")
 	dest := func(extra string) string {
 		return "/setup/detection?tab=rules&day=" + url.QueryEscape(day) + "&device=" + url.QueryEscape(device) +
-			"&filter=" + url.QueryEscape(r.PostFormValue("filter")) + extra + "#rules-day"
+			"&filter=" + url.QueryEscape(r.PostFormValue("filter")) + "&rf=" + url.QueryEscape(r.PostFormValue("rf")) +
+			"&rs=" + url.QueryEscape(r.PostFormValue("rs")) + "&hour=" + url.QueryEscape(r.PostFormValue("hour")) + extra + "#rules-day"
 	}
 	var id string
 	var saveErr error

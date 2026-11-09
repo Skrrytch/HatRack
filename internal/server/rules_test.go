@@ -329,3 +329,39 @@ func TestRulesKeepState(t *testing.T) {
 		t.Errorf("order form does not keep the day-list filter (%d)", n)
 	}
 }
+
+func TestRulesHours(t *testing.T) {
+	e, b := setupBrowser(t)
+	rulesDay(t, e)
+	page := func(q string) string {
+		_, out := b.do("GET", "/setup/detection?tab=rules&day=2026-11-04"+q, nil)
+		return out
+	}
+	// the day fits: the whole day, with a chip per hour
+	out := page("")
+	for _, want := range []string{"Whole day", "09–10", "10–11", "11–12", "UTF-8 Encoding", "billing - Visual"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("whole day: missing %q", want)
+		}
+	}
+	// one hour: only its rows, and no next hour after the last one
+	out = page("&hour=11")
+	if !strings.Contains(out, "billing - Visual") || strings.Contains(out, "UTF-8 Encoding") || strings.Contains(out, "Next:") {
+		t.Error("hour 11")
+	}
+	if out = page("&hour=9"); !strings.Contains(out, "Next: 10–11") || !strings.Contains(out, "hour=10") {
+		t.Error("next hour after 9")
+	}
+	// a filter keeps the hour
+	if !regexp.MustCompile(`href="[^"]*filter=unknown[^"]*hour=9`).MatchString(out) {
+		t.Error("day filter drops the hour")
+	}
+	// a day too long for one page starts with its first hour
+	old := maxTestRows
+	maxTestRows = 4 // the day has 6 rows, its first hour 3
+	defer func() { maxTestRows = old }()
+	out = page("")
+	if !strings.Contains(out, "UTF-8 Encoding") || strings.Contains(out, "billing - Visual") {
+		t.Error("long day does not start with its first hour")
+	}
+}

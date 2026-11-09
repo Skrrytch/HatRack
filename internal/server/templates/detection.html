@@ -57,6 +57,7 @@
   <div class="cover" style="margin-top:.8rem">{{range .Cover}}<i class="{{.Class}}" style="width:{{.Pct}}%"></i>{{end}}</div>
   <div class="coverkey">{{range .Cover}}<span style="--k:{{.Color}}">{{.Label}} {{.Pct}} %</span>{{end}}</div>
   <div class="filters">{{range .Filters}}<a href="{{.Href}}"{{if .On}} class="on"{{end}}>{{.Label}} {{.N}}</a>{{end}}</div>
+  {{if .Hours}}<div class="filters hours"><span class="dim small">{{t $.Lang "web.rules.hours"}}</span>{{range .Hours}}<a href="{{.Href}}"{{if .On}} class="on"{{end}}>{{.Label}} <span class="n">{{.N}}</span></a>{{end}}</div>{{end}}
   <table class="test">
     <tr><th>{{t $.Lang "web.rules.col_time"}}</th><th>{{t $.Lang "web.rules.col_window"}}</th><th>{{t $.Lang "web.rules.col_sugg"}}</th><th>{{t $.Lang "web.rules.col_why"}}</th><th>{{t $.Lang "web.rules.col_booked"}}</th><th></th></tr>
     {{range .Rows}}
@@ -74,6 +75,7 @@
     {{end}}
   </table>
   {{if .More}}<p class="dim small">{{t $.Lang "web.rules.more" .More}}</p>{{end}}
+  {{if .NextHref}}<p class="row" style="margin:.6rem 0 0"><a class="btn" href="{{.NextHref}}">{{t $.Lang "web.rules.next_hour" .NextHour}}</a></p>{{end}}
   <p class="dim small" style="margin:.6rem 0 0">{{t $.Lang "web.rules.unknown_hint"}}</p>
   {{end}}
 {{end}}
@@ -90,6 +92,7 @@
       <input type="hidden" name="device" value="{{.Device}}">
       <input type="hidden" name="rf" value="{{.RuleFilter}}">
       <input type="hidden" name="filter" value="{{.Filter}}">
+      <input type="hidden" name="hour" value="{{.Hour}}">
       {{range .Carry}}<input type="hidden" name="{{index . 0}}" value="{{index . 1}}">{{end}}
       <label class="small dim">{{t $.Lang "web.rules.sort"}} <select name="rs" data-submit>{{range .RuleSorts}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
       <noscript><button>{{t $.Lang "web.rules.show"}}</button></noscript>
@@ -126,6 +129,9 @@
   <input type="hidden" name="day" value="{{$.R.Day}}">
   <input type="hidden" name="device" value="{{$.R.Device}}">
   <input type="hidden" name="filter" value="{{$.R.Filter}}">
+  <input type="hidden" name="hour" value="{{$.R.Hour}}">
+  <input type="hidden" name="rf" value="{{$.R.RuleFilter}}">
+  <input type="hidden" name="rs" value="{{$.R.RuleSortBy}}">
   {{if .Edit}}<input type="hidden" name="ed_edit" value="{{.Edit}}">{{end}}
   {{if .ID}}<input type="hidden" name="ed_id" value="{{.ID}}">{{end}}
   {{if .Booked}}<input type="hidden" name="ed_booked" value="{{.Booked}}">{{end}}

@@ -394,6 +394,9 @@ table.matrix .st { display: block; font-size: .78rem; color: var(--dim); margin-
 .filters{display:flex;gap:.3rem;flex-wrap:wrap;margin:.6rem 0}
 .filters a{font-size:.82rem;text-decoration:none;border:1px solid var(--line);border-radius:1rem;padding:.08rem .65rem;color:var(--dim)}
 .filters a.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.filters.hours{align-items:center;margin-top:-.2rem}
+.filters .n{color:var(--dim)}
+.filters a.on .n{color:inherit;opacity:.7}
 table.test{width:100%;border-collapse:collapse;font-size:.9rem}
 table.test th{font-weight:600;font-size:.76rem;text-align:left;color:var(--dim);padding:.3rem .45rem;border-bottom:1px solid var(--line)}
 table.test td{padding:.5rem .45rem;border-bottom:1px dashed var(--perf);vertical-align:top}
