@@ -468,3 +468,24 @@ table.hist{width:100%;border-collapse:collapse;font-size:.86rem}
 table.hist td,table.hist th{text-align:left;padding:.35rem .5rem;border-bottom:1px dashed var(--perf)}
 table.hist th{font-weight:600;border-bottom:1px solid var(--line)}
 @media (max-width:760px){.grant .head{flex-direction:column}dl.parts{grid-template-columns:1fr}dl.parts dd{margin-bottom:.3rem}}
+
+/* ---- setup overview as a story ---- */
+.step{display:flex;align-items:baseline;gap:.6rem;margin:1.8rem 0 .2rem}
+.step .n{flex:none;width:1.5rem;height:1.5rem;border-radius:50%;background:var(--ink);color:var(--card);display:grid;place-items:center;font-weight:800;font-size:.8rem;transform:translateY(.2rem)}
+.step h2{margin:0;font-size:1.05rem}
+.stepsub{color:var(--dim);font-size:.9rem;margin:0 0 .7rem 2.1rem}
+.inherit{margin-top:.8rem;padding-top:.7rem;border-top:1px dashed var(--perf);font-size:.88rem}
+.inherit a{margin-left:.4rem;font-weight:600}
+.tiles{display:grid;gap:.8rem;align-items:stretch}
+.tiles.flowtiles{grid-template-columns:1fr auto 1fr auto 1fr}
+.tiles.two{grid-template-columns:1fr 1fr}
+.tiles .arrow{align-self:center;color:var(--dim);font-size:1.2rem}
+.tile{display:block;text-decoration:none;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:1rem;padding:.9rem 1rem;box-shadow:var(--shadow);position:relative}
+.tile:hover,.tile:focus-visible{border-color:var(--accent)}
+.tile b{display:block;font-size:1rem;padding-right:1.2rem}
+.tile .what{color:var(--dim);font-size:.85rem;margin:.1rem 0 .55rem;display:block}
+.tile .stat{font-size:.86rem;display:block;line-height:1.45}
+.tile .go{position:absolute;top:.85rem;right:1rem;color:var(--dim)}
+.tile .need{display:inline-block;margin-top:.5rem;font-size:.76rem;font-weight:700;color:#a5531a;background:color-mix(in srgb,#f0a050 16%,transparent);border-radius:1rem;padding:.05rem .55rem}
+@media (max-width:760px){.tiles.flowtiles,.tiles.two{grid-template-columns:1fr}.tiles .arrow{display:none}.stepsub{margin-left:0}}
+.step + details.yaml{margin-top:.5rem}

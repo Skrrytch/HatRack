@@ -45,6 +45,9 @@ type setupView struct {
 	Devices   []deviceRow
 	Detection string // one-line summary of the detection settings
 	Import    importView
+	Inherit   string // what every hat inherits from the defaults
+	Recognise []tile // step 2: permissions, detection, tickets
+	Runs      []tile // step 3: devices, AI
 }
 
 // ticketRow is a known ticket project in the list; Pattern rows are
@@ -626,16 +629,7 @@ func (s *Server) fillSetup(r *http.Request, v *view, cfg core.Config) {
 			Activities: len(h.Activities), First: i == 0, Last: i == len(active)-1})
 	}
 	v.Setup.NextColor = freeColor(cfg)
-	if links, err := s.st.TicketLinks(r.Context()); err == nil {
-		k, _, _ := s.knowledge(r)
-		for _, p := range core.NewTickets(links, cfg.Tickets).Projects() {
-			row := ticketRow{Project: p.Project, System: p.System, Base: p.URL, Registered: p.Source == core.TicketRegistered, Pattern: p.Project == ""}
-			if use, ok := k.Projects[p.Project]; ok {
-				row.Booked, row.Hat, row.Color, row.Share, row.Count = true, nameOf(names(cfg), use.Hat), pal.color(use.Hat), int(use.Share*100+.5), use.Count
-			}
-			v.Setup.Tickets = append(v.Setup.Tickets, row)
-		}
-	}
+	v.Setup.Tickets = s.ticketRows(r, cfg)
 	if devs, err := s.st.Devices(context.Background()); err == nil {
 		v.Setup.Detection = detectionOverview(v.Lang, cfg.Observe, devs)
 		loc := s.Loc
@@ -647,6 +641,7 @@ func (s *Server) fillSetup(r *http.Request, v *view, cfg core.Config) {
 			}
 			v.Setup.Devices = append(v.Setup.Devices, row)
 		}
+		s.fillTiles(r, v, cfg, devs)
 	}
 	for _, h := range cfg.Hats {
 		if h.Archived {
@@ -655,6 +650,25 @@ func (s *Server) fillSetup(r *http.Request, v *view, cfg core.Config) {
 				Deletable: err == nil && !used})
 		}
 	}
+}
+
+// ticketRows lists the known ticket projects with the hat they are booked on.
+func (s *Server) ticketRows(r *http.Request, cfg core.Config) []ticketRow {
+	links, err := s.st.TicketLinks(r.Context())
+	if err != nil {
+		return nil
+	}
+	pal := newPalette(cfg)
+	k, _, _ := s.knowledge(r)
+	var out []ticketRow
+	for _, p := range core.NewTickets(links, cfg.Tickets).Projects() {
+		row := ticketRow{Project: p.Project, System: p.System, Base: p.URL, Registered: p.Source == core.TicketRegistered, Pattern: p.Project == ""}
+		if use, ok := k.Projects[p.Project]; ok {
+			row.Booked, row.Hat, row.Color, row.Share, row.Count = true, nameOf(names(cfg), use.Hat), pal.color(use.Hat), int(use.Share*100+.5), use.Count
+		}
+		out = append(out, row)
+	}
+	return out
 }
 
 // hatsAction changes the list of hats: add, move, archive, restore.
@@ -976,14 +990,14 @@ func (s *Server) ticketsAction(w http.ResponseWriter, r *http.Request, _ access)
 	if err != nil {
 		var bad badConfig
 		if errors.As(err, &bad) {
-			http.Redirect(w, r, "/setup?e="+url.QueryEscape(userError(lang, err))+"#tickets", http.StatusSeeOther)
+			http.Redirect(w, r, "/setup/tickets?e="+url.QueryEscape(userError(lang, err)), http.StatusSeeOther)
 			return
 		}
 		serverError(w, err)
 		return
 	}
 	s.know.drop()
-	http.Redirect(w, r, "/setup#tickets", http.StatusSeeOther)
+	http.Redirect(w, r, "/setup/tickets", http.StatusSeeOther)
 }
 
 // importAction previews or applies a YAML configuration from the form

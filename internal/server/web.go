@@ -53,7 +53,7 @@ var pageFuncs = template.FuncMap{
 var pages = map[string]*template.Template{}
 
 func init() {
-	for _, p := range []string{"login", "now", "day", "week", "setup", "sethat", "setdefaults", "devices", "detection", "grants", "ai"} {
+	for _, p := range []string{"login", "now", "day", "week", "setup", "sethat", "setdefaults", "devices", "detection", "grants", "tickets", "ai"} {
 		pages[p] = template.Must(template.New("layout").Funcs(pageFuncs).
 			ParseFS(webFS, "templates/layout.html", "templates/"+p+".html", "templates/forms.html"))
 	}

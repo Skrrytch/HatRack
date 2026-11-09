@@ -103,7 +103,7 @@
   <div><h3>{{t $.Lang "web.rules.learned_parts"}} <span class="dim small">{{.PartsSub}}</span></h3><ul>{{range .Parts}}<li><span><span class="hatdot" style="--c:{{.Color}}"></span>{{.Name}}</span><span class="m">{{.Meter}}</span></li>{{end}}</ul></div>
   <div><h3>{{t $.Lang "web.rules.learned_details"}} <span class="dim small">{{t $.Lang "web.rules.weeks8"}}</span></h3><ul>{{range .Details}}<li><span><span class="hatdot" style="--c:{{.Color}}"></span>{{.Name}}{{if .Sub}} <span class="dim small">{{.Sub}}</span>{{end}}</span><span class="m">{{.Meter}}</span></li>{{end}}</ul></div>
   <div><h3>{{t $.Lang "web.rules.learned_projects"}}</h3><ul>{{range .Projects}}<li><span><span class="hatdot" style="--c:{{.Color}}"></span>{{.Name}}</span><span class="m">{{.Meter}}</span></li>{{end}}</ul>
-    <p class="small" style="margin:.5rem 0 0"><a href="/setup#tickets">{{t $.Lang "web.rules.manage_tickets"}}</a></p></div>
+    <p class="small" style="margin:.5rem 0 0"><a href="/setup/tickets">{{t $.Lang "web.rules.manage_tickets"}}</a></p></div>
 </div>
 {{end}}
 {{end}}

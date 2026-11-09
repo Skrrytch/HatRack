@@ -75,6 +75,7 @@ func New(st store.Store, reg *modules.Registry) *Server {
 	s.mux.HandleFunc("POST /setup/hats", s.page(true, s.hatsAction))
 	s.mux.HandleFunc("GET /setup/hat", s.page(true, s.hatPage))
 	s.mux.HandleFunc("POST /setup/hat", s.page(true, s.hatSave))
+	s.mux.HandleFunc("GET /setup/tickets", s.page(true, s.ticketsPage))
 	s.mux.HandleFunc("POST /setup/tickets", s.page(true, s.ticketsAction))
 	s.mux.HandleFunc("GET /setup/ai", s.page(true, s.aiPage))
 	s.mux.HandleFunc("POST /setup/ai", s.page(true, s.aiAction))
