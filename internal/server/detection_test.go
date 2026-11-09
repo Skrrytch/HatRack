@@ -133,8 +133,8 @@ func TestDetectionTabs(t *testing.T) {
 		if strings.Contains(out, `class="matrix"`) || strings.Contains(out, "tab=sensors") || strings.Contains(out, "tab=privacy") {
 			t.Errorf("%q: sensors or privacy still on the detection page", q)
 		}
-		if !strings.Contains(out, `<a href="/setup/detection?tab=idle" class="on"`) {
-			t.Errorf("%q: absence is the first tab", q)
+		if !strings.Contains(out, `name="after"`) || strings.Contains(out, "web.rules") || strings.Contains(out, `class="rules"`) {
+			t.Errorf("%q: the page holds the absence settings only", q)
 		}
 	}
 	// old links lead to the page Freigaben
@@ -315,11 +315,26 @@ func TestHatObserve(t *testing.T) {
 	}
 }
 
+func TestRulesMovedToAssign(t *testing.T) {
+	_, b := setupBrowser(t)
+	r, _ := b.do("GET", "/setup/detection?tab=rules&day=2026-11-04&filter=noise", nil)
+	if loc := r.Header.Get("Location"); r.StatusCode != http.StatusMovedPermanently || !strings.HasPrefix(loc, "/assign?") ||
+		!strings.Contains(loc, "tab=day") || !strings.Contains(loc, "filter=noise") || !strings.Contains(loc, "day=2026-11-04") {
+		t.Errorf("old rules link: %d %s", r.StatusCode, loc)
+	}
+	if r, _ := b.do("GET", "/setup/tickets", nil); r.Header.Get("Location") != "/assign?tab=tickets" {
+		t.Errorf("old tickets link: %s", r.Header.Get("Location"))
+	}
+	// the main navigation names the page
+	if _, out := b.do("GET", "/assign", nil); !strings.Contains(out, `<a href="/assign" class="on">Assignment</a>`) {
+		t.Error("navigation")
+	}
+}
+
 func TestIdleTab(t *testing.T) {
 	e, b := setupBrowser(t)
 	_, out := b.do("GET", "/setup/detection?tab=idle", nil)
 	for _, want := range []string{
-		`<a href="/setup/detection?tab=idle" class="on"`,
 		`name="after" min="1" max="1440" value="5"`,
 		`name="ask_after" min="1" max="1440" value="10"`,
 		`name="stop_after" min="1" max="1440" value="15"`,

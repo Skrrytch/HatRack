@@ -107,10 +107,11 @@ func (s *Server) fillTiles(r *http.Request, v *view, cfg core.Config, devs []sto
 	for _, h := range cfg.Hats {
 		nRules += len(h.Rules)
 	}
-	d := tile{Href: "/setup/detection", Title: i18n.In(lang, "web.sensor.title"), What: i18n.In(lang, "web.setup.t_detection")}
+	d := tile{Href: "/assign", Title: i18n.In(lang, "web.assign.title"), What: i18n.In(lang, "web.setup.t_detection")}
 	d.Lines = append(d.Lines,
-		i18n.In(lang, "web.setup.t_rules", strconv.Itoa(nRules), strconv.Itoa(len(k.Details)+len(k.Parts)+len(k.Projects))),
-		i18n.In(lang, "web.setup.t_away", strconv.Itoa(int(cfg.Observe.Idle.AfterD()/time.Minute))))
+		i18n.In(lang, "web.setup.t_rules", strconv.Itoa(nRules), strconv.Itoa(len(k.Details)+len(k.Parts)+len(k.Projects))))
+	away := tile{Href: "/setup/detection", Title: i18n.In(lang, "web.detection.tab_idle"), What: i18n.In(lang, "web.setup.t_idle"),
+		Lines: []string{i18n.In(lang, "web.setup.t_away", strconv.Itoa(int(cfg.Observe.Idle.AfterD()/time.Minute)))}}
 	window := false
 	for _, dv := range devs {
 		window = window || cfg.Observe.Enabled(dv.Name, "window")
@@ -120,7 +121,7 @@ func (s *Server) fillTiles(r *http.Request, v *view, cfg core.Config, devs []sto
 	}
 
 	// tickets: registered, then learned
-	t := tile{Href: "/setup/tickets", Title: i18n.In(lang, "web.tickets.title"), What: i18n.In(lang, "web.setup.t_tickets")}
+	t := tile{Href: "/assign?tab=tickets", Title: i18n.In(lang, "web.tickets.title"), What: i18n.In(lang, "web.setup.t_tickets")}
 	var reg, learned []string
 	pattern := 0
 	for _, row := range st.Tickets {
@@ -145,7 +146,7 @@ func (s *Server) fillTiles(r *http.Request, v *view, cfg core.Config, devs []sto
 	if len(t.Lines) == 0 {
 		t.Lines = []string{i18n.In(lang, "web.tickets.none")}
 	}
-	st.Recognise = []tile{g, d, t}
+	st.Recognise, st.Away = []tile{g, d, t}, away
 
 	// devices: chips, and a device that never connected
 	dv := tile{Href: "/setup/devices", Title: i18n.In(lang, "web.devices"), What: i18n.In(lang, "web.setup.t_devices"), Chips: st.Devices}
@@ -195,13 +196,7 @@ func (s *Server) aiLines(ctx context.Context, lang string, r *http.Request) []st
 	return out
 }
 
-func (s *Server) ticketsPage(w http.ResponseWriter, r *http.Request, acc access) {
-	cfg, _, err := s.st.GetConfig(r.Context())
-	if err != nil {
-		serverError(w, err)
-		return
-	}
-	v := s.base(r, "tickets", acc)
-	v.Setup.Tickets = s.ticketRows(r, cfg)
-	s.render(w, v, http.StatusOK)
+// ticketsPage moved to the page Zuordnung; old links still work.
+func (s *Server) ticketsPage(w http.ResponseWriter, r *http.Request, _ access) {
+	http.Redirect(w, r, "/assign?tab=tickets", http.StatusMovedPermanently)
 }

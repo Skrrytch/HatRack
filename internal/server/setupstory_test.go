@@ -26,7 +26,7 @@ func TestSetupStory(t *testing.T) {
 		t.Errorf("inherit line:\n%s", out)
 	}
 	// tiles link the pages and show their state
-	for _, want := range []string{`class="tile" href="/setup/grants"`, `class="tile" href="/setup/detection"`, `class="tile" href="/setup/tickets"`,
+	for _, want := range []string{`class="tile" href="/setup/grants"`, `class="tile" href="/assign"`, `class="tile" href="/assign?tab=tickets"`, `class="tile" href="/setup/detection"`,
 		`class="tile" href="/setup/devices"`, `class="tile" href="/setup/ai"`, "0 rules · 0 learned clues", "away after 5 min", "no access yet"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("lacks %s", want)

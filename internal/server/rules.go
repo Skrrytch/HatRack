@@ -33,26 +33,29 @@ const (
 )
 
 type rulesView struct {
-	Counts   string
-	Saved    bool
-	Deleted  bool
-	NoSensor bool
-	EmptyDay bool
-	Day      string
-	Days     []option
-	Device   string
-	Devices  []option
-	Carry    [][2]string // fields of an open draft, kept when day or device change
-	Cover    []coverPart
-	Filters  []filterLink
-	Rows     []testRow
-	More     int
-	Hour     string       // "all", "0".."23", or "" for the default
-	Hours    []filterLink // the hours with rows, and the whole day
-	NextHref string       // the next hour with rows
-	NextHour string
-	AddHref  string
-	Editor   *editorView
+	Counts                      string
+	Saved                       bool
+	Deleted                     bool
+	NoSensor                    bool
+	EmptyDay                    bool
+	Day                         string
+	Days                        []option
+	Device                      string
+	Devices                     []option
+	Carry                       [][2]string // fields of an open draft, kept when day or device change
+	Cover                       []coverPart
+	Filters                     []filterLink
+	Rows                        []testRow
+	More                        int
+	Tab                         string // of the page Zuordnung
+	Tabs                        []pageTab
+	NRules, NLearned, NProjects int
+	Hour                        string       // "all", "0".."23", or "" for the default
+	Hours                       []filterLink // the hours with rows, and the whole day
+	NextHref                    string       // the next hour with rows
+	NextHour                    string
+	AddHref                     string
+	Editor                      *editorView
 
 	RuleList   []ruleLine // all rules in one list, filtered and sorted
 	RuleChips  []filterLink
@@ -322,8 +325,8 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 	for _, h := range cfg.Hats {
 		nRules += len(h.Rules)
 	}
-	rv.Counts = i18n.In(lang, "web.rules.counts", strconv.Itoa(nRules), strconv.Itoa(len(tk.Projects())),
-		strconv.Itoa(len(k.Details)+len(k.Parts)+len(k.Projects)))
+	rv.NRules, rv.NProjects, rv.NLearned = nRules, len(tk.Projects()), len(k.Details)+len(k.Parts)+len(k.Projects)
+	rv.Counts = i18n.In(lang, "web.rules.counts", strconv.Itoa(rv.NRules), strconv.Itoa(rv.NProjects), strconv.Itoa(rv.NLearned))
 	rv.Saved, rv.Deleted = q.Get("saved") != "", q.Get("deleted") != ""
 	rv.Filter = q.Get("filter")
 	if !slices.Contains([]string{"unknown", "diff", "noise"}, rv.Filter) {
@@ -399,7 +402,7 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 		rv.Devices = append(rv.Devices, option{Value: n, Label: n, Selected: n == rv.Device})
 	}
 
-	base := "/setup/detection?tab=rules&day=" + url.QueryEscape(pick) + "&device=" + url.QueryEscape(rv.Device)
+	base := "/assign?tab=day&day=" + url.QueryEscape(pick) + "&device=" + url.QueryEscape(rv.Device)
 	rv.AddHref = base + rv.stateQuery(rv.Filter, rv.RuleFilter, rv.RuleSortBy, rv.Hour, false) + "&ed_new=1#try"
 
 	// the draft
@@ -492,7 +495,7 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 		rv.RuleFilter = ""
 	}
 	for _, c := range chips {
-		rv.RuleChips = append(rv.RuleChips, filterLink{Href: base + rv.stateQuery(rv.Filter, c.Value, rv.RuleSortBy, rv.Hour, true) + "#regeln",
+		rv.RuleChips = append(rv.RuleChips, filterLink{Href: strings.Replace(base, "?tab=day&", "?tab=rules&", 1) + rv.stateQuery(rv.Filter, c.Value, rv.RuleSortBy, rv.Hour, true) + "#regeln",
 			Label: c.Label, N: c.N, On: c.Value == rv.RuleFilter})
 	}
 	sortRules(all, rv.RuleSortBy)
@@ -1173,7 +1176,7 @@ func (s *Server) ruleAction(w http.ResponseWriter, r *http.Request, acc access) 
 	d := draftOf(q)
 	day, device := r.PostFormValue("day"), r.PostFormValue("device")
 	dest := func(extra string) string {
-		return "/setup/detection?tab=rules&day=" + url.QueryEscape(day) + "&device=" + url.QueryEscape(device) +
+		return "/assign?tab=day&day=" + url.QueryEscape(day) + "&device=" + url.QueryEscape(device) +
 			"&filter=" + url.QueryEscape(r.PostFormValue("filter")) + "&rf=" + url.QueryEscape(r.PostFormValue("rf")) +
 			"&rs=" + url.QueryEscape(r.PostFormValue("rs")) + "&hour=" + url.QueryEscape(r.PostFormValue("hour")) + extra + "#rules-day"
 	}
@@ -1214,20 +1217,14 @@ func (s *Server) ruleAction(w http.ResponseWriter, r *http.Request, acc access) 
 
 // renderRulesFailure shows the tab again with the editor, the input and the
 // error at the field.
-func (s *Server) renderRulesFailure(w http.ResponseWriter, r *http.Request, acc access, cfg core.Config, q url.Values, saveErr error) {
-	v := s.base(r, "detection", acc)
-	d := &v.Detection
-	d.Tab = "rules"
-	for _, t := range detTabs {
-		d.Tabs = append(d.Tabs, pageTab{ID: t.ID, Href: "/setup/detection?tab=" + t.ID, Title: i18n.In(v.Lang, t.Key), On: t.ID == d.Tab})
-	}
+func (s *Server) renderRulesFailure(w http.ResponseWriter, r *http.Request, acc access, _ core.Config, q url.Values, saveErr error) {
+	v := s.base(r, "assign", acc)
 	cur, _, err := s.st.GetConfig(r.Context())
 	if err != nil {
 		serverError(w, err)
 		return
 	}
-	_ = cfg
-	if err := s.rulesTab(r, &v, cur, q, saveErr); err != nil {
+	if err := s.fillAssign(r, &v, cur, q, saveErr); err != nil {
 		serverError(w, err)
 		return
 	}
@@ -1247,14 +1244,14 @@ type hatRules struct {
 func (s *Server) fillHatRules(r *http.Request, v *view, cfg core.Config, h core.Hat) {
 	hr := &v.Hat.Rules
 	hr.Name = h.DisplayName()
-	hr.AddHref = "/setup/detection?tab=rules&ed_new=1&ed_scope=" + url.QueryEscape(h.Key) + "#try"
+	hr.AddHref = "/assign?tab=day&ed_new=1&ed_scope=" + url.QueryEscape(h.Key) + "#try"
 	k, stats, err := s.knowledge(r)
 	if err != nil {
 		return
 	}
 	nm, pal := names(cfg), newPalette(cfg)
 	for n, rule := range h.Rules {
-		l := s.ruleLineOf(v.Lang, cfg, nm, pal, stats, h.Key, n, rule, "/setup/detection?tab=rules")
+		l := s.ruleLineOf(v.Lang, cfg, nm, pal, stats, h.Key, n, rule, "/assign?tab=day")
 		l.HatName = ""
 		hr.Lines = append(hr.Lines, l)
 	}

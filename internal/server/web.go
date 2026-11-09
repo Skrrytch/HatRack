@@ -54,7 +54,7 @@ var pageFuncs = template.FuncMap{
 var pages = map[string]*template.Template{}
 
 func init() {
-	for _, p := range []string{"login", "now", "day", "week", "setup", "sethat", "setdefaults", "devices", "detection", "grants", "tickets", "ai"} {
+	for _, p := range []string{"login", "now", "day", "week", "setup", "sethat", "setdefaults", "devices", "detection", "grants", "assign", "ai"} {
 		pages[p] = template.Must(template.New("layout").Funcs(pageFuncs).
 			ParseFS(webFS, "templates/layout.html", "templates/"+p+".html", "templates/forms.html"))
 	}
@@ -439,8 +439,9 @@ func (s *Server) base(r *http.Request, page string, acc access) view {
 			v.Nav = append(v.Nav, navItem{n.href, i18n.In(lang, n.key), n.page == page})
 		}
 		if acc == fullAccess {
+			v.Nav = append(v.Nav, navItem{"/assign", i18n.In(lang, "web.nav.assign"), page == "assign"})
 			v.Nav = append(v.Nav, navItem{"/setup", i18n.In(lang, "web.nav.setup"), strings.HasPrefix(page, "set") ||
-				slices.Contains([]string{"devices", "detection", "grants", "tickets", "ai"}, page)})
+				slices.Contains([]string{"devices", "detection", "grants", "ai"}, page)})
 		}
 	}
 	if m := r.URL.Query().Get("e"); m != "" {

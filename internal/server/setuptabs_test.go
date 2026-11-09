@@ -54,8 +54,7 @@ func TestSetupPagesShareTheHead(t *testing.T) {
 		"/setup/defaults":      {"General", "Look", "On switching", "Report"},
 		"/setup/hat?key=venom": {"General", "Look", "On switching"},
 		"/setup/grants":        {"Basics", "Further permissions", "History"},
-		"/setup/detection":     {"Absence", "Assignment"},
-		"/setup/tickets":       nil,
+		"/setup/detection":     nil,
 		"/setup/ai":            nil,
 		"/setup/devices":       nil,
 	} {

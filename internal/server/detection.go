@@ -26,7 +26,6 @@ import (
 // The sensor table and the privacy lists moved to the page Freigaben (#19).
 var detTabs = []struct{ ID, Key string }{
 	{"idle", "web.detection.tab_idle"},
-	{"rules", "web.detection.tab_rules"},
 }
 
 type detectionView struct {
@@ -164,6 +163,11 @@ func (s *Server) detectionPage(w http.ResponseWriter, r *http.Request, acc acces
 	case "privacy":
 		http.Redirect(w, r, "/setup/grants?tab=basics#privacy", http.StatusMovedPermanently)
 		return
+	case "rules": // moved to the page Zuordnung
+		q := r.URL.Query()
+		q.Set("tab", "day")
+		http.Redirect(w, r, "/assign?"+q.Encode(), http.StatusMovedPermanently)
+		return
 	}
 	ctx := r.Context()
 	lang := s.langOf(r)
@@ -184,8 +188,6 @@ func (s *Server) detectionPage(w http.ResponseWriter, r *http.Request, acc acces
 		return
 	}
 	switch d.Tab {
-	case "rules":
-		err = s.rulesTab(r, &v, cfg, r.URL.Query(), nil)
 	case "idle":
 		i := cfg.Observe.Idle
 		d.Idle = idleView{

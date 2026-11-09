@@ -74,7 +74,7 @@ func pcts(out string) (sum int) {
 func TestRulesTab(t *testing.T) {
 	e, b := setupBrowser(t)
 	rulesDay(t, e)
-	r, out := b.do("GET", "/setup/detection?tab=rules&day=2026-11-04", nil)
+	r, out := b.do("GET", "/assign?tab=day&day=2026-11-04", nil)
 	if r.StatusCode != 200 {
 		t.Fatalf("status %d", r.StatusCode)
 	}
@@ -105,12 +105,12 @@ func TestRulesTab(t *testing.T) {
 		t.Error("first title part in the link")
 	}
 	// filter
-	_, out = b.do("GET", "/setup/detection?tab=rules&day=2026-11-04&filter=noise", nil)
+	_, out = b.do("GET", "/assign?tab=day&day=2026-11-04&filter=noise", nil)
 	if strings.Contains(out, "billing - Visual") || !strings.Contains(out, "Spotify") {
 		t.Error("noise filter")
 	}
-	// lists below
-	_, out = b.do("GET", "/setup/detection?tab=rules&day=2026-11-04", nil)
+	// the rule list and what was learned have their own tabs
+	out = assignTabs3(b, "&day=2026-11-04")
 	for _, want := range []string{"WHEN</span>", "activity development", "noise, never a suggestion", "Last 7 days", "Nothing learned yet"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("rules list: missing %q", want)
@@ -121,7 +121,7 @@ func TestRulesTab(t *testing.T) {
 func TestRulesTry(t *testing.T) {
 	e, b := setupBrowser(t)
 	rulesDay(t, e)
-	q := "/setup/detection?tab=rules&day=2026-11-04&ed_scope=tag&ed_app=code&ed_title=billing"
+	q := "/assign?tab=day&day=2026-11-04&ed_scope=tag&ed_app=code&ed_title=billing"
 	r, out := b.do("GET", q, nil)
 	if r.StatusCode != 200 || !strings.Contains(out, `class="ruleedit"`) {
 		t.Fatalf("try: %d", r.StatusCode)
@@ -133,7 +133,7 @@ func TestRulesTry(t *testing.T) {
 		t.Error("hit row")
 	}
 	// an invalid expression is an error under the field, the page still shows
-	r, out = b.do("GET", "/setup/detection?tab=rules&day=2026-11-04&ed_scope=tag&ed_title=(", nil)
+	r, out = b.do("GET", "/assign?tab=day&day=2026-11-04&ed_scope=tag&ed_title=(", nil)
 	if r.StatusCode != 200 || !strings.Contains(out, `class="err"`) {
 		t.Errorf("invalid: %d", r.StatusCode)
 	}
@@ -149,7 +149,7 @@ func TestRulesSave(t *testing.T) {
 		}
 		return f
 	}
-	r, _ := b.do("POST", "/setup/detection", form(nil))
+	r, _ := b.do("POST", "/assign", form(nil))
 	if r.StatusCode != 303 || !strings.Contains(r.Header.Get("Location"), "saved=") {
 		t.Fatalf("save: %d %s", r.StatusCode, r.Header.Get("Location"))
 	}
@@ -158,7 +158,7 @@ func TestRulesSave(t *testing.T) {
 		t.Fatalf("rules: %+v", h.Rules)
 	}
 	// invalid: 400, the error at the field, nothing stored
-	r, out := b.do("POST", "/setup/detection", form(map[string]string{"ed_title": "("}))
+	r, out := b.do("POST", "/assign", form(map[string]string{"ed_title": "("}))
 	if r.StatusCode != 400 || !strings.Contains(out, `class="err"`) || !strings.Contains(out, `value="("`) {
 		t.Errorf("invalid save: %d", r.StatusCode)
 	}
@@ -166,11 +166,11 @@ func TestRulesSave(t *testing.T) {
 		t.Error("an invalid rule was stored")
 	}
 	// edit in place, then move to another hat
-	b.do("POST", "/setup/detection", form(map[string]string{"ed_edit": "tag:0", "ed_title": "billing-service"}))
+	b.do("POST", "/assign", form(map[string]string{"ed_edit": "tag:0", "ed_title": "billing-service"}))
 	if h, _ := config(t, e).Hat("tag"); len(h.Rules) != 1 || h.Rules[0].Match["title"] != "billing-service" {
 		t.Fatalf("edit: %+v", h.Rules)
 	}
-	b.do("POST", "/setup/detection", form(map[string]string{"ed_edit": "tag:0", "ed_scope": "venom", "ed_act": "review"}))
+	b.do("POST", "/assign", form(map[string]string{"ed_edit": "tag:0", "ed_scope": "venom", "ed_act": "review"}))
 	c := config(t, e)
 	if h, _ := c.Hat("tag"); len(h.Rules) != 0 {
 		t.Errorf("moved rule stayed: %+v", h.Rules)
@@ -179,12 +179,12 @@ func TestRulesSave(t *testing.T) {
 		t.Errorf("moved rule missing: %+v", h.Rules)
 	}
 	// the editor opens with the rule's values
-	_, out = b.do("GET", "/setup/detection?tab=rules&day=2026-11-04&ed_edit=venom:1", nil)
+	_, out = b.do("GET", "/assign?tab=day&day=2026-11-04&ed_edit=venom:1", nil)
 	if !strings.Contains(out, `name="ed_title" value="billing"`) || !strings.Contains(out, `name="ed_edit" value="venom:1"`) {
 		t.Errorf("edit prefill:\n%s", out[strings.Index(out, `class="ruleedit"`):])
 	}
 	// delete
-	r, _ = b.do("POST", "/setup/detection", url.Values{"op": {"rule.delete"}, "day": {"2026-11-04"}, "ed_edit": {"venom:1"}})
+	r, _ = b.do("POST", "/assign", url.Values{"op": {"rule.delete"}, "day": {"2026-11-04"}, "ed_edit": {"venom:1"}})
 	if r.StatusCode != 303 || !strings.Contains(r.Header.Get("Location"), "deleted=1") {
 		t.Fatalf("delete: %d %s", r.StatusCode, r.Header.Get("Location"))
 	}
@@ -196,7 +196,7 @@ func TestRulesSave(t *testing.T) {
 func TestRulesEmptyStates(t *testing.T) {
 	e, b := setupBrowser(t)
 	// no window sensor on any device
-	_, out := b.do("GET", "/setup/detection?tab=rules", nil)
+	out := assignTabs3(b, "")
 	for _, want := range []string{"No windows observed yet", "To the sensors", "No rules yet. Add the first one.", "Nothing learned yet"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q", want)
@@ -204,7 +204,7 @@ func TestRulesEmptyStates(t *testing.T) {
 	}
 	// the sensor is on, the day is empty
 	e.do("PUT", "/api/config", "version: 1\nobserve:\n  devices:\n    laptop: {window: true}\nhats: {}\n")
-	_, out = b.do("GET", "/setup/detection?tab=rules", nil)
+	_, out = b.do("GET", "/assign?tab=day", nil)
 	if !strings.Contains(out, "Nothing was observed on this day") {
 		t.Error("empty day")
 	}
@@ -302,7 +302,8 @@ func TestRuleSortText(t *testing.T) {
 func TestRulesKeepState(t *testing.T) {
 	e, b := setupBrowser(t)
 	rulesDay(t, e)
-	_, out := b.do("GET", "/setup/detection?tab=rules&day=2026-11-04&filter=unknown&rf=noise&rs=app&ed_new=1&ed_app=firefox", nil)
+	state := "&day=2026-11-04&filter=unknown&rf=noise&rs=app&ed_new=1&ed_app=firefox"
+	var out string
 	href := func(re string) string {
 		t.Helper()
 		m := regexp.MustCompile(`href="([^"]*` + re + `[^"]*)"`).FindStringSubmatch(out)
@@ -312,29 +313,42 @@ func TestRulesKeepState(t *testing.T) {
 		return m[1]
 	}
 	// a chip of the rule list keeps the day-list filter, the order and the draft
-	if h := href(`rf=ohne`); !strings.Contains(h, "filter=unknown") || !strings.Contains(h, "rs=app") || !strings.Contains(h, "ed_app=firefox") {
+	_, out = b.do("GET", "/assign?tab=rules"+state, nil)
+	if h := href(`rf=ohne`); !strings.Contains(h, "tab=rules") || !strings.Contains(h, "filter=unknown") || !strings.Contains(h, "rs=app") || !strings.Contains(h, "ed_app=firefox") {
 		t.Errorf("rule chip: %s", h)
 	}
+	// the order form keeps the day-list filter
+	if !strings.Contains(out, `name="filter" value="unknown"`) {
+		t.Error("order form does not keep the day-list filter")
+	}
 	// a filter of the day list keeps filter and order of the rule list and the draft
+	_, out = b.do("GET", "/assign?tab=day"+state, nil)
 	if h := href(`filter=diff`); !strings.Contains(h, "rf=noise") || !strings.Contains(h, "rs=app") || !strings.Contains(h, "ed_app=firefox") {
 		t.Errorf("day filter: %s", h)
 	}
-	// the day form keeps the rule list, the order form keeps the day-list filter
+	// the day form keeps the rule list
 	for _, want := range []string{`name="rf" value="noise"`, `name="rs" value="app"`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("day form: missing %s", want)
 		}
 	}
-	if n := strings.Count(out, `name="filter" value="unknown"`); n < 2 {
-		t.Errorf("order form does not keep the day-list filter (%d)", n)
+}
+
+// assignTabs3 is the page Zuordnung with its tabs rules, day and learned.
+func assignTabs3(b *browser, q string) string {
+	var out string
+	for _, tab := range []string{"rules", "day", "learned"} {
+		_, o := b.do("GET", "/assign?tab="+tab+q, nil)
+		out += o
 	}
+	return out
 }
 
 func TestRulesHours(t *testing.T) {
 	e, b := setupBrowser(t)
 	rulesDay(t, e)
 	page := func(q string) string {
-		_, out := b.do("GET", "/setup/detection?tab=rules&day=2026-11-04"+q, nil)
+		_, out := b.do("GET", "/assign?tab=day&day=2026-11-04"+q, nil)
 		return out
 	}
 	// the day fits: the whole day, with a chip per hour

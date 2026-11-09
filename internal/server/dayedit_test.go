@@ -213,14 +213,14 @@ func TestTicketLinksSetup(t *testing.T) {
 	e, b := setupBrowser(t)
 	b.do("POST", "/action", url.Values{"op": {"on"}, "hat": {"venom"}, "activity": {"review"}})
 	b.do("POST", "/action", url.Values{"op": {"detail"}, "detail": {"https://wrong.example/browse/TAG-1"}})
-	_, out := b.do("GET", "/setup/tickets", nil)
+	_, out := b.do("GET", "/assign?tab=tickets", nil)
 	if !strings.Contains(out, "https://wrong.example/browse/") {
 		t.Fatal("learned link listed")
 	}
 	if _, out := b.do("GET", "/setup", nil); !strings.Contains(out, "TAG learned from bookings") || strings.Contains(out, "https://wrong.example/browse/") {
 		t.Error("the overview names the project, the table is on its own page")
 	}
-	if r, _ := b.do("POST", "/setup/tickets", url.Values{"op": {"register"}, "project": {"ACME"}, "link": {"https://jira.example.com/browse/ACME-1"}}); r.Header.Get("Location") != "/setup/tickets" {
+	if r, _ := b.do("POST", "/setup/tickets", url.Values{"op": {"register"}, "project": {"ACME"}, "link": {"https://jira.example.com/browse/ACME-1"}}); r.Header.Get("Location") != "/assign?tab=tickets" {
 		t.Errorf("after registering: %s", r.Header.Get("Location"))
 	}
 	b.do("POST", "/setup/tickets", url.Values{"project": {"TAG"}})

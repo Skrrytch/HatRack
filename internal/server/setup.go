@@ -46,7 +46,8 @@ type setupView struct {
 	Detection string // one-line summary of the detection settings
 	Import    importView
 	Inherit   string // what every hat inherits from the defaults
-	Recognise []tile // step 2: permissions, detection, tickets
+	Recognise []tile // step 2: permissions, assignment, tickets
+	Away      tile   // step 2, below: absence
 	Runs      []tile // step 3: devices, AI
 }
 
@@ -1038,14 +1039,14 @@ func (s *Server) ticketsAction(w http.ResponseWriter, r *http.Request, _ access)
 	if err != nil {
 		var bad badConfig
 		if errors.As(err, &bad) {
-			http.Redirect(w, r, "/setup/tickets?e="+url.QueryEscape(userError(lang, err)), http.StatusSeeOther)
+			http.Redirect(w, r, "/assign?tab=tickets&e="+url.QueryEscape(userError(lang, err)), http.StatusSeeOther)
 			return
 		}
 		serverError(w, err)
 		return
 	}
 	s.know.drop()
-	http.Redirect(w, r, "/setup/tickets", http.StatusSeeOther)
+	http.Redirect(w, r, "/assign?tab=tickets", http.StatusSeeOther)
 }
 
 // importAction previews or applies a YAML configuration from the form

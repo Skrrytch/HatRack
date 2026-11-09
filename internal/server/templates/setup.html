@@ -52,6 +52,7 @@
 <div class="tiles flowtiles">
   {{range $i, $t := .Recognise}}{{if $i}}<span class="arrow" aria-hidden="true">→</span>{{end}}{{template "tile" $t}}{{end}}
 </div>
+<div class="tiles flowtiles" style="margin-top:.8rem">{{template "tile" .Away}}</div>
 
 <div class="step"><span class="n">3</span><h2>{{t $.Lang "web.setup.s3"}}</h2></div>
 <p class="stepsub">{{t $.Lang "web.setup.s3_sub"}}</p>

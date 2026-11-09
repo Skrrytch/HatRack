@@ -58,7 +58,7 @@
     {{range .Projects}}<span class="src ticket">{{t $.Lang "web.rules.src_ticket"}} <span class="f">{{t $.Lang "web.hat.also_project"}}</span> {{.}}</span>{{end}}
     {{if .Learned}}<span class="src learned">{{t $.Lang "web.rules.src_learned"}} <span class="f">{{.Learned}}</span></span>{{end}}
     {{else}}<span class="dim">{{t $.Lang "web.hat.also_none"}}</span>{{end}}
-    <span class="grow"></span><a class="small" href="/setup/detection?tab=rules">{{t $.Lang "web.hat.to_rules"}}</a></div>
+    <span class="grow"></span><a class="small" href="/assign?tab=rules">{{t $.Lang "web.hat.to_rules"}}</a></div>
 </div>
 {{end}}
 {{else}}

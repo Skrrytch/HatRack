@@ -59,7 +59,7 @@
   </div>
   <div class="ract">
     {{if .Mode}}<span class="mode {{.ModeCls}}">{{.Mode}}</span>{{end}}
-    <span class="stat{{if .StatZero}} zero{{end}}" tabindex="0">{{.Stat}}<span class="pop"><b>{{.StatHead}}</b><span>{{.StatBody}}</span></span></span>
+    <span class="rstat{{if .StatZero}} zero{{end}}" tabindex="0">{{.Stat}}<span class="pop"><b>{{.StatHead}}</b><span>{{.StatBody}}</span></span></span>
     {{if $.CanWrite}}<a class="btn small" href="{{.Edit}}">{{t $.Lang "web.setup.edit"}}</a>{{end}}
   </div>
 </li>{{end}}{{end}}
