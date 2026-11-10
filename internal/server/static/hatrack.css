@@ -604,3 +604,13 @@ table.test .wd .br{color:var(--ink)}
 .ruleedit .infobox dl{margin:0 0 .4rem}
 .ruleedit .infobox dt{font-weight:700;white-space:nowrap}
 .ruleedit .infobox dd{margin:0 0 .45rem}
+.btn.icon,button.icon{display:inline-flex;align-items:center;justify-content:center;padding:.25rem .4rem;line-height:1}
+.btn.icon .ico,button.icon .ico{width:1rem;height:1rem}
+.rules .ract{gap:.3rem}
+.drawer .dtools{display:flex;align-items:center;gap:.2rem}
+.drawer .dtools button.icon{background:none;border:1px solid transparent;color:var(--dim)}
+.drawer .dtools button.icon:hover{border-color:var(--line);color:var(--ink)}
+.drawer .dtools button.icon.danger:hover{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,transparent)}
+.ruleedit .acts{display:flex;align-items:center;gap:.5rem}
+.ruleedit .acts .discard{color:var(--dim);font-size:.9rem}
+.ruleedit .acts .discard:hover{color:var(--ink)}

@@ -26,6 +26,7 @@
   </div>
   {{if .RuleList}}
   <ul class="rules">{{range .RuleList}}{{template "ruleline" dict "L" . "Lang" $.Lang "CanWrite" $.CanWrite}}{{end}}</ul>
+  {{with .Editor}}{{template "ruleeditor" dict "E" . "R" $.Detection.Rules "Lang" $.Lang}}{{end}}
   {{else}}<p class="dim">{{t $.Lang "web.rules.all_empty"}}</p>{{end}}
   <p class="row" style="margin:.6rem 0 0">{{if $.CanWrite}}<a class="btn" href="{{.GlobalAdd}}">{{t $.Lang "web.rules.add"}}</a>{{end}}<button type="button" disabled title="{{t $.Lang "web.rules.templates_soon"}}">{{t $.Lang "web.rules.templates"}}</button></p>
 </div>
@@ -168,7 +169,7 @@
 
 {{define "ruleeditor"}}{{with .E}}
 <form class="ruleedit drawer" id="try" method="get" action="/assign" data-keepscroll aria-labelledby="try-h">
-  <input type="hidden" name="tab" value="day">
+  <input type="hidden" name="tab" value="{{if eq $.R.Tab "rules"}}rules{{else}}day{{end}}">
   <input type="hidden" name="day" value="{{$.R.Day}}">
   <input type="hidden" name="device" value="{{$.R.Device}}">
   <input type="hidden" name="filter" value="{{$.R.Filter}}">
@@ -185,7 +186,7 @@
   {{if .ObsApp}}<input type="hidden" name="ed_oapp" value="{{.ObsApp}}">{{end}}
   {{if .ObsTitle}}<input type="hidden" name="ed_otitle" value="{{.ObsTitle}}">{{end}}
   <div class="dhead"><h2 id="try-h">{{if .IsEdit}}{{t $.Lang "web.rules.e_edit"}}{{else}}{{t $.Lang "web.rules.e_new"}}{{end}}{{if .ID}} <span class="rid {{ridc .ID}}">#{{.ID}}</span>{{else if .Copy}} <span class="rid">{{t $.Lang "web.rules.e_copy" .Copy}}</span>{{end}}</h2>
-    <a class="x" href="{{.CloseHref}}" data-close-drawer title="{{t $.Lang "web.rules.discard"}}" aria-label="{{t $.Lang "web.rules.discard"}}">×</a></div>
+    <span class="dtools">{{if .IsEdit}}<button type="submit" class="icon" name="ed_dup" value="1" title="{{t $.Lang "web.rules.dup"}}" aria-label="{{t $.Lang "web.rules.dup"}}">{{template "icon" "copy"}}</button><button type="submit" class="icon danger" formmethod="post" name="op" value="rule.delete" title="{{t $.Lang "web.rules.delete"}}" aria-label="{{t $.Lang "web.rules.delete"}}" onclick="return confirm('{{t $.Lang "web.rules.delete_confirm"}}')">{{template "icon" "trash"}}</button>{{end}}<a class="x" href="{{.CloseHref}}" data-close-drawer title="{{t $.Lang "web.rules.discard"}}" aria-label="{{t $.Lang "web.rules.discard"}}">×</a></span></div>
   {{if .ErrTop}}<p class="err">{{.ErrTop}}</p>{{end}}
   <div class="line"><span>{{t $.Lang "web.rules.e_for"}}</span>
     <label>{{t $.Lang "web.rules.f_hat"}}<select name="ed_scope" data-submit>{{range .Hats}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label><span></span></div>
@@ -215,12 +216,13 @@
           <p class="dim">{{t $.Lang "web.rules.live_soon"}}</p></div></details>
       <details><summary class="small dim">{{t $.Lang "web.rules.f_more"}}</summary>
         <label class="small">{{t $.Lang "web.rules.f_prio"}} <input type="number" name="ed_prio" min="-100" max="100" value="{{.Prio}}" style="width:5rem"></label> <span class="hint">{{t $.Lang "web.rules.f_prio_hint"}}</span>{{if .ErrPrio}}<div class="err">{{.ErrPrio}}</div>{{end}}</details>
-      {{if .IsEdit}}<span class="grow"></span><button type="submit" class="small" name="ed_dup" value="1">{{t $.Lang "web.rules.dup"}}</button><button type="submit" class="danger small" formmethod="post" name="op" value="rule.delete" onclick="return confirm('{{t $.Lang "web.rules.delete_confirm"}}')">{{t $.Lang "web.rules.delete"}}</button>{{end}}
     </div>
     <div class="acts">
       <button type="submit" data-try>{{t $.Lang "web.rules.try"}}</button>
       <button type="submit" class="primary" formmethod="post" name="op" value="rule.save">{{t $.Lang "web.rules.save"}}</button>
-      <a class="btn" href="{{.CloseHref}}">{{t $.Lang "web.rules.discard"}}</a>
+      <span class="grow"></span>
+      <a class="discard" href="{{.CloseHref}}">{{t $.Lang "web.rules.discard"}}</a>
     </div>
+    {{if .DayHref}}<p class="small" style="margin:.2rem 0 0"><a href="{{.DayHref}}">{{t $.Lang "web.rules.see_day"}}</a></p>{{end}}
   </div>
 </form>{{end}}{{end}}

@@ -50,7 +50,7 @@ func (s *Server) fillAssign(r *http.Request, v *view, cfg core.Config, q url.Val
 			rv.Tab = t.ID
 		}
 	}
-	if saveErr != nil || (rv.Editor != nil && !q.Has("tab")) {
+	if (saveErr != nil && q.Get("tab") != "rules") || (rv.Editor != nil && !q.Has("tab")) {
 		rv.Tab = "day" // the error shows at the editor; an old link with a draft
 	}
 	switch rv.Tab {

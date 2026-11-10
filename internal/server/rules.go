@@ -176,6 +176,7 @@ type editorView struct {
 	ObsWhen, ObsApp, ObsTitle                                                        string // the observation the draft came from
 	Copy                                                                             string // id of the rule this new one copies
 	CloseHref                                                                        string
+	DayHref                                                                          string // from the rules: this draft on the day
 	Verdict, VerdictCls                                                              string // the draft on its starting point: win, miss, beaten, pending
 }
 
@@ -478,6 +479,12 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 
 	base := "/assign?tab=day&day=" + url.QueryEscape(pick) + "&device=" + url.QueryEscape(rv.Device)
 	rv.AddHref = base + rv.stateQuery(rv.Filter, rv.RuleFilter, rv.RuleSortBy, rv.Hour, false) + "&ed_new=1"
+	// the editor opens over the tab it came from and returns there
+	rulesBase := strings.Replace(base, "?tab=day&", "?tab=rules&", 1)
+	edBase := base
+	if q.Get("tab") == "rules" {
+		edBase = rulesBase
+	}
 
 	// the draft
 	var try *core.Classifier
@@ -488,7 +495,7 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 		if d.Edit != "" {
 			rv.Editor.IsEdit = true
 		}
-		rv.Editor.CloseHref = base + rv.stateQuery(rv.Filter, rv.RuleFilter, rv.RuleSortBy, rv.Hour, false)
+		rv.Editor.CloseHref = edBase + rv.stateQuery(rv.Filter, rv.RuleFilter, rv.RuleSortBy, rv.Hour, false)
 		for _, f := range strings.Fields(editorFields) {
 			if q.Has(f) && !(q.Has("ed_dup") && (f == "ed_edit" || f == "ed_id" || f == "ed_new" || f == "ed_copy")) {
 				rv.Carry = append(rv.Carry, [2]string{f, q.Get(f)})
@@ -496,6 +503,13 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 		}
 		if q.Has("ed_dup") { // links keep the copy, not the rule it came from
 			rv.Carry = append(rv.Carry, [2]string{"ed_new", "1"}, [2]string{"ed_copy", d.Copy})
+		}
+		if edBase != base { // from the rules: the same draft on the day, to see its rows
+			c := url.Values{}
+			for _, kv := range rv.Carry {
+				c.Set(kv[0], kv[1])
+			}
+			rv.Editor.DayHref = base + rv.stateQuery(rv.Filter, rv.RuleFilter, rv.RuleSortBy, rv.Hour, false) + "&" + c.Encode()
 		}
 		rule, rerr := d.rule()
 		err := rerr
@@ -563,17 +577,17 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 	rv.GlobalAdd = base + "&ed_new=1&ed_scope=" + core.RulesScopeDefaults
 	var all []ruleLine
 	for n, rule := range cfg.Defaults.Rules {
-		all = append(all, s.ruleLineOf(lang, cfg, nm, pal, stats, core.RulesScopeDefaults, n, rule, base))
+		all = append(all, s.ruleLineOf(lang, cfg, nm, pal, stats, core.RulesScopeDefaults, n, rule, rulesBase))
 	}
 	for _, h := range cfg.ActiveHats() {
 		for n, rule := range h.Rules {
-			all = append(all, s.ruleLineOf(lang, cfg, nm, pal, stats, h.Key, n, rule, base))
+			all = append(all, s.ruleLineOf(lang, cfg, nm, pal, stats, h.Key, n, rule, rulesBase))
 		}
 	}
 	for _, h := range cfg.Hats { // they count, so they show, last and marked
 		if h.Archived {
 			for n, rule := range h.Rules {
-				l := s.ruleLineOf(lang, cfg, nm, pal, stats, h.Key, n, rule, base)
+				l := s.ruleLineOf(lang, cfg, nm, pal, stats, h.Key, n, rule, rulesBase)
 				l.Archived, l.Mode, l.NoAct = true, "", ""
 				all = append(all, l)
 			}
@@ -1384,8 +1398,12 @@ func (s *Server) ruleAction(w http.ResponseWriter, r *http.Request, acc access) 
 	q := r.PostForm
 	d := draftOf(q)
 	day, device := r.PostFormValue("day"), r.PostFormValue("device")
+	tab := "day"
+	if r.PostFormValue("tab") == "rules" {
+		tab = "rules"
+	}
 	dest := func(extra string) string {
-		return "/assign?tab=day&day=" + url.QueryEscape(day) + "&device=" + url.QueryEscape(device) +
+		return "/assign?tab=" + tab + "&day=" + url.QueryEscape(day) + "&device=" + url.QueryEscape(device) +
 			"&filter=" + url.QueryEscape(r.PostFormValue("filter")) + "&rf=" + url.QueryEscape(r.PostFormValue("rf")) +
 			"&rs=" + url.QueryEscape(r.PostFormValue("rs")) + "&hour=" + url.QueryEscape(r.PostFormValue("hour")) + extra
 	}

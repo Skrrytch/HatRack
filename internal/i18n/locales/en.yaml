@@ -655,6 +655,7 @@ web.rules.f_detail_hint: "$1 takes the first (group) from the title, else branch
 web.rules.f_noise: "Noise: never a suggestion"
 web.rules.f_none: "– none –"
 web.rules.f_optional: "optional"
+web.rules.see_day: "See the matches in the day"
 web.rules.f_live: "Live"
 web.rules.live_what: "What does Live mean?"
 web.rules.live_intro: "what HatRack does while you work and this rule matches. When the day is reviewed afterwards, every rule counts, whatever is set here."

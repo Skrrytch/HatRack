@@ -62,6 +62,6 @@
   <div class="ract">
     {{if .Mode}}<span class="mode {{.ModeCls}}">{{.Mode}}</span>{{end}}
     <span class="rstat{{if .StatZero}} zero{{end}}" tabindex="0">{{.Stat}}<span class="pop"><b>{{.StatHead}}</b><span>{{.StatBody}}</span></span></span>
-    {{if $.CanWrite}}{{if .Dup}}<a class="btn small" href="{{.Dup}}">{{t $.Lang "web.rules.dup"}}</a>{{end}}<a class="btn small" href="{{.Edit}}">{{t $.Lang "web.setup.edit"}}</a>{{end}}
+    {{if $.CanWrite}}{{if .Dup}}<a class="btn small icon" href="{{.Dup}}" title="{{t $.Lang "web.rules.dup"}}" aria-label="{{t $.Lang "web.rules.dup"}}">{{template "icon" "copy"}}</a>{{end}}<a class="btn small icon" href="{{.Edit}}" title="{{t $.Lang "web.setup.edit"}}" aria-label="{{t $.Lang "web.setup.edit"}}">{{template "icon" "edit"}}</a>{{end}}
   </div>
 </li>{{end}}{{end}}

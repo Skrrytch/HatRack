@@ -655,6 +655,7 @@ web.rules.f_detail_hint: "$1 übernimmt die erste (Klammer) aus Titel, sonst Bra
 web.rules.f_noise: "Rauschen: nie ein Vorschlag"
 web.rules.f_none: "– keine –"
 web.rules.f_optional: "optional"
+web.rules.see_day: "Treffer im Tag ansehen"
 web.rules.f_live: "Live"
 web.rules.live_what: "Was bedeutet Live?"
 web.rules.live_intro: "was HatRack tut, während du arbeitest und diese Regel passt. Beim Durchsehen des Tages hinterher zählt jede Regel, egal was hier steht."
