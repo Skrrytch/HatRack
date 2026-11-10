@@ -66,6 +66,8 @@ type observeView struct {
 	IgnorePaths    string   // one folder per line
 	Recent         []string // apps seen lately, not yet listed
 	Retention      int      // days
+	Stored         string   // what is stored, in words; "" when nothing
+	ClearMax       string   // now, as the limit of the clear field
 }
 
 // idleView is the absence tab: the effective values in minutes.

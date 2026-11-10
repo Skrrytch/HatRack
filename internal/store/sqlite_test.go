@@ -423,3 +423,44 @@ func TestOpenOldDatabaseGetsObservations(t *testing.T) {
 		t.Fatalf("%d %v", st, err)
 	}
 }
+
+func TestClearObservations(t *testing.T) {
+	s, ctx := open(t), context.Background()
+	if n, first, err := s.ObservationSummary(ctx); err != nil || n != 0 || !first.IsZero() {
+		t.Fatalf("empty summary: %d %v %v", n, first, err)
+	}
+	if _, _, err := s.PutObservations(ctx, "pc", []core.Observation{
+		ob("a", "window", 0, 5, nil), ob("b", "window", 5, 10, nil), ob("c", "window", 8, 20, nil), ob("d", "idle", 30, 40, nil),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if n, first, _ := s.ObservationSummary(ctx); n != 4 || !first.Equal(base) {
+		t.Fatalf("summary: %d %v", n, first)
+	}
+	// up to minute 10: a and b go (b ends exactly then), c starts at 10
+	n, err := s.ClearObservations(ctx, base.Add(10*time.Minute))
+	if err != nil || n != 2 {
+		t.Fatalf("clear: %d %v", n, err)
+	}
+	got := allObs(t, s)
+	if len(got) != 2 || got[0].ID != "c" || !got[0].Start.Equal(base.Add(10*time.Minute)) || got[1].ID != "d" {
+		t.Fatalf("after clear: %+v", got)
+	}
+	// a late upload brings nothing back: old spans are skipped, a span
+	// running past the limit is cut
+	st, sk, err := s.PutObservations(ctx, "pc", []core.Observation{ob("a", "window", 0, 6, nil), ob("e", "window", 9, 12, nil)})
+	if err != nil || st != 1 || sk != 1 {
+		t.Fatalf("late upload: %d %d %v", st, sk, err)
+	}
+	got = allObs(t, s)
+	if len(got) != 3 || got[1].ID != "e" || !got[1].Start.Equal(base.Add(10*time.Minute)) {
+		t.Fatalf("late upload stored: %+v", got)
+	}
+	// an earlier limit does not lower the remembered one
+	if _, err := s.ClearObservations(ctx, base.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if st, sk, _ := s.PutObservations(ctx, "pc", []core.Observation{ob("f", "window", 2, 4, nil)}); st != 0 || sk != 1 {
+		t.Fatalf("limit lowered: %d %d", st, sk)
+	}
+}

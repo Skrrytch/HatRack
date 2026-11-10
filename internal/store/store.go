@@ -109,6 +109,14 @@ type Store interface {
 	ObservationStats(ctx context.Context, from, to time.Time) (map[string]map[string]ObsStat, error)
 	// DeleteObservationsBefore removes spans that ended before t.
 	DeleteObservationsBefore(ctx context.Context, t time.Time) (int, error)
+	// ClearObservations deletes everything observed up to t: spans that end
+	// by t go, spans running past t start at t. t is remembered, so spans a
+	// device sends later are cut the same way. It returns how many spans
+	// were deleted.
+	ClearObservations(ctx context.Context, t time.Time) (int, error)
+	// ObservationSummary counts the stored spans and gives the earliest start
+	// (zero when there are none).
+	ObservationSummary(ctx context.Context) (n int, first time.Time, err error)
 	// FilterObservations runs f over every span of a device and stores what
 	// it returns: changed attributes are written, false deletes the span.
 	// It returns how many spans changed and how many were deleted.

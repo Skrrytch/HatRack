@@ -112,6 +112,9 @@ func (s *Server) grantsView(r *http.Request, acc access, pending *pendingRevoke)
 	if n := r.URL.Query().Get("cleaned"); n != "" {
 		v.Msg = i18n.In(lang, "web.grants.cleaned", n)
 	}
+	if n := r.URL.Query().Get("cleared"); n != "" {
+		v.Msg = i18n.In(lang, "web.clear.done", n)
+	}
 	cfg, _, err := s.st.GetConfig(ctx)
 	if err != nil {
 		return v, err
@@ -126,6 +129,12 @@ func (s *Server) grantsView(r *http.Request, acc access, pending *pendingRevoke)
 		IgnorePaths: strings.Join(cfg.Observe.IgnorePaths, "\n"),
 		Retention:   int(cfg.Observe.Retention() / (24 * time.Hour)),
 		Recent:      s.recentApps(ctx, cfg.Observe, s.Now()),
+		ClearMax:    s.Now().In(loc).Format(clearLayout),
+	}
+	if n, first, err := s.st.ObservationSummary(ctx); err != nil {
+		return v, err
+	} else if n > 0 {
+		d.Observe.Stored = i18n.In(lang, "web.clear.stored", strconv.Itoa(n), first.In(loc).Format("02.01.2006 15:04"))
 	}
 	devs, err := s.st.Devices(ctx)
 	if err != nil {
@@ -288,6 +297,8 @@ func (s *Server) grantsAction(w http.ResponseWriter, r *http.Request, acc access
 		s.observeSave(w, r, "/setup/grants?tab=basics&saved=1#privacy", fail)
 	case "grant":
 		s.grantSave(w, r, acc, fail)
+	case "clear":
+		s.clearObservations(w, r, fail)
 	default:
 		fail("unknown action")
 	}
@@ -485,4 +496,35 @@ func (s *Server) affected(ctx context.Context, o core.Observe, devices []string,
 		}
 	}
 	return n, nil
+}
+
+// clearLayout is the value of a datetime-local field, to the minute.
+const clearLayout = "2006-01-02T15:04"
+
+// clearObservations deletes what was observed up to the chosen moment, which
+// may be now but not later. Hats, activities and the log stay.
+func (s *Server) clearObservations(w http.ResponseWriter, r *http.Request, fail func(string)) {
+	lang := s.langOf(r)
+	until, err := time.ParseInLocation(clearLayout, strings.TrimSpace(r.PostFormValue("until")), s.locOf(r))
+	if err != nil {
+		fail(i18n.In(lang, "web.clear.bad"))
+		return
+	}
+	now := s.Now()
+	if until.After(now.Add(time.Minute)) { // the field shows minutes only
+		fail(i18n.In(lang, "web.clear.future"))
+		return
+	}
+	if until.After(now) {
+		until = now
+	}
+	n, err := s.st.ClearObservations(r.Context(), until)
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	s.know.mu.Lock()
+	s.know.cur = nil // learned from what is gone
+	s.know.mu.Unlock()
+	http.Redirect(w, r, "/setup/grants?tab=basics&cleared="+strconv.Itoa(n)+"#clear", http.StatusSeeOther)
 }

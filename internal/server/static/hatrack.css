@@ -51,7 +51,7 @@ button.pill { border-radius: 2rem; padding: .45rem 1.05rem; font-weight: 700; bo
 .iconbtn { padding: .3rem .45rem; }
 .ico { width: 1.15em; height: 1.15em; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 .defaultbtn { position: absolute; left: -9999px; }
-input[type=text], input[type=number], input[type=password], input[type=time], select, textarea {
+input[type=text], input[type=number], input[type=password], input[type=time], input[type=datetime-local], select, textarea {
   font: inherit; padding: .4rem .65rem; border: 1px solid var(--line); border-radius: .6rem; background: var(--bg); color: inherit; }
 input:focus, select:focus, textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 0; border-color: var(--accent); }
 input:disabled { opacity: .6; }
@@ -590,3 +590,8 @@ table.test .incl{display:block;font-size:.78rem;color:var(--dim);margin-top:.15r
 table.test .wd{display:flex;align-items:center;gap:.25rem;font-size:.8rem;color:var(--dim);margin-top:.15rem;font-family:var(--mono)}
 table.test .wd .ico{width:.85rem;height:.85rem;flex:none}
 table.test .wd .br{color:var(--ink)}
+.clearobs { margin-top: 1rem; }
+.clearobs h3 { margin: 0 0 .3rem; }
+.clearobs .row { align-items: center; gap: .6rem; }
+.clearobs label { display: inline; font-size: .9rem; }
+.clearobs input[type=datetime-local] { width: auto; }

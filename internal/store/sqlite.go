@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -619,7 +620,21 @@ func (s *SQLite) PutObservations(ctx context.Context, device string, obs []core.
 		return 0, 0, err
 	}
 	defer tx.Rollback()
+	cleared, err := clearedUntil(ctx, tx)
+	if err != nil {
+		return 0, 0, err
+	}
 	for _, o := range obs {
+		// what was cleared does not come back with a late upload
+		if !cleared.IsZero() {
+			if !o.End.After(cleared) {
+				skipped++
+				continue
+			}
+			if o.Start.Before(cleared) {
+				o.Start = cleared
+			}
+		}
 		var dev string
 		var end int64
 		err := tx.QueryRowContext(ctx, `SELECT device, end FROM observations WHERE id = ?`, o.ID).Scan(&dev, &end)
@@ -725,6 +740,70 @@ func (s *SQLite) DeleteObservationsBefore(ctx context.Context, t time.Time) (int
 	}
 	n, err := r.RowsAffected()
 	return int(n), err
+}
+
+// settingObsCleared holds the time up to which observations were cleared,
+// in Unix nanoseconds.
+const settingObsCleared = "observations_cleared_until"
+
+func clearedUntil(ctx context.Context, tx *sql.Tx) (time.Time, error) {
+	var v string
+	err := tx.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, settingObsCleared).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, nil
+	}
+	if err != nil {
+		return time.Time{}, err
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("setting %s: %w", settingObsCleared, err)
+	}
+	return time.Unix(0, n).UTC(), nil
+}
+
+func (s *SQLite) ClearObservations(ctx context.Context, t time.Time) (int, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	ns := t.UnixNano()
+	r, err := tx.ExecContext(ctx, `DELETE FROM observations WHERE end <= ?`, ns)
+	if err != nil {
+		return 0, err
+	}
+	n, err := r.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE observations SET start = ? WHERE start < ?`, ns, ns); err != nil {
+		return 0, err
+	}
+	// an earlier, later limit stays: clearing never brings data back
+	old, err := clearedUntil(ctx, tx)
+	if err != nil {
+		return 0, err
+	}
+	if t.After(old) {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES (?, ?)
+		  ON CONFLICT(key) DO UPDATE SET value = excluded.value`, settingObsCleared, strconv.FormatInt(ns, 10)); err != nil {
+			return 0, err
+		}
+	}
+	return int(n), tx.Commit()
+}
+
+func (s *SQLite) ObservationSummary(ctx context.Context) (int, time.Time, error) {
+	var n int
+	var first sql.NullInt64
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*), MIN(start) FROM observations`).Scan(&n, &first); err != nil {
+		return 0, time.Time{}, err
+	}
+	if !first.Valid {
+		return 0, time.Time{}, nil
+	}
+	return n, time.Unix(0, first.Int64).UTC(), nil
 }
 
 func (s *SQLite) HatUsed(ctx context.Context, key string) (bool, error) {
