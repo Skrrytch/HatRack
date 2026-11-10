@@ -64,6 +64,9 @@ type ReadSpan struct {
 	Observation
 	Cand   Candidate
 	Booked string // "" when nothing was booked
+	// Absorbed are the spans that count for this one (absorb.go); End
+	// already covers them.
+	Absorbed []Observation
 }
 
 // Differs reports a span whose hat was found but another one was booked.
@@ -73,7 +76,8 @@ func (r ReadSpan) Differs() bool {
 
 // ReadDay reads observations (window and idle spans, any order) against the
 // booked intervals: the window spans without the absences, sorted by start,
-// each classified. Fleeting entries do not count as booked.
+// each classified, with helpers and short side trips absorbed into the span
+// before them. Fleeting entries do not count as booked.
 func ReadDay(obs []Observation, iv []Interval, cls *Classifier) []ReadSpan {
 	spans := ActiveSpans(obs, obs)
 	out := make([]ReadSpan, 0, len(spans))
@@ -81,7 +85,7 @@ func ReadDay(obs []Observation, iv []Interval, cls *Classifier) []ReadSpan {
 		out = append(out, ReadSpan{Observation: o, Cand: cls.Classify(o.Attrs),
 			Booked: BookedAt(iv, o.Start.Add(o.End.Sub(o.Start)/2))})
 	}
-	return out
+	return absorb(out, cls.cfg.Observe)
 }
 
 // BookedAt is the hat of the entry that runs at t, or "". Fleeting entries

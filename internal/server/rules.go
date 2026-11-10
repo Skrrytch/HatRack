@@ -33,6 +33,7 @@ const (
 )
 
 type rulesView struct {
+	Glance                      glanceView
 	Counts                      string
 	Saved                       bool
 	Deleted                     bool
@@ -90,6 +91,7 @@ type testRow struct {
 	WhyNone                 string
 	BookedName, BookedColor string
 	Plus                    string // link that opens the editor with this row
+	Incl, InclTitle         string // the side windows counted in this row, and which
 }
 
 // marked is a text with the part a draft's condition matches.
@@ -618,6 +620,7 @@ type rawSpan struct {
 	base    core.Candidate
 	booked  string
 	differs bool
+	in      []core.Observation // absorbed spans
 }
 
 var ticketLike = regexp.MustCompile(`\b[A-Z][A-Z0-9]{1,9}-[0-9]+\b`)
@@ -627,7 +630,7 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 	reads []core.ReadSpan, base *core.Classifier, hitID, link string, tried core.Rule, d draft, trying bool) {
 	var raw []rawSpan
 	for _, r := range reads {
-		sp := rawSpan{o: r.Observation, cand: r.Cand, base: r.Cand, booked: r.Booked, differs: r.Differs()}
+		sp := rawSpan{o: r.Observation, cand: r.Cand, base: r.Cand, booked: r.Booked, differs: r.Differs(), in: r.Absorbed}
 		if trying {
 			sp.base = base.Classify(r.Attrs)
 		}
@@ -646,7 +649,8 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 	type group struct {
 		first, last rawSpan
 		start, end  time.Time
-		noHat       bool // before the draft, no span of it had a hat
+		noHat       bool               // before the draft, no span of it had a hat
+		in          []core.Observation // absorbed spans of all its members
 	}
 	var groups []*group
 	for _, sp := range raw {
@@ -657,10 +661,11 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 				reflect.DeepEqual(g.last.cand, sp.cand) && g.last.booked == sp.booked && sp.o.Start.Sub(g.end) < testMergeGap {
 				g.last, g.end = sp, sp.o.End
 				g.noHat = g.noHat || sp.base.Hat == ""
+				g.in = append(g.in, sp.in...)
 				continue
 			}
 		}
-		groups = append(groups, &group{first: sp, last: sp, start: sp.o.Start, end: sp.o.End, noHat: sp.base.Hat == ""})
+		groups = append(groups, &group{first: sp, last: sp, start: sp.o.Start, end: sp.o.End, noHat: sp.base.Hat == "", in: sp.in})
 	}
 
 	// the observation the draft started from: its start lies in a row
@@ -687,6 +692,7 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 			row.App, row.Title = marked{Pre: row.App.Text()}, marked{Pre: row.Title.Text()}
 		}
 		row.Sugg = suggOf(lang, cfg, nm, pal, c)
+		row.Incl, row.InclTitle = inclOf(lang, g.in)
 		var classes []string
 		switch c.Kind() {
 		case core.KindNoise:
@@ -1448,4 +1454,39 @@ func (s *Server) fillHatRules(r *http.Request, v *view, cfg core.Config, h core.
 	if parts+details > 0 {
 		hr.Learned = i18n.In(v.Lang, "web.hat.also_learned", strconv.Itoa(parts), strconv.Itoa(details))
 	}
+}
+
+// inclOf says which side windows (helpers, short side trips) count for a
+// row: a short line and, for hovering, the apps with their time.
+func inclOf(lang string, in []core.Observation) (line, title string) {
+	if len(in) == 0 {
+		return "", ""
+	}
+	var total time.Duration
+	per := map[string]time.Duration{}
+	var apps []string
+	for _, o := range in {
+		d := o.End.Sub(o.Start)
+		total += d
+		a := o.Attrs["app"]
+		if _, ok := per[a]; !ok {
+			apps = append(apps, a)
+		}
+		per[a] += d
+	}
+	sort.SliceStable(apps, func(i, j int) bool { return per[apps[i]] > per[apps[j]] })
+	parts := make([]string, len(apps))
+	for i, a := range apps {
+		parts[i] = a + " " + shortDur(per[a])
+	}
+	return i18n.In(lang, "web.rules.incl", strconv.Itoa(len(in)), shortDur(total)),
+		i18n.In(lang, "web.rules.incl_title", strings.Join(parts, ", "))
+}
+
+// shortDur renders a short time in seconds, from a minute on in minutes.
+func shortDur(d time.Duration) string {
+	if d < time.Minute {
+		return strconv.Itoa(int(d.Round(time.Second)/time.Second)) + " s"
+	}
+	return core.FormatDuration(d)
 }

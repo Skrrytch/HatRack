@@ -74,11 +74,11 @@
     var x = e.key === "Escape" && document.querySelector("[data-close-drawer]");
     if (x) { keepScroll(); location.href = x.href; }
   });
-  // "recently seen" apps: a chip appends its app to the ignore list
+  // "recently seen" apps: a chip appends its app to a list (data-to, else the ignore list)
   document.addEventListener("click", function (e) {
     var b = e.target.closest && e.target.closest("[data-add]");
     if (!b) return;
-    var area = document.getElementById("obs-ignore");
+    var area = document.getElementById(b.dataset.to || "obs-ignore");
     if (!area) return;
     var app = b.dataset.add;
     var lines = area.value.split("\n").map(function (l) { return l.trim().toLowerCase(); });

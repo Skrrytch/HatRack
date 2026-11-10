@@ -54,6 +54,13 @@ type Observe struct {
 	Grants map[string]map[string]string `yaml:"grants,omitempty" json:"grants,omitempty"`
 	// Idle sets when an absence stops the clock and when it is asked about.
 	Idle Idle `yaml:"idle,omitempty" json:"idle,omitzero"`
+	// Helpers lists apps that only serve the work around them (password
+	// prompt, file dialog); their spans count for the window before. nil
+	// means DefaultHelpers, an empty list none (absorb.go).
+	Helpers *[]string `yaml:"helpers,omitempty" json:"helpers,omitempty"`
+	// GlanceSeconds: a short side trip between two spans of the same window
+	// counts for that window if it is shorter than this; 0 is the default.
+	GlanceSeconds int `yaml:"glance_seconds,omitempty" json:"glance_seconds,omitempty"`
 }
 
 // Idle are the absence settings, in minutes; 0 selects the default.
@@ -158,12 +165,15 @@ func (o Observe) Validate() error {
 	for _, l := range []struct {
 		name string
 		list []string
-	}{{"ignore", o.Ignore}, {"redact", o.Redact}, {"ignore_paths", o.IgnorePaths}} {
+	}{{"ignore", o.Ignore}, {"redact", o.Redact}, {"ignore_paths", o.IgnorePaths}, {"helpers", o.HelperApps()}} {
 		for _, a := range l.list {
 			if strings.TrimSpace(a) == "" {
 				return fmt.Errorf("config: observe.%s: empty entry", l.name)
 			}
 		}
+	}
+	if o.GlanceSeconds < 0 || o.GlanceSeconds > MaxGlanceSeconds {
+		return fmt.Errorf("config: observe.glance_seconds %d: want 0 to %d", o.GlanceSeconds, MaxGlanceSeconds)
 	}
 	if err := o.Idle.Validate(); err != nil {
 		return err

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"hatrack/internal/core"
 	"hatrack/internal/i18n"
@@ -19,6 +20,7 @@ var assignTabs = []struct{ ID, Key string }{
 	{"day", "web.assign.tab_day"},
 	{"learned", "web.assign.tab_learned"},
 	{"tickets", "web.assign.tab_tickets"},
+	{"glance", "web.assign.tab_glance"},
 }
 
 func (s *Server) assignPage(w http.ResponseWriter, r *http.Request, acc access) {
@@ -51,8 +53,12 @@ func (s *Server) fillAssign(r *http.Request, v *view, cfg core.Config, q url.Val
 	if saveErr != nil || (rv.Editor != nil && !q.Has("tab")) {
 		rv.Tab = "day" // the error shows at the editor; an old link with a draft
 	}
-	if rv.Tab == "tickets" {
+	switch rv.Tab {
+	case "tickets":
 		v.Setup.Tickets = s.ticketRows(r, cfg)
+	case "glance":
+		rv.Glance = s.glanceTab(r.Context(), cfg.Observe)
+		rv.Glance.Saved = q.Get("glance_saved") != ""
 	}
 	keep := "&day=" + url.QueryEscape(rv.Day) + "&device=" + url.QueryEscape(rv.Device)
 	for _, t := range assignTabs {
@@ -68,6 +74,8 @@ func (s *Server) fillAssign(r *http.Request, v *view, cfg core.Config, q url.Val
 			tab.Stat = count(v.Lang, rv.NLearned, "web.assign.st_learned_one", "web.assign.st_learned")
 		case "tickets":
 			tab.Stat = count(v.Lang, rv.NProjects, "web.assign.st_tickets_one", "web.assign.st_tickets")
+		case "glance":
+			tab.Stat = strconv.Itoa(int(cfg.Observe.Glance()/time.Second)) + " s"
 		}
 		rv.Tabs = append(rv.Tabs, tab)
 	}
@@ -82,11 +90,14 @@ func count(lang string, n int, one, many string) string {
 	return i18n.In(lang, many, strconv.Itoa(n))
 }
 
-// assignAction saves or deletes a rule, or changes a ticket project.
+// assignAction saves or deletes a rule, stores the side window settings, or
+// changes a ticket project.
 func (s *Server) assignAction(w http.ResponseWriter, r *http.Request, acc access) {
 	switch r.PostFormValue("op") {
 	case "rule.save", "rule.delete":
 		s.ruleAction(w, r, acc)
+	case "glance":
+		s.glanceSave(w, r)
 	default:
 		s.ticketsAction(w, r, acc)
 	}

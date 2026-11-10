@@ -73,7 +73,7 @@
     {{range .Rows}}
     <tr class="{{.Class}}">
       <td class="when">{{.When}}<span class="conf">{{.Dur}}</span>{{if .Src}}<span class="srctag">{{t $.Lang "web.rules.p_start"}}</span>{{end}}</td>
-      <td>{{template "marked" .App}}{{template "mst" dict "S" .AppSt "Lang" $.Lang}}{{if .Title.Text}}<span class="ttl">{{template "marked" .Title}}{{template "mst" dict "S" .TitleSt "Lang" $.Lang}}</span>{{end}}</td>
+      <td>{{template "marked" .App}}{{template "mst" dict "S" .AppSt "Lang" $.Lang}}{{if .Title.Text}}<span class="ttl">{{template "marked" .Title}}{{template "mst" dict "S" .TitleSt "Lang" $.Lang}}</span>{{end}}{{if .Incl}}<span class="incl" title="{{.InclTitle}}">{{.Incl}}</span>{{end}}</td>
       <td>{{template "sugg" dict "S" .Sugg "Lang" $.Lang}}{{with .Before}}<span class="before">{{t $.Lang "web.rules.p_before"}} {{template "sugg" dict "S" . "Lang" $.Lang}}</span>{{end}}</td>
       <td><div class="whys">{{template "whys" .Whys}}{{if .WhyNone}}<span class="dim small">{{.WhyNone}}</span>{{end}}</div></td>
       <td class="booked">{{if .BookedName}}<span class="hatdot" style="--c:{{.BookedColor}}"></span>{{.BookedName}}{{else}}<span class="dim">–</span>{{end}}</td>
@@ -104,6 +104,22 @@
 {{end}}
 {{end}}
 </div>
+{{end}}
+
+{{if eq .Tab "glance"}}
+{{with .Glance}}
+{{if .Saved}}<p class="note ok">{{t $.Lang "web.glance.saved"}}</p>{{end}}
+<form method="post" action="/assign" class="card glance">
+  <input type="hidden" name="op" value="glance">
+  <p class="note">{{t $.Lang "web.glance.note"}}</p>
+  <div class="row2"><label for="gl-secs">{{t $.Lang "web.glance.secs"}}</label><span class="nowrap"><input type="number" id="gl-secs" name="seconds" min="1" max="{{.Max}}" value="{{.Seconds}}"> s</span><span class="dim small">{{t $.Lang "web.glance.secs_hint"}}</span></div>
+  <label for="gl-helpers">{{t $.Lang "web.glance.helpers"}} <span class="dim small">{{t $.Lang "web.glance.helpers_hint"}}</span></label>
+  <textarea id="gl-helpers" name="helpers">{{.Helpers}}</textarea>
+  {{if .Recent}}<span class="chips"><span class="dim small">{{t $.Lang "web.glance.recent"}}</span>{{range .Recent}}<button type="button" class="chip" data-to="gl-helpers" data-add="{{.}}">+ {{.}}</button>{{end}}</span>{{end}}
+  <div class="ex">{{t $.Lang "web.glance.example"}}</div>
+  <div class="row"><button class="primary">{{t $.Lang "web.setup.save"}}</button>{{if not .IsDefault}}<button name="reset" value="1">{{t $.Lang "web.glance.reset"}}</button>{{end}}</div>
+</form>
+{{end}}
 {{end}}
 
 {{if eq .Tab "tickets"}}

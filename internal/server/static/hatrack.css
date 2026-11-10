@@ -580,3 +580,10 @@ table.hist th{font-weight:600;border-bottom:1px solid var(--line)}
 .card.mod details.more pre{white-space:pre-wrap}
 .allgrants .dim{font-size:.88rem}
 .never + .subtabs{margin-top:1.2rem}
+table.test .incl{display:block;font-size:.78rem;color:var(--dim);margin-top:.15rem;text-decoration:underline dotted;text-underline-offset:2px;cursor:help;width:fit-content}
+.glance .row2 { display: grid; grid-template-columns: 16rem 8rem 1fr; gap: .6rem 1rem; align-items: center; margin: .3rem 0 .9rem; }
+.glance .row2 label { display: inline; font-size: .9rem; }
+.glance .nowrap { white-space: nowrap; }
+.glance input[type=number] { width: 5rem; }
+.glance textarea { height: 9rem; margin-top: .25rem; }
+.glance .ex { border-left: 3px solid var(--line); padding-left: .8rem; margin: 1rem 0 .8rem; font-size: .9rem; color: var(--dim); }

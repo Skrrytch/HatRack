@@ -989,7 +989,7 @@ Following the three layers (default → hat → device):
 | defaults | `rules` (ignore rules, global activity and detail rules), `prompt.*`, `reconstruct.noise`; from 6a `reconstruct.window` (60 min), `reconstruct.min_entry` (5 min), `reconstruct.memory` (15 min, also live), `live.dwell` (10 of 15 min), replacing `reconstruct.block` |
 | hat | `rules`, `observe: true \| false` |
 | device | sensors on or off (`window`; `idle` on by default), in `observe.devices`; grants with their level (`workdir`, `ai_sessions`, `media`, `notify_text`), in `observe.grants` (1b) |
-| all devices | `observe.ignore` and `observe.redact` app lists, `observe.ignore_paths` (folders `workdir` never looks up), `observe.retention_days` (default 28), `observe.idle` (`after` 5, `ask_after` 10, `stop_after` 15 min, `ask`) |
+| all devices | `observe.ignore` and `observe.redact` app lists, `observe.ignore_paths` (folders `workdir` never looks up), `observe.retention_days` (default 28), `observe.idle` (`after` 5, `ask_after` 10, `stop_after` 15 min, `ask`), `observe.helpers` and `observe.glance_seconds` (default 5; side windows, see decisions 2026-11-10) |
 
 Setup gets its own page **"Erkennung"** with tabs, so the settings do not
 pile up on other pages; each later ticket adds a tab instead of a block:
