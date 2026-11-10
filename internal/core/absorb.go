@@ -50,10 +50,11 @@ func (o Observe) Glance() time.Duration {
 	return time.Duration(s) * time.Second
 }
 
-// sameWindow reports spans of one window: same device, app and title up to
-// status marks.
+// sameWindow reports spans of one window: same device, app, repository and
+// branch, and title up to status marks.
 func sameWindow(a, b Observation) bool {
 	return a.Device == b.Device && a.Attrs["app"] == b.Attrs["app"] &&
+		a.Attrs[AttrRepo] == b.Attrs[AttrRepo] && a.Attrs[AttrBranch] == b.Attrs[AttrBranch] &&
 		NormalizeTitle(a.Attrs["title"]) == NormalizeTitle(b.Attrs["title"])
 }
 

@@ -31,11 +31,13 @@ const (
 	MatchTitle        = "title"
 	MatchNotification = "notification"
 	MatchMedia        = "media"
+	MatchBranch       = AttrBranch // the checked-out branch (sensor workdir)
+	MatchRepo         = AttrRepo   // the work tree's folder name
 )
 
 // matchFields are the fields in the order their groups are looked up for
 // numbered references in a detail: the first one present wins.
-var matchFields = []string{MatchTitle, MatchNotification, MatchApp}
+var matchFields = []string{MatchTitle, MatchBranch, MatchRepo, MatchNotification, MatchApp}
 
 // Rule maps observed attributes to hat, activity and detail.
 type Rule struct {
@@ -248,7 +250,7 @@ func validateRule(p string, hat *Hat, r Rule) error {
 	for _, f := range slices.Sorted(maps.Keys(r.Match)) {
 		v := r.Match[f]
 		switch f {
-		case MatchApp, MatchTitle, MatchNotification:
+		case MatchApp, MatchTitle, MatchNotification, MatchBranch, MatchRepo:
 			if strings.TrimSpace(v) == "" {
 				return fmt.Errorf("config: %s.match.%s: empty pattern", p, f)
 			}
@@ -262,7 +264,7 @@ func validateRule(p string, hat *Hat, r Rule) error {
 				return fmt.Errorf("config: %s.match.media %q: want mic or cam", p, v)
 			}
 		default:
-			return fmt.Errorf("config: %s.match: unknown field %q (use app, title, notification, media)", p, f)
+			return fmt.Errorf("config: %s.match: unknown field %q (use app, title, branch, repo, notification, media)", p, f)
 		}
 	}
 	if r.ID != "" && !ruleIDRe.MatchString(r.ID) {

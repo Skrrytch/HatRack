@@ -127,7 +127,7 @@ func compileRule(scope, hat string, order int, r Rule) (compiledRule, bool) {
 		switch f {
 		case MatchMedia:
 			cr.media = v
-		case MatchApp, MatchTitle, MatchNotification:
+		case MatchApp, MatchTitle, MatchNotification, MatchBranch, MatchRepo:
 			re, err := compileMatch(v)
 			if err != nil {
 				return cr, false
@@ -232,7 +232,7 @@ func (cr compiledRule) expand(subs map[string][]string) string {
 				continue
 			}
 			name := t[i+2 : i+end]
-			for _, f := range []string{MatchTitle, MatchNotification, MatchApp} {
+			for _, f := range matchFields {
 				if re, ok := cr.re[f]; ok {
 					if x := re.SubexpIndex(name); x >= 0 && x < len(subs[f]) {
 						b.WriteString(subs[f][x])
@@ -333,10 +333,7 @@ func (c *Classifier) Classify(a Attrs) Candidate {
 		}
 	}
 	title := a[MatchTitle]
-	lt := strings.ToLower(title)
-	if title != "" {
-		claims = c.learnedClaims(title, lt, a[MatchApp])
-	}
+	claims = c.learnedClaims(a)
 	var best *learned
 	if cand.Hat == "" {
 		for i := range claims {
@@ -398,6 +395,11 @@ func (c *Classifier) Classify(a Attrs) Candidate {
 			break
 		}
 	}
+	// a key in the branch of a working tool beats one in a title
+	if keys := c.tickets.BranchKeys(a[MatchBranch]); cand.Detail == "" && len(keys) > 0 {
+		cand.Detail = keys[0]
+		cand.Why = append(cand.Why, Reason{Field: FieldDetail, Source: SourceTicket, Ref: keys[0]})
+	}
 	if cand.Detail == "" && title != "" {
 		if refs := c.tickets.Find(title); len(refs) > 0 {
 			cand.Detail = refs[0].Key
@@ -418,32 +420,50 @@ func (c *Classifier) Classify(a Attrs) Candidate {
 	return cand
 }
 
-// learnedClaims collects what was learned about a title, best first.
-func (c *Classifier) learnedClaims(title, lt, app string) []learned {
+// learnedClaims collects what was learned about a span, best first: details
+// and ticket keys in the title, ticket keys in the branch, learned title
+// parts and the repository.
+func (c *Classifier) learnedClaims(a Attrs) []learned {
+	title, app := a[MatchTitle], a[MatchApp]
+	lt := strings.ToLower(title)
 	var out []learned
-	for i, d := range c.know.Details {
-		if !containsWord(lt, c.detailLC[i]) {
-			continue
+	if title != "" {
+		for i, d := range c.know.Details {
+			if !containsWord(lt, c.detailLC[i]) {
+				continue
+			}
+			hat := d.Hat
+			if h, ok := c.hats[hat]; !ok || h.Archived {
+				hat = ""
+			}
+			out = append(out, learned{hat: hat, conf: ConfDetail, rank: 0, minutes: d.Minutes, act: d.Activity, detail: d.Detail,
+				reason: Reason{Field: FieldHat, Source: SourceDetail, Ref: d.Detail, Hat: d.Hat, Minutes: d.Minutes}})
 		}
-		hat := d.Hat
-		if h, ok := c.hats[hat]; !ok || h.Archived {
-			hat = ""
-		}
-		out = append(out, learned{hat: hat, conf: ConfDetail, rank: 0, minutes: d.Minutes, act: d.Activity, detail: d.Detail,
-			reason: Reason{Field: FieldHat, Source: SourceDetail, Ref: d.Detail, Hat: d.Hat, Minutes: d.Minutes}})
 	}
-	for _, r := range c.tickets.Find(title) {
-		u, ok := c.know.Projects[r.Project]
+	ticket := func(project, key string) {
+		u, ok := c.know.Projects[project]
 		if !ok {
-			continue
+			return
 		}
 		if h, ok := c.hats[u.Hat]; !ok || h.Archived {
-			continue
+			return
 		}
-		out = append(out, learned{hat: u.Hat, conf: ConfTicket, rank: 1, minutes: u.Count, detail: r.Key,
-			reason: Reason{Field: FieldHat, Source: SourceTicket, Ref: r.Key, Hat: u.Hat, Share: u.Share}})
+		out = append(out, learned{hat: u.Hat, conf: ConfTicket, rank: 1, minutes: u.Count, detail: key,
+			reason: Reason{Field: FieldHat, Source: SourceTicket, Ref: key, Hat: u.Hat, Share: u.Share}})
 	}
-	for _, p := range TitleParts(title, app) {
+	for _, k := range c.tickets.BranchKeys(a[MatchBranch]) {
+		ticket(keyProject(k), k)
+	}
+	if title != "" {
+		for _, r := range c.tickets.Find(title) {
+			ticket(r.Project, r.Key)
+		}
+	}
+	parts := TitleParts(title, app)
+	if r := strings.TrimSpace(a[MatchRepo]); r != "" {
+		parts = append(parts, r)
+	}
+	for _, p := range parts {
 		if lp, ok := c.parts[strings.ToLower(p)]; ok {
 			out = append(out, learned{hat: lp.Hat, conf: ConfPart, rank: 2, minutes: lp.Minutes,
 				reason: Reason{Field: FieldHat, Source: SourcePart, Ref: p, Hat: lp.Hat, Share: lp.Share, Minutes: lp.Minutes}})
@@ -478,4 +498,12 @@ func (c Candidate) WithHat(cfg Config, hat string) Candidate {
 		c.Activities = nil
 	}
 	return c
+}
+
+// keyProject is the project of a ticket key: what comes before the last '-'.
+func keyProject(key string) string {
+	if i := strings.LastIndexByte(key, '-'); i > 0 {
+		return key[:i]
+	}
+	return key
 }

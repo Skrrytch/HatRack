@@ -240,6 +240,9 @@ func BuildKnowledge(events []Event, obs []Observation, t Tickets, retention time
 	parts := map[string]hatTime{}
 	for _, o := range ActiveSpans(window, idle) {
 		ps := TitleParts(o.Attrs["title"], o.Attrs["app"])
+		if r := strings.TrimSpace(o.Attrs[AttrRepo]); r != "" {
+			ps = append(ps, r) // the repository counts as a title part
+		}
 		if len(ps) == 0 {
 			continue
 		}

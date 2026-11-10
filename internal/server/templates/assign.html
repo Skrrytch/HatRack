@@ -73,7 +73,7 @@
     {{range .Rows}}
     <tr class="{{.Class}}">
       <td class="when">{{.When}}<span class="conf">{{.Dur}}</span>{{if .Src}}<span class="srctag">{{t $.Lang "web.rules.p_start"}}</span>{{end}}</td>
-      <td>{{template "marked" .App}}{{template "mst" dict "S" .AppSt "Lang" $.Lang}}{{if .Title.Text}}<span class="ttl">{{template "marked" .Title}}{{template "mst" dict "S" .TitleSt "Lang" $.Lang}}</span>{{end}}{{if .Incl}}<span class="incl" title="{{.InclTitle}}">{{.Incl}}</span>{{end}}</td>
+      <td>{{template "marked" .App}}{{template "mst" dict "S" .AppSt "Lang" $.Lang}}{{if .Title.Text}}<span class="ttl">{{template "marked" .Title}}{{template "mst" dict "S" .TitleSt "Lang" $.Lang}}</span>{{end}}{{if or .Repo.Text .Branch.Text}}<span class="wd" title="{{t $.Lang "web.rules.wd_title"}}">{{template "icon" "branch"}}{{if .Repo.Text}}{{template "marked" .Repo}}{{template "mst" dict "S" .RepoSt "Lang" $.Lang}}{{end}}{{if .Branch.Text}} <span class="br">{{template "marked" .Branch}}</span>{{template "mst" dict "S" .BranchSt "Lang" $.Lang}}{{end}}</span>{{end}}{{if .Incl}}<span class="incl" title="{{.InclTitle}}">{{.Incl}}</span>{{end}}</td>
       <td>{{template "sugg" dict "S" .Sugg "Lang" $.Lang}}{{with .Before}}<span class="before">{{t $.Lang "web.rules.p_before"}} {{template "sugg" dict "S" . "Lang" $.Lang}}</span>{{end}}</td>
       <td><div class="whys">{{template "whys" .Whys}}{{if .WhyNone}}<span class="dim small">{{.WhyNone}}</span>{{end}}</div></td>
       <td class="booked">{{if .BookedName}}<span class="hatdot" style="--c:{{.BookedColor}}"></span>{{.BookedName}}{{else}}<span class="dim">–</span>{{end}}</td>
@@ -192,6 +192,9 @@
   <div class="line"><span>{{t $.Lang "web.rules.e_if"}}</span>
     <label>{{t $.Lang "web.rules.sent_app"}}<input type="text" name="ed_app" value="{{.App}}"><div class="hint">{{t $.Lang "web.rules.f_app_hint"}}</div>{{if .ErrApp}}<div class="err">{{.ErrApp}}</div>{{end}}</label>
     <label>{{t $.Lang "web.rules.sent_title"}}<input type="text" name="ed_title" value="{{.Title}}"><div class="hint">{{t $.Lang "web.rules.f_title_hint"}}</div>{{if .ErrTitle}}<div class="err">{{.ErrTitle}}</div>{{end}}</label></div>
+  <div class="line"><span></span>
+    <label>{{t $.Lang "web.rules.sent_repo"}}<input type="text" name="ed_repo" value="{{.Repo}}"><div class="hint">{{t $.Lang "web.rules.f_repo_hint"}}</div>{{if .ErrRepo}}<div class="err">{{.ErrRepo}}</div>{{end}}</label>
+    <label>{{t $.Lang "web.rules.sent_branch"}}<input type="text" name="ed_branch" value="{{.Branch}}"><div class="hint">{{t $.Lang "web.rules.f_branch_hint"}}</div>{{if .ErrBranch}}<div class="err">{{.ErrBranch}}</div>{{end}}</label></div>
   <div class="line"><span>{{t $.Lang "web.rules.e_then"}}</span>
     {{if .Defaults}}
     <label>{{t $.Lang "web.rules.f_acts"}}<input type="text" name="ed_acts" value="{{.Acts}}"><div class="hint">{{t $.Lang "web.rules.f_acts_hint"}}</div>{{if .ErrAct}}<div class="err">{{.ErrAct}}</div>{{end}}</label>

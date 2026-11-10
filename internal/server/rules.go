@@ -29,7 +29,7 @@ const (
 	maxLearned   = 8
 	testMergeGap = time.Minute
 	recentDays   = 7
-	editorFields = "ed_scope ed_app ed_title ed_act ed_acts ed_detail ed_ignore ed_mode ed_prio ed_edit ed_id ed_booked ed_notification ed_media ed_new ed_owhen ed_oapp ed_otitle ed_copy"
+	editorFields = "ed_scope ed_app ed_title ed_act ed_acts ed_detail ed_ignore ed_mode ed_prio ed_edit ed_id ed_booked ed_notification ed_media ed_branch ed_repo ed_new ed_owhen ed_oapp ed_otitle ed_copy"
 )
 
 type rulesView struct {
@@ -83,9 +83,11 @@ type filterLink struct {
 type testRow struct {
 	Class, When, Dur string
 	App, Title       marked
+	Repo, Branch     marked // from the sensor workdir; empty without it
 	AppSt, TitleSt   string // the starting point: "pass" or "fail" per condition
-	Src              bool   // the observation the draft started from
-	Before           *Sugg  // the starting point's suggestion without the draft, if it differs
+	RepoSt, BranchSt string
+	Src              bool  // the observation the draft started from
+	Before           *Sugg // the starting point's suggestion without the draft, if it differs
 	Sugg
 	Whys                    []whyChip
 	WhyNone                 string
@@ -163,11 +165,13 @@ type learnedItem struct {
 
 type editorView struct {
 	Scope, App, Title, Act, Acts, Detail, Mode, Prio, Edit, ID, Booked, Notif, Media string
+	Branch, Repo                                                                     string
 	Ignore, Defaults, IsEdit                                                         bool
 	Hats                                                                             []option
 	Activities                                                                       []option
 	Modes                                                                            []option
 	ErrApp, ErrTitle, ErrAct, ErrDetail, ErrPrio, ErrTop                             string
+	ErrBranch, ErrRepo                                                               string
 	Hit                                                                              string
 	ObsWhen, ObsApp, ObsTitle                                                        string // the observation the draft came from
 	Copy                                                                             string // id of the rule this new one copies
@@ -183,6 +187,7 @@ type obsSrc struct {
 // draft is the rule being tried, as the editor fields describe it.
 type draft struct {
 	Scope, App, Title, Act, Acts, Detail, Mode, Prio, Edit, ID, Booked, Notif, Media string
+	Branch, Repo                                                                     string
 	Ignore, Present, New                                                             bool
 	Obs                                                                              obsSrc
 	Copy                                                                             string // id of the rule this new one copies
@@ -192,7 +197,8 @@ func draftOf(q url.Values) draft {
 	d := draft{Scope: q.Get("ed_scope"), App: strings.TrimSpace(q.Get("ed_app")), Title: strings.TrimSpace(q.Get("ed_title")),
 		Act: q.Get("ed_act"), Acts: q.Get("ed_acts"), Detail: strings.TrimSpace(q.Get("ed_detail")), Mode: q.Get("ed_mode"),
 		Prio: strings.TrimSpace(q.Get("ed_prio")), Edit: q.Get("ed_edit"), ID: q.Get("ed_id"), Booked: q.Get("ed_booked"),
-		Notif: q.Get("ed_notification"), Media: q.Get("ed_media"), Ignore: q.Get("ed_ignore") != "", New: q.Get("ed_new") != "",
+		Notif: q.Get("ed_notification"), Media: q.Get("ed_media"),
+		Branch: strings.TrimSpace(q.Get("ed_branch")), Repo: strings.TrimSpace(q.Get("ed_repo")), Ignore: q.Get("ed_ignore") != "", New: q.Get("ed_new") != "",
 		Obs: obsSrc{When: q.Get("ed_owhen"), App: q.Get("ed_oapp"), Title: q.Get("ed_otitle")}, Copy: q.Get("ed_copy")}
 	if q.Get("ed_dup") != "" { // "Duplicate" in the editor: the same values as a new rule
 		d.Copy, d.Edit, d.ID, d.New = d.ID, "", "", true
@@ -206,6 +212,7 @@ func (d *draft) fromRule(scope string, r core.Rule, edit string) {
 	d.Scope, d.Edit, d.ID = scope, edit, r.ID
 	d.App, d.Title = r.Match[core.MatchApp], r.Match[core.MatchTitle]
 	d.Notif, d.Media = r.Match[core.MatchNotification], r.Match[core.MatchMedia]
+	d.Branch, d.Repo = r.Match[core.MatchBranch], r.Match[core.MatchRepo]
 	if scope == core.RulesScopeDefaults {
 		d.Acts = strings.Join(r.Activity, ", ")
 	} else if len(r.Activity) > 0 {
@@ -221,7 +228,8 @@ func (d *draft) fromRule(scope string, r core.Rule, edit string) {
 // error for the field.
 func (d draft) rule() (core.Rule, error) {
 	r := core.Rule{ID: d.ID, Match: map[string]string{}, Detail: d.Detail, Mode: d.Mode}
-	for k, v := range map[string]string{core.MatchApp: d.App, core.MatchTitle: d.Title, core.MatchNotification: d.Notif, core.MatchMedia: d.Media} {
+	for k, v := range map[string]string{core.MatchApp: d.App, core.MatchTitle: d.Title, core.MatchNotification: d.Notif, core.MatchMedia: d.Media,
+		core.MatchBranch: d.Branch, core.MatchRepo: d.Repo} {
 		if v != "" {
 			r.Match[k] = v
 		}
@@ -249,7 +257,9 @@ func (d draft) rule() (core.Rule, error) {
 	return r, nil
 }
 
-func (d draft) hasMatch() bool { return d.App != "" || d.Title != "" || d.Notif != "" || d.Media != "" }
+func (d draft) hasMatch() bool {
+	return d.App != "" || d.Title != "" || d.Notif != "" || d.Media != "" || d.Branch != "" || d.Repo != ""
+}
 
 // rulesOf returns the rules list of a scope inside cfg, which the caller
 // owns (see cloneRules).
@@ -332,6 +342,10 @@ func fieldError(err error) (field, text string) {
 		field = "app"
 	case strings.HasSuffix(path, ".match.title"):
 		field = "title"
+	case strings.HasSuffix(path, ".match.branch"):
+		field = "branch"
+	case strings.HasSuffix(path, ".match.repo"):
+		field = "repo"
 	case strings.HasSuffix(path, ".activity"), strings.Contains(path, ".activity["):
 		field = "act"
 	case strings.HasSuffix(path, ".detail"):
@@ -507,6 +521,10 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 				e.ErrApp = text
 			case "title":
 				e.ErrTitle = text
+			case "branch":
+				e.ErrBranch = text
+			case "repo":
+				e.ErrRepo = text
 			case "act":
 				e.ErrAct = text
 			case "detail":
@@ -583,7 +601,7 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 
 func (s *Server) editorOf(lang string, cfg core.Config, nm map[string]string, d draft) *editorView {
 	e := &editorView{Scope: d.Scope, App: d.App, Title: d.Title, Act: d.Act, Acts: d.Acts, Detail: d.Detail, Mode: d.Mode, Prio: d.Prio,
-		Edit: d.Edit, ID: d.ID, Booked: d.Booked, Notif: d.Notif, Media: d.Media, Ignore: d.Ignore, Defaults: d.Scope == core.RulesScopeDefaults,
+		Edit: d.Edit, ID: d.ID, Booked: d.Booked, Notif: d.Notif, Media: d.Media, Branch: d.Branch, Repo: d.Repo, Ignore: d.Ignore, Defaults: d.Scope == core.RulesScopeDefaults,
 		ObsWhen: d.Obs.When, ObsApp: d.Obs.App, ObsTitle: d.Obs.Title, Copy: d.Copy}
 	for _, h := range cfg.ActiveHats() {
 		label := h.DisplayName()
@@ -657,6 +675,7 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 		if n := len(groups); n > 0 {
 			g := groups[n-1]
 			if g.last.o.Device == sp.o.Device && g.last.o.Attrs["app"] == sp.o.Attrs["app"] &&
+				g.last.o.Attrs[core.AttrRepo] == sp.o.Attrs[core.AttrRepo] && g.last.o.Attrs[core.AttrBranch] == sp.o.Attrs[core.AttrBranch] &&
 				core.NormalizeTitle(g.last.o.Attrs["title"]) == core.NormalizeTitle(sp.o.Attrs["title"]) &&
 				reflect.DeepEqual(g.last.cand, sp.cand) && g.last.booked == sp.booked && sp.o.Start.Sub(g.end) < testMergeGap {
 				g.last, g.end = sp, sp.o.End
@@ -685,11 +704,15 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 		var appSt, titleSt string
 		row.App, appSt = markOf(d.App, sp.o.Attrs["app"])
 		row.Title, titleSt = markOf(d.Title, core.NormalizeTitle(sp.o.Attrs["title"]))
-		full := trying && appSt != "fail" && titleSt != "fail" && d.Notif == "" && d.Media == ""
+		var repoSt, branchSt string
+		row.Repo, repoSt = markOf(d.Repo, sp.o.Attrs[core.AttrRepo])
+		row.Branch, branchSt = markOf(d.Branch, sp.o.Attrs[core.AttrBranch])
+		full := trying && appSt != "fail" && titleSt != "fail" && repoSt != "fail" && branchSt != "fail" && d.Notif == "" && d.Media == ""
 		row.Src = srcOK && !g.start.Truncate(time.Minute).After(srcAt) && srcAt.Before(g.end.Add(time.Minute)) &&
 			sp.o.Attrs["app"] == d.Obs.App && core.NormalizeTitle(sp.o.Attrs["title"]) == core.NormalizeTitle(d.Obs.Title)
 		if !full && !row.Src {
 			row.App, row.Title = marked{Pre: row.App.Text()}, marked{Pre: row.Title.Text()}
+			row.Repo, row.Branch = marked{Pre: row.Repo.Text()}, marked{Pre: row.Branch.Text()}
 		}
 		row.Sugg = suggOf(lang, cfg, nm, pal, c)
 		row.Incl, row.InclTitle = inclOf(lang, g.in)
@@ -724,7 +747,7 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 		if row.Src && !srcSeen {
 			srcSeen = true
 			classes = append(classes, "start")
-			row.AppSt, row.TitleSt = appSt, titleSt
+			row.AppSt, row.TitleSt, row.RepoSt, row.BranchSt = appSt, titleSt, repoSt, branchSt
 			if trying {
 				if b := suggOf(lang, cfg, nm, pal, sp.base); b != row.Sugg {
 					row.Before = &b
@@ -773,10 +796,17 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 			if a := sp.o.Attrs["app"]; a != "" {
 				f.Set("ed_app", regexp.QuoteMeta(a))
 			}
-			for _, p := range core.TitleParts(sp.o.Attrs["title"], sp.o.Attrs["app"]) {
-				if !fileTail.MatchString(p) {
-					f.Set("ed_title", regexp.QuoteMeta(p))
-					break
+			if repo := sp.o.Attrs[core.AttrRepo]; repo != "" {
+				// the work tree says more than a terminal's title, and holds
+				// in every tool; the app stays out
+				f.Del("ed_app")
+				f.Set("ed_repo", "^"+regexp.QuoteMeta(repo)+"$")
+			} else {
+				for _, p := range core.TitleParts(sp.o.Attrs["title"], sp.o.Attrs["app"]) {
+					if !fileTail.MatchString(p) {
+						f.Set("ed_title", regexp.QuoteMeta(p))
+						break
+					}
 				}
 			}
 			f.Set("ed_owhen", g.start.In(loc).Format(obsWhenLayout)+"/"+g.end.In(loc).Format("15:04"))
@@ -954,6 +984,8 @@ func findRule(cfg core.Config, id string) (r core.Rule, edit string, ok bool) {
 var condKeys = []struct{ field, word, short string }{
 	{core.MatchApp, "web.rules.sent_app", "web.rules.short_app"},
 	{core.MatchTitle, "web.rules.sent_title", "web.rules.short_title"},
+	{core.MatchRepo, "web.rules.sent_repo", "web.rules.short_repo"},
+	{core.MatchBranch, "web.rules.sent_branch", "web.rules.short_branch"},
 	{core.MatchNotification, "web.rules.sent_notif", "web.rules.short_notif"},
 	{core.MatchMedia, "", "web.rules.short_media"},
 }
@@ -1105,7 +1137,8 @@ func dupQuery(scope string, r core.Rule) url.Values {
 	d.fromRule(scope, r, "")
 	q := url.Values{"ed_new": {"1"}, "ed_scope": {d.Scope}, "ed_copy": {r.ID}}
 	for k, v := range map[string]string{"ed_app": d.App, "ed_title": d.Title, "ed_act": d.Act, "ed_acts": d.Acts, "ed_detail": d.Detail,
-		"ed_mode": d.Mode, "ed_prio": d.Prio, "ed_notification": d.Notif, "ed_media": d.Media} {
+		"ed_mode": d.Mode, "ed_prio": d.Prio, "ed_notification": d.Notif, "ed_media": d.Media,
+		"ed_branch": d.Branch, "ed_repo": d.Repo} {
 		if v != "" {
 			q.Set(k, v)
 		}

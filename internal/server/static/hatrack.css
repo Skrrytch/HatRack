@@ -587,3 +587,6 @@ table.test .incl{display:block;font-size:.78rem;color:var(--dim);margin-top:.15r
 .glance input[type=number] { width: 5rem; }
 .glance textarea { height: 9rem; margin-top: .25rem; }
 .glance .ex { border-left: 3px solid var(--line); padding-left: .8rem; margin: 1rem 0 .8rem; font-size: .9rem; color: var(--dim); }
+table.test .wd{display:flex;align-items:center;gap:.25rem;font-size:.8rem;color:var(--dim);margin-top:.15rem;font-family:var(--mono)}
+table.test .wd .ico{width:.85rem;height:.85rem;flex:none}
+table.test .wd .br{color:var(--ink)}
