@@ -63,6 +63,8 @@ func BuildMenu(s agent.Snapshot, now time.Time) []Item {
 		base := strings.TrimSuffix(s.Server, "/")
 		menu = append(menu,
 			Item{Label: i18n.T("web.nav.setup"), Action: &Action{Link: base + "/setup"}},
+			Item{Label: i18n.T("web.nav.assign"), Action: &Action{Link: base + "/assign"}},
+			Item{Separator: true},
 			Item{Label: i18n.T("ui.nav.week"), Action: &Action{Link: base + "/week"}},
 			Item{Label: i18n.T("ui.nav.day"), Action: &Action{Link: base + "/day"}},
 			Item{Label: i18n.T("ui.nav.now"), Action: &Action{Link: base + "/"}},

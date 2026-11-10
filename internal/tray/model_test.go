@@ -44,7 +44,7 @@ func TestMenuWearing(t *testing.T) {
 	if find(m, "Pause") != nil || find(m, "Resume") != nil {
 		t.Fatal("wearing: no Pause or Resume, both live in the panel")
 	}
-	// the four pages sit flat in the menu, in this order, then About and Quit
+	// Setup and Assign, then the three time pages, then About and Quit
 	var labels, links []string
 	for _, it := range m[2:] {
 		if it.Separator {
@@ -56,10 +56,10 @@ func TestMenuWearing(t *testing.T) {
 			links = append(links, it.Action.Link)
 		}
 	}
-	if strings.Join(labels, ",") != "Setup,Week,Day,Now,|,About HatRack,|,Quit tray" {
+	if strings.Join(labels, ",") != "Setup,Assignment,|,Week,Day,Now,|,About HatRack,|,Quit tray" {
 		t.Fatalf("menu order: %v", labels)
 	}
-	want := []string{"http://127.0.0.1:8421/setup", "http://127.0.0.1:8421/week", "http://127.0.0.1:8421/day", "http://127.0.0.1:8421/"}
+	want := []string{"http://127.0.0.1:8421/setup", "http://127.0.0.1:8421/assign", "http://127.0.0.1:8421/week", "http://127.0.0.1:8421/day", "http://127.0.0.1:8421/"}
 	if strings.Join(links, "|") != strings.Join(want, "|") {
 		t.Fatalf("links: %v", links)
 	}
