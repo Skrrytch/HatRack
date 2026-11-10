@@ -207,6 +207,12 @@
     {{if or .Verdict .Hit}}<div class="result">{{if .Verdict}}<p class="verdict {{.VerdictCls}}">{{.Verdict}}</p>{{end}}{{if .Hit}}<p class="hitnote">{{.Hit}}</p>{{end}}</div>{{end}}
     <div class="opts">
       <label>{{t $.Lang "web.rules.f_live"}} <select name="ed_mode">{{range .Modes}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+      <details class="info"><summary title="{{t $.Lang "web.rules.live_what"}}" aria-label="{{t $.Lang "web.rules.live_what"}}">i</summary>
+        <div class="infobox"><p><b>{{t $.Lang "web.rules.f_live"}}:</b> {{t $.Lang "web.rules.live_intro"}}</p>
+          <dl><dt>{{t $.Lang "web.rules.mode_suggest"}}</dt><dd>{{t $.Lang "web.rules.live_suggest"}}</dd>
+          <dt>{{t $.Lang "web.rules.mode_auto_long"}}</dt><dd>{{t $.Lang "web.rules.live_auto"}}</dd>
+          <dt>{{t $.Lang "web.rules.mode_off"}}</dt><dd>{{t $.Lang "web.rules.live_off"}}</dd></dl>
+          <p class="dim">{{t $.Lang "web.rules.live_soon"}}</p></div></details>
       <details><summary class="small dim">{{t $.Lang "web.rules.f_more"}}</summary>
         <label class="small">{{t $.Lang "web.rules.f_prio"}} <input type="number" name="ed_prio" min="-100" max="100" value="{{.Prio}}" style="width:5rem"></label> <span class="hint">{{t $.Lang "web.rules.f_prio_hint"}}</span>{{if .ErrPrio}}<div class="err">{{.ErrPrio}}</div>{{end}}</details>
       {{if .IsEdit}}<span class="grow"></span><button type="submit" class="small" name="ed_dup" value="1">{{t $.Lang "web.rules.dup"}}</button><button type="submit" class="danger small" formmethod="post" name="op" value="rule.delete" onclick="return confirm('{{t $.Lang "web.rules.delete_confirm"}}')">{{t $.Lang "web.rules.delete"}}</button>{{end}}
