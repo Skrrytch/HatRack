@@ -419,6 +419,7 @@ func (s *Server) editConfig(ctx context.Context, dry bool, fn func(*core.Config)
 		}
 		return cfg, err
 	}
+	core.AssignRuleIDs(&cfg) // rules keep a short label for good
 	if err := cfg.Validate(); err != nil {
 		return cfg, badConfig{err}
 	}

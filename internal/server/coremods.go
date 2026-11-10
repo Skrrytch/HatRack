@@ -44,6 +44,14 @@ func (s *Server) Start(ctx context.Context) {
 		log.Printf("core modules: %v", err)
 		return
 	}
+	// rules from before short ids get theirs once
+	if c := cfg; core.AssignRuleIDs(&c) {
+		if c, err = s.editConfig(ctx, false, func(*core.Config) error { return nil }); err != nil {
+			log.Printf("rule ids: %v", err)
+		} else {
+			cfg = c
+		}
+	}
 	s.configureCore(cfg)
 	s.publishCore(ctx)
 }

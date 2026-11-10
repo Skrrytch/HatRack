@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+	"html"
 	"net/url"
 	"regexp"
 	"slices"
@@ -9,6 +11,7 @@ import (
 	"time"
 
 	"hatrack/internal/core"
+	"hatrack/internal/modules"
 )
 
 const rulesCfg = `version: 1
@@ -104,6 +107,11 @@ func TestRulesTab(t *testing.T) {
 	if !strings.Contains(out, "ed_title=billing") {
 		t.Error("first title part in the link")
 	}
+	// a saved rule's chip opens it in the editor; the day's state stays
+	if !regexp.MustCompile(`<a class="src rule" href="[^"]*day=2026-11-04[^"]*ed_edit=venom%3a0"`).MatchString(strings.ToLower(out)) ||
+		!regexp.MustCompile(`<a class="src rule" href="[^"]*ed_edit=defaults%3a1"`).MatchString(strings.ToLower(out)) {
+		t.Error("rule chips do not link to the editor")
+	}
 	// filter
 	_, out = b.do("GET", "/assign?tab=day&day=2026-11-04&filter=noise", nil)
 	if strings.Contains(out, "billing - Visual") || !strings.Contains(out, "Spotify") {
@@ -123,11 +131,11 @@ func TestRulesTry(t *testing.T) {
 	rulesDay(t, e)
 	q := "/assign?tab=day&day=2026-11-04&ed_scope=tag&ed_app=code&ed_title=billing"
 	r, out := b.do("GET", q, nil)
-	if r.StatusCode != 200 || !strings.Contains(out, `class="ruleedit"`) {
+	if r.StatusCode != 200 || !strings.Contains(out, `class="ruleedit drawer"`) {
 		t.Fatalf("try: %d", r.StatusCode)
 	}
 	if !strings.Contains(out, `class="hitnote"`) || !strings.Contains(out, "matches 1 windows, 6m") || !strings.Contains(out, "1 of them without a hat so far") {
-		t.Errorf("hit note:\n%s", out[strings.Index(out, `class="ruleedit"`):])
+		t.Errorf("hit note:\n%s", out[strings.Index(out, `class="ruleedit drawer"`):])
 	}
 	if !strings.Contains(out, `unk hit`) && !strings.Contains(out, `hit"`) {
 		t.Error("hit row")
@@ -181,7 +189,7 @@ func TestRulesSave(t *testing.T) {
 	// the editor opens with the rule's values
 	_, out = b.do("GET", "/assign?tab=day&day=2026-11-04&ed_edit=venom:1", nil)
 	if !strings.Contains(out, `name="ed_title" value="billing"`) || !strings.Contains(out, `name="ed_edit" value="venom:1"`) {
-		t.Errorf("edit prefill:\n%s", out[strings.Index(out, `class="ruleedit"`):])
+		t.Errorf("edit prefill:\n%s", out[strings.Index(out, `class="ruleedit drawer"`):])
 	}
 	// delete
 	r, _ = b.do("POST", "/assign", url.Values{"op": {"rule.delete"}, "day": {"2026-11-04"}, "ed_edit": {"venom:1"}})
@@ -221,7 +229,7 @@ func TestHatPageRules(t *testing.T) {
 	}
 	_, out := b.do("GET", "/setup/hat?key=venom", nil)
 	for _, want := range []string{"How HatRack tells you are working on VENOM", `<code>venom</code>`, "VENOM</span>",
-		"Last 7 days", "ed_edit=venom%3A0#try", "ed_scope=venom#try", "HatRack also finds VENOM by:", "See assignment"} {
+		"Last 7 days", "ed_edit=venom%3A0\"", "ed_scope=venom\"", "HatRack also finds VENOM by:", "See assignment"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q", want)
 		}
@@ -231,7 +239,7 @@ func TestHatPageRules(t *testing.T) {
 	}
 	// a hat without rules says so, and offers the first rule
 	_, out = b.do("GET", "/setup/hat?key=tag", nil)
-	if !strings.Contains(out, "No rule yet. HatRack still finds TAG by") || !strings.Contains(out, "ed_scope=tag#try") || strings.Contains(out, "%!") {
+	if !strings.Contains(out, "No rule yet. HatRack still finds TAG by") || !strings.Contains(out, "ed_scope=tag\"") || strings.Contains(out, "%!") {
 		t.Errorf("empty hat:\n%s", out)
 	}
 }
@@ -377,5 +385,165 @@ func TestRulesHours(t *testing.T) {
 	out = page("")
 	if !strings.Contains(out, "UTF-8 Encoding") || strings.Contains(out, "billing - Visual") {
 		t.Error("long day does not start with its first hour")
+	}
+}
+
+func TestRulesProbe(t *testing.T) {
+	e, b := setupBrowser(t)
+	rulesDay(t, e)
+	_, out := b.do("GET", "/assign?tab=day&day=2026-11-04", nil)
+	// the "+ rule" link of the billing row carries the observation
+	m := regexp.MustCompile(`href="([^"]*ed_otitle=billing[^"]*)"`).FindStringSubmatch(out)
+	if m == nil {
+		t.Fatal("+ rule link without the observation")
+	}
+	plus := html.UnescapeString(m[1])
+	src := ""
+	if m := regexp.MustCompile(`ed_otitle=venom-api[^"]*ed_owhen=([^"&]*)`).FindStringSubmatch(html.UnescapeString(out)); m != nil {
+		src, _ = url.QueryUnescape(m[1])
+	}
+	if !strings.Contains(plus, "ed_oapp=code") || !strings.Contains(plus, "ed_owhen=2026-11-04T") {
+		t.Errorf("link: %s", plus)
+	}
+	// opened and tried: the row it came from is marked in the list with each
+	// condition, the verdict stands in the panel
+	_, out = b.do("GET", plus, nil)
+	if !strings.Contains(out, `class="hit start"`) || !strings.Contains(out, "Starting point") || !strings.Contains(out, "<mark>billing</mark> - Visual Studio Code") {
+		t.Fatalf("starting point not marked:\n%s", out)
+	}
+	if !strings.Contains(out, `class="mst pass"`) || !strings.Contains(out, "decides the result") || !strings.Contains(out, `name="ed_otitle"`) || !strings.Contains(out, `class="before"`) {
+		t.Errorf("starting point of the draft:\n%s", out)
+	}
+	if strings.Index(out, `class="verdict`) > strings.Index(out, `class="hitnote"`) {
+		t.Error("verdict below the hit count")
+	}
+	// a title that does not match: the row stays visible even under a filter
+	_, out = b.do("GET", strings.Replace(strings.Replace(plus, "ed_title=billing", "ed_title=nothing", 1), "filter=&", "filter=noise&", 1), nil)
+	if !strings.Contains(out, `class="mst fail"`) || !strings.Contains(out, "does not match the starting point") || !strings.Contains(out, "billing - Visual Studio Code") {
+		t.Errorf("no match:\n%s", out)
+	}
+	// another rule comes first: VENOM's title rule is older and as specific
+	q := "/assign?tab=day&day=2026-11-04&ed_scope=tag&ed_title=venom&ed_otitle=venom-api+-+Visual+Studio+Code&ed_oapp=code&ed_owhen=" + url.QueryEscape(src)
+	if _, out = b.do("GET", q, nil); !strings.Contains(out, "another one comes first") {
+		t.Errorf("beaten:\n%s", out)
+	}
+	// every row the draft matches shows where
+	_, out = b.do("GET", "/assign?tab=day&day=2026-11-04&ed_edit=venom:0", nil)
+	if strings.Count(out, "<mark>venom</mark>") < 2 || strings.Contains(out, `class="verdict`) {
+		t.Errorf("marks of an edited rule:\n%s", out)
+	}
+}
+
+func TestRuleIDs(t *testing.T) {
+	e, b := setupBrowser(t)
+	rulesDay(t, e)
+	// a stored configuration gives every rule a short id
+	c := config(t, e)
+	h, _ := c.Hat("venom")
+	ids := []string{h.Rules[0].ID, c.Defaults.Rules[0].ID, c.Defaults.Rules[1].ID}
+	for _, id := range ids {
+		if len(id) != 3 || strings.ContainsAny(id, "oli") {
+			t.Fatalf("ids %v", ids)
+		}
+	}
+	// chips, the rule list and the editor show it
+	_, out := b.do("GET", "/assign?tab=day&day=2026-11-04", nil)
+	if !strings.Contains(out, `<b class="rid `+ridColor(ids[0])+`">#`+ids[0]+`</b>`) || ridColor(ids[0]) != ridColor(ids[0]) {
+		t.Error("chip without the id")
+	}
+	if out = assignTabs3(b, "&day=2026-11-04"); !strings.Contains(out, `">#`+ids[1]+`</span>`) {
+		t.Error("rule list without the id")
+	}
+	if _, out = b.do("GET", "/assign?tab=day&day=2026-11-04&ed_edit=venom:0", nil); !strings.Contains(out, `">#`+ids[0]+`</span></h2>`) {
+		t.Error("editor without the id")
+	}
+	// a new rule gets one on saving, and the page marks it by that id; an
+	// edit keeps it
+	r, _ := b.do("POST", "/assign", url.Values{"op": {"rule.save"}, "day": {"2026-11-04"}, "ed_scope": {"tag"}, "ed_title": {"billing"}})
+	h, _ = config(t, e).Hat("tag")
+	if len(h.Rules) != 1 || len(h.Rules[0].ID) != 3 || !strings.Contains(r.Header.Get("Location"), "saved="+h.Rules[0].ID) {
+		t.Fatalf("saved: %+v %s", h.Rules, r.Header.Get("Location"))
+	}
+	id := h.Rules[0].ID
+	b.do("POST", "/assign", url.Values{"op": {"rule.save"}, "day": {"2026-11-04"}, "ed_scope": {"tag"}, "ed_title": {"billing-x"}, "ed_edit": {"tag:0"}, "ed_id": {id}})
+	if h, _ = config(t, e).Hat("tag"); h.Rules[0].ID != id || h.Rules[0].Match["title"] != "billing-x" {
+		t.Errorf("edit: %+v", h.Rules)
+	}
+}
+
+func TestRuleIDsAtStart(t *testing.T) {
+	e := setup(t)
+	cfg, err := core.ParseConfig([]byte(rulesCfg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.st.PutConfig(context.Background(), cfg); err != nil { // as stored before short ids
+		t.Fatal(err)
+	}
+	srv := New(e.st, modules.Builtin(nil))
+	srv.Start(context.Background())
+	defer srv.Close()
+	c, _, _ := e.st.GetConfig(context.Background())
+	if core.AssignRuleIDs(&c) {
+		t.Error("rules without id after start")
+	}
+}
+
+func TestRulesArchivedHat(t *testing.T) {
+	e, b := setupBrowser(t)
+	rulesDay(t, e)
+	cfg := strings.Replace(rulesCfg, "  tag:\n", "  old:\n    name: OLD\n    archived: true\n    activities: [legacy]\n    rules:\n      - match: {title: old}\n  tag:\n", 1)
+	if r, body := e.do("PUT", "/api/config", cfg); r.StatusCode != 200 {
+		t.Fatalf("config: %d %s", r.StatusCode, body)
+	}
+	// a new rule for an archived hat goes to an active one, with its activities
+	_, out := b.do("GET", "/assign?tab=day&day=2026-11-04&ed_new=1&ed_scope=old", nil)
+	if !strings.Contains(out, `<option value="venom" selected>`) || strings.Contains(out, "legacy") || !strings.Contains(out, `<option value="development"`) {
+		t.Errorf("new rule:\n%s", out[strings.Index(out, `class="ruleedit`):])
+	}
+	// a rule of an archived hat keeps its hat, marked as archived
+	_, out = b.do("GET", "/assign?tab=day&day=2026-11-04&ed_edit=old:0", nil)
+	if !strings.Contains(out, `<option value="old" selected>OLD (archived)</option>`) || !strings.Contains(out, `<option value="legacy"`) {
+		t.Errorf("edit:\n%s", out[strings.Index(out, `class="ruleedit`):])
+	}
+}
+
+func TestRulesListArchivedAndDuplicate(t *testing.T) {
+	e, b := setupBrowser(t)
+	rulesDay(t, e)
+	cfg := strings.Replace(rulesCfg, "  tag:\n", "  old:\n    name: OLD\n    archived: true\n    activities: [legacy]\n    rules:\n      - match: {title: old}\n  tag:\n", 1)
+	if r, body := e.do("PUT", "/api/config", cfg); r.StatusCode != 200 {
+		t.Fatalf("config: %d %s", r.StatusCode, body)
+	}
+	// the list shows as many rules as the tab counts, the archived one last
+	out := assignTabs3(b, "&day=2026-11-04")
+	if !strings.Contains(out, "4 rules") || strings.Count(out, "<li") < 4 || !strings.Contains(out, `<li class="archived">`) ||
+		!strings.Contains(out, "Archived hats 1") || !strings.Contains(out, "the rule does not act") {
+		t.Errorf("list:\n%s", out)
+	}
+	list := out[strings.Index(out, `<ul class="rules">`):]
+	list = list[:strings.Index(list, "</ul>")]
+	if strings.LastIndex(list, "<li") != strings.Index(list, `<li class="archived">`) {
+		t.Error("archived rule not last")
+	}
+	// "Duplicate" opens a new rule with the values of the old one
+	m := regexp.MustCompile(`href="([^"]*ed_copy=[^"]*ed_title=venom[^"]*)"`).FindStringSubmatch(out)
+	if m == nil {
+		t.Fatal("no duplicate link")
+	}
+	h, _ := config(t, e).Hat("venom")
+	_, out = b.do("GET", html.UnescapeString(m[1]), nil)
+	if !strings.Contains(out, "New rule") || !strings.Contains(out, "copy of #"+h.Rules[0].ID) || !strings.Contains(out, `name="ed_title" value="venom"`) || strings.Contains(out, `name="ed_edit"`) {
+		t.Errorf("duplicate:\n%s", out[strings.Index(out, `class="ruleedit`):])
+	}
+	// so does the button in the editor, with the values as edited
+	_, out = b.do("GET", "/assign?tab=day&day=2026-11-04&ed_edit=venom:0&ed_id="+h.Rules[0].ID+"&ed_scope=venom&ed_title=venom2&ed_dup=1", nil)
+	if !strings.Contains(out, "New rule") || !strings.Contains(out, `name="ed_title" value="venom2"`) || strings.Contains(out, `name="ed_edit"`) || strings.Contains(out, `name="ed_id"`) {
+		t.Errorf("duplicate in the editor:\n%s", out[strings.Index(out, `class="ruleedit`):])
+	}
+	// saved, the copy is a rule of its own
+	b.do("POST", "/assign", url.Values{"op": {"rule.save"}, "day": {"2026-11-04"}, "ed_scope": {"venom"}, "ed_title": {"venom2"}, "ed_copy": {h.Rules[0].ID}})
+	if h2, _ := config(t, e).Hat("venom"); len(h2.Rules) != 2 || h2.Rules[1].ID == h.Rules[0].ID {
+		t.Errorf("saved copy: %+v", h2.Rules)
 	}
 }

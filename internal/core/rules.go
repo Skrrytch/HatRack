@@ -1,6 +1,7 @@
 package core
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -116,10 +117,98 @@ func RuleID(scope string, r Rule) string {
 	return scope + ":" + hex.EncodeToString(sum[:4])
 }
 
+// ruleIDChars make the short ids HatRack gives rules: digits and lower
+// case letters without o, l and i, which look like 0 and 1.
+const ruleIDChars = "0123456789abcdefghjkmnpqrstuvwxyz"
+
+// RuleIDs returns the ids the rules of cfg have.
+func RuleIDs(cfg Config) map[string]bool {
+	used := map[string]bool{}
+	for _, h := range cfg.Hats {
+		for _, r := range h.Rules {
+			if r.ID != "" {
+				used[r.ID] = true
+			}
+		}
+	}
+	for _, r := range cfg.Defaults.Rules {
+		if r.ID != "" {
+			used[r.ID] = true
+		}
+	}
+	return used
+}
+
+// NewRuleID returns a short id of three characters that used does not
+// hold, and adds it to used. The id only labels the rule for the eye; when
+// three characters run out, it gets longer.
+func NewRuleID(used map[string]bool) string {
+	for n := 3; ; n++ {
+		for try := 0; try < 200; try++ {
+			b := make([]byte, n)
+			rand.Read(b)
+			for i := range b {
+				b[i] = ruleIDChars[int(b[i])%len(ruleIDChars)]
+			}
+			if id := string(b); !used[id] {
+				used[id] = true
+				return id
+			}
+		}
+	}
+}
+
+// AssignRuleIDs gives every rule of cfg without an id a new short one, so
+// that a rule keeps its label when it changes. It reports whether it gave
+// any; cfg gets its own copies of the rule lists it changes.
+func AssignRuleIDs(cfg *Config) bool {
+	used := RuleIDs(*cfg)
+	fill := func(rules []Rule) ([]Rule, bool) {
+		if !slices.ContainsFunc(rules, func(r Rule) bool { return r.ID == "" }) {
+			return rules, false
+		}
+		rules = slices.Clone(rules)
+		for i := range rules {
+			if rules[i].ID == "" {
+				rules[i].ID = NewRuleID(used)
+			}
+		}
+		return rules, true
+	}
+	changed := false
+	for i := range cfg.Hats {
+		if rules, ok := fill(cfg.Hats[i].Rules); ok {
+			if !changed {
+				cfg.Hats = slices.Clone(cfg.Hats)
+			}
+			cfg.Hats[i].Rules, changed = rules, true
+		}
+	}
+	if rules, ok := fill(cfg.Defaults.Rules); ok {
+		cfg.Defaults.Rules, changed = rules, true
+	}
+	return changed
+}
+
 // compileMatch compiles a match pattern. Matching ignores case unless the
 // pattern switches it off with (?-i).
 func compileMatch(pattern string) (*regexp.Regexp, error) {
 	return regexp.Compile("(?i)" + pattern)
+}
+
+// MatchSpan reports where a match pattern first matches value, as a rule
+// does: start and end of the match, or ok false. An empty value never
+// matches. err is a pattern that does not compile.
+func MatchSpan(pattern, value string) (start, end int, ok bool, err error) {
+	re, err := compileMatch(pattern)
+	if err != nil || value == "" {
+		return 0, 0, false, err
+	}
+	loc := re.FindStringIndex(value)
+	if loc == nil {
+		return 0, 0, false, nil
+	}
+	return loc[0], loc[1], true, nil
 }
 
 var (

@@ -48,6 +48,32 @@
     if (t.name === "ed_scope" && f.elements.ed_act) f.elements.ed_act.value = "";
     f.requestSubmit(f.querySelector("[data-try]") || undefined);
   });
+  // inside [data-keepscroll] (the rule test, its editor) a reload of the
+  // same page keeps the scroll position instead of jumping to the top
+  var SCROLL = "hatrack-scroll";
+  function keepScroll() {
+    try { sessionStorage.setItem(SCROLL, JSON.stringify({ p: location.pathname, y: window.scrollY, t: Date.now() })); } catch (e) {}
+  }
+  try {
+    var kept = JSON.parse(sessionStorage.getItem(SCROLL) || "null");
+    sessionStorage.removeItem(SCROLL);
+    if (kept && kept.p === location.pathname && Date.now() - kept.t < 30000) {
+      window.scrollTo(0, kept.y);
+      window.addEventListener("load", function () { window.scrollTo(0, kept.y); });
+    }
+  } catch (e) {}
+  document.addEventListener("submit", function (e) {
+    if (e.target.closest && e.target.closest("[data-keepscroll]")) keepScroll();
+  }, true);
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest && e.target.closest("a[href]");
+    if (a && a.closest("[data-keepscroll]") && a.pathname === location.pathname) keepScroll();
+  }, true);
+  // Escape closes the rule editor panel
+  document.addEventListener("keydown", function (e) {
+    var x = e.key === "Escape" && document.querySelector("[data-close-drawer]");
+    if (x) { keepScroll(); location.href = x.href; }
+  });
   // "recently seen" apps: a chip appends its app to the ignore list
   document.addEventListener("click", function (e) {
     var b = e.target.closest && e.target.closest("[data-add]");

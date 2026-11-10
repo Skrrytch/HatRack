@@ -51,15 +51,17 @@
 {{end}}
 {{end}}
 
-{{define "ruleline"}}{{with .L}}<li>
+{{define "ruleline"}}{{with .L}}<li{{if .Archived}} class="archived"{{end}}>
+  <span class="rid">{{if .ID}}<span class="{{ridc .ID}}">#{{.ID}}</span>{{end}}</span>
   <div class="rbody">
     <div class="wenn"><span class="k">{{t $.Lang "web.rules.when"}}</span>{{range $i, $c := .Conds}}{{if $i}}<span class="sep">{{t $.Lang "web.rules.sent_and"}}</span>{{end}}<span class="cond"><span class="w">{{$c.Word}}</span>{{if $c.Value}} <code>{{$c.Value}}</code>{{end}}</span>{{end}}</div>
     <div class="dann"><span class="k">{{t $.Lang "web.rules.then"}}</span><span class="then">{{if .Scope}}<span class="hatdot" style="--c:{{.HatColor}}"></span>{{end}}{{.Then}}</span></div>
     {{if .NoAct}}<div class="meta zero">{{.NoAct}}</div>{{end}}
+    {{if .Archived}}<div class="meta">{{t $.Lang "web.rules.archived_note"}}</div>{{end}}
   </div>
   <div class="ract">
     {{if .Mode}}<span class="mode {{.ModeCls}}">{{.Mode}}</span>{{end}}
     <span class="rstat{{if .StatZero}} zero{{end}}" tabindex="0">{{.Stat}}<span class="pop"><b>{{.StatHead}}</b><span>{{.StatBody}}</span></span></span>
-    {{if $.CanWrite}}<a class="btn small" href="{{.Edit}}">{{t $.Lang "web.setup.edit"}}</a>{{end}}
+    {{if $.CanWrite}}{{if .Dup}}<a class="btn small" href="{{.Dup}}">{{t $.Lang "web.rules.dup"}}</a>{{end}}<a class="btn small" href="{{.Edit}}">{{t $.Lang "web.setup.edit"}}</a>{{end}}
   </div>
 </li>{{end}}{{end}}

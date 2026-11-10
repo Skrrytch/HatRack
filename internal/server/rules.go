@@ -29,7 +29,7 @@ const (
 	maxLearned   = 8
 	testMergeGap = time.Minute
 	recentDays   = 7
-	editorFields = "ed_scope ed_app ed_title ed_act ed_acts ed_detail ed_ignore ed_mode ed_prio ed_edit ed_id ed_booked ed_notification ed_media ed_new"
+	editorFields = "ed_scope ed_app ed_title ed_act ed_acts ed_detail ed_ignore ed_mode ed_prio ed_edit ed_id ed_booked ed_notification ed_media ed_new ed_owhen ed_oapp ed_otitle ed_copy"
 )
 
 type rulesView struct {
@@ -80,20 +80,55 @@ type filterLink struct {
 }
 
 type testRow struct {
-	Class, When, Dur, App, Title string
-	Noise, Unknown, NoHat        bool
-	HatName, Color, Rest, Conf   string
-	Whys                         []whyChip
-	WhyNone                      string
-	BookedName, BookedColor      string
-	Plus                         string // link that opens the editor with this row
+	Class, When, Dur string
+	App, Title       marked
+	AppSt, TitleSt   string // the starting point: "pass" or "fail" per condition
+	Src              bool   // the observation the draft started from
+	Before           *Sugg  // the starting point's suggestion without the draft, if it differs
+	Sugg
+	Whys                    []whyChip
+	WhyNone                 string
+	BookedName, BookedColor string
+	Plus                    string // link that opens the editor with this row
+}
+
+// marked is a text with the part a draft's condition matches.
+type marked struct{ Pre, Mark, Post string }
+
+func (m marked) Text() string { return m.Pre + m.Mark + m.Post }
+
+// markOf matches pattern against value: the marked text and "pass" or
+// "fail"; no pattern, or one that does not compile, gives "".
+func markOf(pattern, value string) (marked, string) {
+	if pattern == "" {
+		return marked{Pre: value}, ""
+	}
+	from, to, ok, err := core.MatchSpan(pattern, value)
+	switch {
+	case err != nil:
+		return marked{Pre: value}, ""
+	case !ok:
+		return marked{Pre: value}, "fail"
+	}
+	return marked{Pre: value[:from], Mark: value[from:to], Post: value[to:]}, "pass"
+}
+
+// Sugg is a suggestion as the day list shows it.
+type Sugg struct {
+	Noise, Unknown, NoHat      bool
+	HatName, Color, Rest, Conf string
 }
 
 type whyChip struct {
 	Class, Label, Field, Text, Title string
+	ID                               string // a rule's own id
+	Href                             string // a saved rule: opens it in the editor
 }
 
 type ruleLine struct {
+	ID            string
+	Dup           string // link: a new rule with this one's values
+	Archived      bool   // its hat is archived: the rule does not act
 	Conds         []ruleCond
 	Then          string
 	Stat          string // short label: time in the last days
@@ -132,19 +167,34 @@ type editorView struct {
 	Modes                                                                            []option
 	ErrApp, ErrTitle, ErrAct, ErrDetail, ErrPrio, ErrTop                             string
 	Hit                                                                              string
+	ObsWhen, ObsApp, ObsTitle                                                        string // the observation the draft came from
+	Copy                                                                             string // id of the rule this new one copies
+	CloseHref                                                                        string
+	Verdict, VerdictCls                                                              string // the draft on its starting point: win, miss, beaten, pending
+}
+
+// obsSrc is the observation a draft started from.
+type obsSrc struct {
+	When, App, Title string // When as in ed_owhen
 }
 
 // draft is the rule being tried, as the editor fields describe it.
 type draft struct {
 	Scope, App, Title, Act, Acts, Detail, Mode, Prio, Edit, ID, Booked, Notif, Media string
 	Ignore, Present, New                                                             bool
+	Obs                                                                              obsSrc
+	Copy                                                                             string // id of the rule this new one copies
 }
 
 func draftOf(q url.Values) draft {
 	d := draft{Scope: q.Get("ed_scope"), App: strings.TrimSpace(q.Get("ed_app")), Title: strings.TrimSpace(q.Get("ed_title")),
 		Act: q.Get("ed_act"), Acts: q.Get("ed_acts"), Detail: strings.TrimSpace(q.Get("ed_detail")), Mode: q.Get("ed_mode"),
 		Prio: strings.TrimSpace(q.Get("ed_prio")), Edit: q.Get("ed_edit"), ID: q.Get("ed_id"), Booked: q.Get("ed_booked"),
-		Notif: q.Get("ed_notification"), Media: q.Get("ed_media"), Ignore: q.Get("ed_ignore") != "", New: q.Get("ed_new") != ""}
+		Notif: q.Get("ed_notification"), Media: q.Get("ed_media"), Ignore: q.Get("ed_ignore") != "", New: q.Get("ed_new") != "",
+		Obs: obsSrc{When: q.Get("ed_owhen"), App: q.Get("ed_oapp"), Title: q.Get("ed_otitle")}, Copy: q.Get("ed_copy")}
+	if q.Get("ed_dup") != "" { // "Duplicate" in the editor: the same values as a new rule
+		d.Copy, d.Edit, d.ID, d.New = d.ID, "", "", true
+	}
 	d.Present = q.Has("ed_scope") || q.Has("ed_edit") || d.New
 	return d
 }
@@ -320,6 +370,14 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 			d.Scope = a[0].Key
 		}
 	}
+	// a new rule goes to a hat one can pick; a rule of an archived hat stays
+	// there until moved
+	if d.Present && d.Edit == "" && d.Scope != core.RulesScopeDefaults && !activeHat(cfg, d.Scope) {
+		d.Scope, d.Act = core.RulesScopeDefaults, ""
+		if a := cfg.ActiveHats(); len(a) > 0 {
+			d.Scope = a[0].Key
+		}
+	}
 
 	nRules := len(cfg.Defaults.Rules)
 	for _, h := range cfg.Hats {
@@ -403,7 +461,7 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 	}
 
 	base := "/assign?tab=day&day=" + url.QueryEscape(pick) + "&device=" + url.QueryEscape(rv.Device)
-	rv.AddHref = base + rv.stateQuery(rv.Filter, rv.RuleFilter, rv.RuleSortBy, rv.Hour, false) + "&ed_new=1#try"
+	rv.AddHref = base + rv.stateQuery(rv.Filter, rv.RuleFilter, rv.RuleSortBy, rv.Hour, false) + "&ed_new=1"
 
 	// the draft
 	var try *core.Classifier
@@ -414,10 +472,14 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 		if d.Edit != "" {
 			rv.Editor.IsEdit = true
 		}
+		rv.Editor.CloseHref = base + rv.stateQuery(rv.Filter, rv.RuleFilter, rv.RuleSortBy, rv.Hour, false)
 		for _, f := range strings.Fields(editorFields) {
-			if q.Has(f) {
+			if q.Has(f) && !(q.Has("ed_dup") && (f == "ed_edit" || f == "ed_id" || f == "ed_new" || f == "ed_copy")) {
 				rv.Carry = append(rv.Carry, [2]string{f, q.Get(f)})
 			}
+		}
+		if q.Has("ed_dup") { // links keep the copy, not the rule it came from
+			rv.Carry = append(rv.Carry, [2]string{"ed_new", "1"}, [2]string{"ed_copy", d.Copy})
 		}
 		rule, rerr := d.rule()
 		err := rerr
@@ -477,9 +539,8 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 		}
 		s.fillRows(rv, lang, loc, cfg, nm, pal, tk, k, reads, cls, hitID, base, tried, d, try != nil)
 	}
-
 	// one list of all rules: rules for all hats first, then each hat's
-	rv.GlobalAdd = base + "&ed_new=1&ed_scope=" + core.RulesScopeDefaults + "#try"
+	rv.GlobalAdd = base + "&ed_new=1&ed_scope=" + core.RulesScopeDefaults
 	var all []ruleLine
 	for n, rule := range cfg.Defaults.Rules {
 		all = append(all, s.ruleLineOf(lang, cfg, nm, pal, stats, core.RulesScopeDefaults, n, rule, base))
@@ -487,6 +548,15 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 	for _, h := range cfg.ActiveHats() {
 		for n, rule := range h.Rules {
 			all = append(all, s.ruleLineOf(lang, cfg, nm, pal, stats, h.Key, n, rule, base))
+		}
+	}
+	for _, h := range cfg.Hats { // they count, so they show, last and marked
+		if h.Archived {
+			for n, rule := range h.Rules {
+				l := s.ruleLineOf(lang, cfg, nm, pal, stats, h.Key, n, rule, base)
+				l.Archived, l.Mode, l.NoAct = true, "", ""
+				all = append(all, l)
+			}
 		}
 	}
 	rv.RuleSorts = ruleSorts(lang, rv.RuleSortBy)
@@ -499,6 +569,7 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 			Label: c.Label, N: c.N, On: c.Value == rv.RuleFilter})
 	}
 	sortRules(all, rv.RuleSortBy)
+	sort.SliceStable(all, func(i, j int) bool { return !all[i].Archived && all[j].Archived })
 	for _, l := range all {
 		if ruleShown(l, rv.RuleFilter) {
 			rv.RuleList = append(rv.RuleList, l)
@@ -510,13 +581,17 @@ func (s *Server) rulesTab(r *http.Request, v *view, cfg core.Config, q url.Value
 
 func (s *Server) editorOf(lang string, cfg core.Config, nm map[string]string, d draft) *editorView {
 	e := &editorView{Scope: d.Scope, App: d.App, Title: d.Title, Act: d.Act, Acts: d.Acts, Detail: d.Detail, Mode: d.Mode, Prio: d.Prio,
-		Edit: d.Edit, ID: d.ID, Booked: d.Booked, Notif: d.Notif, Media: d.Media, Ignore: d.Ignore, Defaults: d.Scope == core.RulesScopeDefaults}
+		Edit: d.Edit, ID: d.ID, Booked: d.Booked, Notif: d.Notif, Media: d.Media, Ignore: d.Ignore, Defaults: d.Scope == core.RulesScopeDefaults,
+		ObsWhen: d.Obs.When, ObsApp: d.Obs.App, ObsTitle: d.Obs.Title, Copy: d.Copy}
 	for _, h := range cfg.ActiveHats() {
 		label := h.DisplayName()
 		if h.Key == d.Booked {
 			label += " " + i18n.In(lang, "web.rules.e_booked")
 		}
 		e.Hats = append(e.Hats, option{Value: h.Key, Label: label, Selected: h.Key == d.Scope})
+	}
+	if h, ok := cfg.Hat(d.Scope); ok && h.Archived {
+		e.Hats = append(e.Hats, option{Value: h.Key, Label: h.DisplayName() + " " + i18n.In(lang, "web.rules.e_archived"), Selected: true})
 	}
 	e.Hats = append(e.Hats, option{Value: core.RulesScopeDefaults, Label: i18n.In(lang, "web.rules.e_all_hats"), Selected: e.Defaults})
 	if h, ok := cfg.Hat(d.Scope); ok && !e.Defaults {
@@ -530,6 +605,10 @@ func (s *Server) editorOf(lang string, cfg core.Config, nm map[string]string, d 
 	}
 	return e
 }
+
+// obsWhenLayout is the start of an observation in ed_owhen; the end
+// follows after a slash as 15:04.
+const obsWhenLayout = "2006-01-02T15:04"
 
 // rawSpan is a read span of the rule test; base is its candidate without
 // the rule being tried.
@@ -584,6 +663,11 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 		groups = append(groups, &group{first: sp, last: sp, start: sp.o.Start, end: sp.o.End, noHat: sp.base.Hat == ""})
 	}
 
+	// the observation the draft started from: its start lies in a row
+	from, _, _ := strings.Cut(d.Obs.When, "/")
+	srcAt, err := time.ParseInLocation(obsWhenLayout, from, loc)
+	srcOK, srcSeen := err == nil && d.Present, false
+
 	var rows []testRow
 	var rowHour []int
 	counts := map[string]int{}
@@ -592,19 +676,23 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 	for _, g := range groups {
 		sp := g.first
 		c := sp.cand
-		row := testRow{When: g.start.In(loc).Format("15:04") + "–" + g.end.In(loc).Format("15:04"), Dur: core.FormatDuration(g.end.Sub(g.start)),
-			App: sp.o.Attrs["app"], Title: core.NormalizeTitle(sp.o.Attrs["title"])}
+		row := testRow{When: g.start.In(loc).Format("15:04") + "–" + g.end.In(loc).Format("15:04"), Dur: core.FormatDuration(g.end.Sub(g.start))}
+		var appSt, titleSt string
+		row.App, appSt = markOf(d.App, sp.o.Attrs["app"])
+		row.Title, titleSt = markOf(d.Title, core.NormalizeTitle(sp.o.Attrs["title"]))
+		full := trying && appSt != "fail" && titleSt != "fail" && d.Notif == "" && d.Media == ""
+		row.Src = srcOK && !g.start.Truncate(time.Minute).After(srcAt) && srcAt.Before(g.end.Add(time.Minute)) &&
+			sp.o.Attrs["app"] == d.Obs.App && core.NormalizeTitle(sp.o.Attrs["title"]) == core.NormalizeTitle(d.Obs.Title)
+		if !full && !row.Src {
+			row.App, row.Title = marked{Pre: row.App.Text()}, marked{Pre: row.Title.Text()}
+		}
+		row.Sugg = suggOf(lang, cfg, nm, pal, c)
 		var classes []string
 		switch c.Kind() {
 		case core.KindNoise:
 			classes = append(classes, "noise")
-			row.Noise = true
-		case core.KindUnknown:
+		case core.KindUnknown, core.KindPart:
 			classes = append(classes, "unk")
-			row.Unknown = true
-		case core.KindPart:
-			classes = append(classes, "unk")
-			row.NoHat = true
 		}
 		if sp.differs {
 			classes = append(classes, "diff")
@@ -627,34 +715,40 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 				}
 			}
 		}
-		row.Class = strings.Join(classes, " ")
-		if c.Hat != "" {
-			row.HatName, row.Color = nameOf(nm, c.Hat), pal.color(c.Hat)
-			row.Conf = i18n.In(lang, map[string]string{core.LevelSure: "web.rules.conf_sure",
-				core.LevelLikely: "web.rules.conf_likely", core.LevelMaybe: "web.rules.conf_maybe"}[c.Level()])
-		}
-		var rest []string
-		act := c.Activity
-		if act == "" && len(c.Activities) > 0 {
-			act = strings.Join(c.Activities, ", ")
-			for _, a := range c.Activities {
-				if hatsHave(cfg, a) {
-					act = a
-					break
+		if row.Src && !srcSeen {
+			srcSeen = true
+			classes = append(classes, "start")
+			row.AppSt, row.TitleSt = appSt, titleSt
+			if trying {
+				if b := suggOf(lang, cfg, nm, pal, sp.base); b != row.Sugg {
+					row.Before = &b
 				}
 			}
+			if rv.Editor != nil {
+				e := rv.Editor
+				switch {
+				case !trying:
+					if !d.hasMatch() {
+						e.Verdict, e.VerdictCls = i18n.In(lang, "web.rules.p_pending"), "pending"
+					}
+				case !full:
+					e.Verdict, e.VerdictCls = i18n.In(lang, "web.rules.p_nomatch"), "miss"
+				case hit:
+					e.Verdict, e.VerdictCls = i18n.In(lang, "web.rules.p_wins"), "win"
+				case c.Ignore:
+					e.Verdict, e.VerdictCls = i18n.In(lang, "web.rules.p_ignored"), "beaten"
+				default:
+					e.Verdict, e.VerdictCls = i18n.In(lang, "web.rules.p_beaten"), "beaten"
+				}
+			}
+		} else {
+			row.Src = false
 		}
-		if act != "" {
-			rest = append(rest, act)
-		}
-		if c.Detail != "" {
-			rest = append(rest, c.Detail)
-		}
-		row.Rest = strings.Join(rest, " · ")
+		row.Class = strings.Join(classes, " ")
 		if sp.booked != "" {
 			row.BookedName, row.BookedColor = nameOf(nm, sp.booked), pal.color(sp.booked)
 		}
-		row.Whys = s.whys(lang, cfg, nm, tk, k, tried, d, c.Why)
+		row.Whys = s.whys(lang, cfg, nm, tk, k, tried, d, c.Why, link+rv.stateQuery(rv.Filter, rv.RuleFilter, rv.RuleSortBy, rv.Hour, false))
 		if len(c.Why) == 0 {
 			row.WhyNone = i18n.In(lang, "web.rules.why_none")
 			if m := ticketLike.FindString(sp.o.Attrs["title"]); m != "" {
@@ -662,12 +756,12 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 			}
 		}
 		if !c.Ignore && (strings.Contains(row.Class, "unk") || strings.Contains(row.Class, "diff") || (c.Hat != "" && c.Level() != core.LevelSure)) {
-			scope := sp.booked
-			if scope == "" {
-				scope = c.Hat
-			}
-			if scope == "" {
-				scope = core.RulesScopeDefaults
+			scope := core.RulesScopeDefaults
+			for _, h := range []string{sp.booked, c.Hat} {
+				if activeHat(cfg, h) {
+					scope = h
+					break
+				}
 			}
 			f := url.Values{"ed_new": {"1"}, "ed_scope": {scope}, "ed_booked": {sp.booked}}
 			if a := sp.o.Attrs["app"]; a != "" {
@@ -679,7 +773,10 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 					break
 				}
 			}
-			row.Plus = link + rv.stateQuery(rv.Filter, rv.RuleFilter, rv.RuleSortBy, rv.Hour, false) + "&" + f.Encode() + "#try"
+			f.Set("ed_owhen", g.start.In(loc).Format(obsWhenLayout)+"/"+g.end.In(loc).Format("15:04"))
+			f.Set("ed_oapp", sp.o.Attrs["app"])
+			f.Set("ed_otitle", sp.o.Attrs["title"])
+			row.Plus = link + rv.stateQuery(rv.Filter, rv.RuleFilter, rv.RuleSortBy, rv.Hour, false) + "&" + f.Encode()
 		}
 		counts["all"]++
 		for _, cl := range classes {
@@ -687,7 +784,7 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 				counts[map[string]string{"unk": "unknown", "diff": "diff", "noise": "noise"}[cl]]++
 			}
 		}
-		if rv.Filter != "" && !strings.Contains(row.Class, map[string]string{"unknown": "unk", "diff": "diff", "noise": "noise"}[rv.Filter]) {
+		if rv.Filter != "" && !row.Src && !strings.Contains(row.Class, map[string]string{"unknown": "unk", "diff": "diff", "noise": "noise"}[rv.Filter]) {
 			continue
 		}
 		rows = append(rows, row)
@@ -720,6 +817,49 @@ func (s *Server) fillRows(rv *rulesView, lang string, loc *time.Location, cfg co
 	}
 }
 
+// suggOf puts a candidate into words.
+func suggOf(lang string, cfg core.Config, nm map[string]string, pal palette, c core.Candidate) Sugg {
+	var sg Sugg
+	switch c.Kind() {
+	case core.KindNoise:
+		sg.Noise = true
+	case core.KindUnknown:
+		sg.Unknown = true
+	case core.KindPart:
+		sg.NoHat = true
+	}
+	if c.Hat != "" {
+		sg.HatName, sg.Color = nameOf(nm, c.Hat), pal.color(c.Hat)
+		sg.Conf = i18n.In(lang, map[string]string{core.LevelSure: "web.rules.conf_sure",
+			core.LevelLikely: "web.rules.conf_likely", core.LevelMaybe: "web.rules.conf_maybe"}[c.Level()])
+	}
+	var rest []string
+	act := c.Activity
+	if act == "" && len(c.Activities) > 0 {
+		act = strings.Join(c.Activities, ", ")
+		for _, a := range c.Activities {
+			if hatsHave(cfg, a) {
+				act = a
+				break
+			}
+		}
+	}
+	if act != "" {
+		rest = append(rest, act)
+	}
+	if c.Detail != "" {
+		rest = append(rest, c.Detail)
+	}
+	sg.Rest = strings.Join(rest, " · ")
+	return sg
+}
+
+// activeHat reports whether key names a hat that is not archived.
+func activeHat(cfg core.Config, key string) bool {
+	h, ok := cfg.Hat(key)
+	return ok && !h.Archived
+}
+
 func hatsHave(cfg core.Config, activity string) bool {
 	for _, h := range cfg.ActiveHats() {
 		for _, a := range h.Activities {
@@ -731,8 +871,9 @@ func hatsHave(cfg core.Config, activity string) bool {
 	return false
 }
 
-// whys turns the reasons of a candidate into chips.
-func (s *Server) whys(lang string, cfg core.Config, nm map[string]string, tk core.Tickets, k core.Knowledge, tried core.Rule, d draft, why []core.Reason) []whyChip {
+// whys turns the reasons of a candidate into chips. editLink is the page
+// link a saved rule's chip opens it with; "" for none.
+func (s *Server) whys(lang string, cfg core.Config, nm map[string]string, tk core.Tickets, k core.Knowledge, tried core.Rule, d draft, why []core.Reason, editLink string) []whyChip {
 	var out []whyChip
 	field := func(f string) string {
 		switch f {
@@ -750,10 +891,14 @@ func (s *Server) whys(lang string, cfg core.Config, nm map[string]string, tk cor
 		switch w.Source {
 		case core.SourceRule:
 			ch.Class, ch.Label = "rule", i18n.In(lang, "web.rules.src_rule")
-			if r, ok := findRule(cfg, w.Ref); ok {
-				ch.Text, ch.Title = ruleShort(lang, r), ruleSentence(lang, nm, r)
-			} else if core.RuleID(d.Scope, tried) == w.Ref {
-				ch.Text, ch.Title = ruleShort(lang, tried), ruleSentence(lang, nm, tried)
+			if core.RuleID(d.Scope, tried) == w.Ref {
+				// the draft: its words, not those of the rule it changes
+				ch.Text, ch.Title, ch.ID = ruleShort(lang, tried), ruleSentence(lang, nm, tried), tried.ID
+			} else if r, edit, ok := findRule(cfg, w.Ref); ok {
+				ch.Text, ch.Title, ch.ID = ruleShort(lang, r), ruleSentence(lang, nm, r), r.ID
+				if editLink != "" {
+					ch.Href = editLink + "&ed_edit=" + url.QueryEscape(edit)
+				}
 			} else {
 				ch.Text = w.Ref
 			}
@@ -783,21 +928,21 @@ func (s *Server) whys(lang string, cfg core.Config, nm map[string]string, tk cor
 	return out
 }
 
-// findRule looks a rule up by its id.
-func findRule(cfg core.Config, id string) (core.Rule, bool) {
+// findRule looks a rule up by its id; edit names it as "scope:N".
+func findRule(cfg core.Config, id string) (r core.Rule, edit string, ok bool) {
 	for _, h := range cfg.Hats {
-		for _, r := range h.Rules {
+		for n, r := range h.Rules {
 			if core.RuleID(h.Key, r) == id {
-				return r, true
+				return r, h.Key + ":" + strconv.Itoa(n), true
 			}
 		}
 	}
-	for _, r := range cfg.Defaults.Rules {
+	for n, r := range cfg.Defaults.Rules {
 		if core.RuleID(core.RulesScopeDefaults, r) == id {
-			return r, true
+			return r, core.RulesScopeDefaults + ":" + strconv.Itoa(n), true
 		}
 	}
-	return core.Rule{}, false
+	return core.Rule{}, "", false
 }
 
 var condKeys = []struct{ field, word, short string }{
@@ -807,12 +952,8 @@ var condKeys = []struct{ field, word, short string }{
 	{core.MatchMedia, "", "web.rules.short_media"},
 }
 
-// ruleShort is the short text of a rule in a chip: its own id, or its first
-// condition.
+// ruleShort is the short text of a rule in a chip: its first condition.
 func ruleShort(lang string, r core.Rule) string {
-	if r.ID != "" {
-		return r.ID
-	}
 	var parts []string
 	for _, c := range condKeys {
 		if v, ok := r.Match[c.field]; ok {
@@ -900,7 +1041,8 @@ func ruleSentence(lang string, nm map[string]string, r core.Rule) string {
 }
 
 func (s *Server) ruleLineOf(lang string, cfg core.Config, nm map[string]string, pal palette, stats ruleStats, scope string, n int, r core.Rule, base string) ruleLine {
-	l := ruleLine{Conds: conds(lang, r), Edit: base + "&ed_edit=" + url.QueryEscape(scope+":"+strconv.Itoa(n)) + "#try"}
+	l := ruleLine{ID: r.ID, Conds: conds(lang, r), Edit: base + "&ed_edit=" + url.QueryEscape(scope+":"+strconv.Itoa(n)),
+		Dup: base + "&" + dupQuery(scope, r).Encode()}
 	hat := ""
 	if scope != core.RulesScopeDefaults {
 		hat = scope
@@ -951,6 +1093,23 @@ func (s *Server) ruleLineOf(lang string, cfg core.Config, nm map[string]string, 
 	return l
 }
 
+// dupQuery opens the editor with a new rule that has r's values.
+func dupQuery(scope string, r core.Rule) url.Values {
+	var d draft
+	d.fromRule(scope, r, "")
+	q := url.Values{"ed_new": {"1"}, "ed_scope": {d.Scope}, "ed_copy": {r.ID}}
+	for k, v := range map[string]string{"ed_app": d.App, "ed_title": d.Title, "ed_act": d.Act, "ed_acts": d.Acts, "ed_detail": d.Detail,
+		"ed_mode": d.Mode, "ed_prio": d.Prio, "ed_notification": d.Notif, "ed_media": d.Media} {
+		if v != "" {
+			q.Set(k, v)
+		}
+	}
+	if d.Ignore {
+		q.Set("ed_ignore", "1")
+	}
+	return q
+}
+
 // ruleSortKeys are the orders of the rule list; the first one is the default.
 var ruleSortKeys = []string{"use", "app", "title", "hat", "act"}
 
@@ -971,8 +1130,8 @@ type ruleChip struct {
 	N            int
 }
 
-// ruleChips are: all rules, rules for all hats, noise, and one per hat that
-// has rules.
+// ruleChips are: all rules, rules for all hats, noise, one per hat that
+// has rules, and the rules of archived hats.
 func ruleChips(lang string, cfg core.Config, all []ruleLine) []ruleChip {
 	out := []ruleChip{{Label: i18n.In(lang, "web.rules.flt_all"), N: len(all)}}
 	ohne, noise := 0, 0
@@ -997,6 +1156,15 @@ func ruleChips(lang string, cfg core.Config, all []ruleLine) []ruleChip {
 			out = append(out, ruleChip{"hat:" + h.Key, h.DisplayName(), n})
 		}
 	}
+	archived := 0
+	for _, l := range all {
+		if l.Archived {
+			archived++
+		}
+	}
+	if archived > 0 {
+		out = append(out, ruleChip{"archived", i18n.In(lang, "web.rules.flt_archived"), archived})
+	}
 	return out
 }
 
@@ -1007,6 +1175,8 @@ func ruleShown(l ruleLine, f string) bool {
 		return l.Scope == core.RulesScopeDefaults
 	case f == "noise":
 		return l.Noise
+	case f == "archived":
+		return l.Archived
 	case strings.HasPrefix(f, "hat:"):
 		return l.Scope == strings.TrimPrefix(f, "hat:")
 	}
@@ -1178,7 +1348,7 @@ func (s *Server) ruleAction(w http.ResponseWriter, r *http.Request, acc access) 
 	dest := func(extra string) string {
 		return "/assign?tab=day&day=" + url.QueryEscape(day) + "&device=" + url.QueryEscape(device) +
 			"&filter=" + url.QueryEscape(r.PostFormValue("filter")) + "&rf=" + url.QueryEscape(r.PostFormValue("rf")) +
-			"&rs=" + url.QueryEscape(r.PostFormValue("rs")) + "&hour=" + url.QueryEscape(r.PostFormValue("hour")) + extra + "#rules-day"
+			"&rs=" + url.QueryEscape(r.PostFormValue("rs")) + "&hour=" + url.QueryEscape(r.PostFormValue("hour")) + extra
 	}
 	var id string
 	var saveErr error
@@ -1190,6 +1360,9 @@ func (s *Server) ruleAction(w http.ResponseWriter, r *http.Request, acc access) 
 		rule, err := d.rule()
 		if err != nil {
 			return badConfig{err}
+		}
+		if rule.ID == "" {
+			rule.ID = core.NewRuleID(core.RuleIDs(*c))
 		}
 		if err := applyRule(c, d.Scope, d.Edit, rule); err != nil {
 			return badConfig{err}
@@ -1244,7 +1417,7 @@ type hatRules struct {
 func (s *Server) fillHatRules(r *http.Request, v *view, cfg core.Config, h core.Hat) {
 	hr := &v.Hat.Rules
 	hr.Name = h.DisplayName()
-	hr.AddHref = "/assign?tab=day&ed_new=1&ed_scope=" + url.QueryEscape(h.Key) + "#try"
+	hr.AddHref = "/assign?tab=day&ed_new=1&ed_scope=" + url.QueryEscape(h.Key)
 	k, stats, err := s.knowledge(r)
 	if err != nil {
 		return

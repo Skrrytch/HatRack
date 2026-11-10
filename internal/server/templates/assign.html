@@ -44,7 +44,7 @@
 
 <h1 id="rules-day">{{t $.Lang "web.rules.day"}}</h1>
 <p class="sub">{{t $.Lang "web.rules.day_sub"}}</p>
-<div class="card">
+<div class="card" data-keepscroll>
 {{if .NoSensor}}
   <p class="dim">{{t $.Lang "web.rules.empty_sensor"}}</p>
   <p><a class="btn" href="/setup/grants#basics">{{t $.Lang "web.rules.to_sensors"}}</a></p>
@@ -72,13 +72,10 @@
     <tr><th>{{t $.Lang "web.rules.col_time"}}</th><th>{{t $.Lang "web.rules.col_window"}}</th><th>{{t $.Lang "web.rules.col_sugg"}}</th><th>{{t $.Lang "web.rules.col_why"}}</th><th>{{t $.Lang "web.rules.col_booked"}}</th><th></th></tr>
     {{range .Rows}}
     <tr class="{{.Class}}">
-      <td class="when">{{.When}}<span class="conf">{{.Dur}}</span></td>
-      <td>{{.App}}{{if .Title}}<span class="ttl">{{.Title}}</span>{{end}}</td>
-      <td>{{if .Noise}}{{t $.Lang "web.rules.noise"}}
-        {{else if .Unknown}}{{t $.Lang "web.rules.unknown"}}
-        {{else if .NoHat}}{{t $.Lang "web.rules.no_hat"}}{{if .Rest}} · {{.Rest}}{{end}}
-        {{else}}<span class="hatdot" style="--c:{{.Color}}"></span>{{.HatName}}{{if .Rest}} · {{.Rest}}{{end}}<span class="conf">{{.Conf}}</span>{{end}}</td>
-      <td><div class="whys">{{range .Whys}}<span class="src {{.Class}}"{{if .Title}} title="{{.Title}}"{{end}}>{{.Label}}{{if .Field}} <span class="f">{{.Field}}</span>{{end}}{{if .Text}} {{.Text}}{{end}}</span>{{end}}{{if .WhyNone}}<span class="dim small">{{.WhyNone}}</span>{{end}}</div></td>
+      <td class="when">{{.When}}<span class="conf">{{.Dur}}</span>{{if .Src}}<span class="srctag">{{t $.Lang "web.rules.p_start"}}</span>{{end}}</td>
+      <td>{{template "marked" .App}}{{template "mst" dict "S" .AppSt "Lang" $.Lang}}{{if .Title.Text}}<span class="ttl">{{template "marked" .Title}}{{template "mst" dict "S" .TitleSt "Lang" $.Lang}}</span>{{end}}</td>
+      <td>{{template "sugg" dict "S" .Sugg "Lang" $.Lang}}{{with .Before}}<span class="before">{{t $.Lang "web.rules.p_before"}} {{template "sugg" dict "S" . "Lang" $.Lang}}</span>{{end}}</td>
+      <td><div class="whys">{{template "whys" .Whys}}{{if .WhyNone}}<span class="dim small">{{.WhyNone}}</span>{{end}}</div></td>
       <td class="booked">{{if .BookedName}}<span class="hatdot" style="--c:{{.BookedColor}}"></span>{{.BookedName}}{{else}}<span class="dim">–</span>{{end}}</td>
       <td>{{if and .Plus $.CanWrite}}<a class="btn plus" href="{{.Plus}}">{{t $.Lang "web.rules.add"}}</a>{{end}}</td>
     </tr>
@@ -142,8 +139,19 @@
 {{end}}
 {{end}}
 
+{{define "sugg"}}{{with .S}}{{if .Noise}}{{t $.Lang "web.rules.noise"}}
+  {{else if .Unknown}}{{t $.Lang "web.rules.unknown"}}
+  {{else if .NoHat}}{{t $.Lang "web.rules.no_hat"}}{{if .Rest}} · {{.Rest}}{{end}}
+  {{else}}<span class="hatdot" style="--c:{{.Color}}"></span>{{.HatName}}{{if .Rest}} · {{.Rest}}{{end}}<span class="conf">{{.Conf}}</span>{{end}}{{end}}{{end}}
+
+{{define "marked"}}{{.Pre}}{{if .Mark}}<mark>{{.Mark}}</mark>{{end}}{{.Post}}{{end}}
+
+{{define "mst"}}{{if eq .S "pass"}}<span class="mst pass">{{t .Lang "web.rules.p_ok"}}</span>{{else if eq .S "fail"}}<span class="mst fail">{{t .Lang "web.rules.p_no"}}</span>{{end}}{{end}}
+
+{{define "whys"}}{{range .}}{{if .Href}}<a class="src {{.Class}}" href="{{.Href}}"{{if .Title}} title="{{.Title}}"{{end}}>{{else}}<span class="src {{.Class}}"{{if .Title}} title="{{.Title}}"{{end}}>{{end}}{{if .ID}}<b class="rid {{ridc .ID}}">#{{.ID}}</b>{{end}}{{.Label}}{{if .Field}} <span class="f">{{.Field}}</span>{{end}}{{if .Text}} {{.Text}}{{end}}{{if .Href}} {{template "icon" "edit"}}</a>{{else}}</span>{{end}}{{end}}{{end}}
+
 {{define "ruleeditor"}}{{with .E}}
-<form class="ruleedit" id="try" method="get" action="/assign">
+<form class="ruleedit drawer" id="try" method="get" action="/assign" data-keepscroll aria-labelledby="try-h">
   <input type="hidden" name="tab" value="day">
   <input type="hidden" name="day" value="{{$.R.Day}}">
   <input type="hidden" name="device" value="{{$.R.Device}}">
@@ -156,6 +164,12 @@
   {{if .Booked}}<input type="hidden" name="ed_booked" value="{{.Booked}}">{{end}}
   {{if .Notif}}<input type="hidden" name="ed_notification" value="{{.Notif}}">{{end}}
   {{if .Media}}<input type="hidden" name="ed_media" value="{{.Media}}">{{end}}
+  {{if .ObsWhen}}<input type="hidden" name="ed_owhen" value="{{.ObsWhen}}">{{end}}
+  {{if .Copy}}<input type="hidden" name="ed_copy" value="{{.Copy}}">{{end}}
+  {{if .ObsApp}}<input type="hidden" name="ed_oapp" value="{{.ObsApp}}">{{end}}
+  {{if .ObsTitle}}<input type="hidden" name="ed_otitle" value="{{.ObsTitle}}">{{end}}
+  <div class="dhead"><h2 id="try-h">{{if .IsEdit}}{{t $.Lang "web.rules.e_edit"}}{{else}}{{t $.Lang "web.rules.e_new"}}{{end}}{{if .ID}} <span class="rid {{ridc .ID}}">#{{.ID}}</span>{{else if .Copy}} <span class="rid">{{t $.Lang "web.rules.e_copy" .Copy}}</span>{{end}}</h2>
+    <a class="x" href="{{.CloseHref}}" data-close-drawer title="{{t $.Lang "web.rules.discard"}}" aria-label="{{t $.Lang "web.rules.discard"}}">×</a></div>
   {{if .ErrTop}}<p class="err">{{.ErrTop}}</p>{{end}}
   <div class="line"><span>{{t $.Lang "web.rules.e_for"}}</span>
     <label>{{t $.Lang "web.rules.f_hat"}}<select name="ed_scope" data-submit>{{range .Hats}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label><span></span></div>
@@ -171,13 +185,17 @@
     {{end}}
     <label>{{t $.Lang "web.rules.f_detail"}}<input type="text" name="ed_detail" value="{{.Detail}}" placeholder="{{t $.Lang "web.rules.f_optional"}}"><div class="hint">{{t $.Lang "web.rules.f_detail_hint"}}</div>{{if .ErrDetail}}<div class="err">{{.ErrDetail}}</div>{{end}}</label></div>
   <div class="foot">
-    <label style="display:flex;gap:.4rem;align-items:center;font-size:.85rem">{{t $.Lang "web.rules.f_live"}}<select name="ed_mode">{{range .Modes}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
-    <details><summary class="small dim">{{t $.Lang "web.rules.f_more"}}</summary>
-      <label class="small">{{t $.Lang "web.rules.f_prio"}} <input type="number" name="ed_prio" min="-100" max="100" value="{{.Prio}}" style="width:5rem"></label> <span class="hint">{{t $.Lang "web.rules.f_prio_hint"}}</span>{{if .ErrPrio}}<div class="err">{{.ErrPrio}}</div>{{end}}</details>
-    <button type="submit" data-try>{{t $.Lang "web.rules.try"}}</button>
-    <button type="submit" class="primary" formmethod="post" name="op" value="rule.save">{{t $.Lang "web.rules.save"}}</button>
-    {{if .IsEdit}}<button type="submit" class="link" formmethod="post" name="op" value="rule.delete" onclick="return confirm('{{t $.Lang "web.rules.delete_confirm"}}')">{{t $.Lang "web.rules.delete"}}</button>{{end}}
-    <a class="small" href="/assign?tab=day&day={{$.R.Day}}&device={{$.R.Device}}&filter={{$.R.Filter}}#rules-day">{{t $.Lang "web.rules.discard"}}</a>
-    <span class="grow"></span>{{if .Hit}}<span class="hitnote">{{.Hit}}</span>{{end}}
+    {{if or .Verdict .Hit}}<div class="result">{{if .Verdict}}<p class="verdict {{.VerdictCls}}">{{.Verdict}}</p>{{end}}{{if .Hit}}<p class="hitnote">{{.Hit}}</p>{{end}}</div>{{end}}
+    <div class="opts">
+      <label>{{t $.Lang "web.rules.f_live"}} <select name="ed_mode">{{range .Modes}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}</select></label>
+      <details><summary class="small dim">{{t $.Lang "web.rules.f_more"}}</summary>
+        <label class="small">{{t $.Lang "web.rules.f_prio"}} <input type="number" name="ed_prio" min="-100" max="100" value="{{.Prio}}" style="width:5rem"></label> <span class="hint">{{t $.Lang "web.rules.f_prio_hint"}}</span>{{if .ErrPrio}}<div class="err">{{.ErrPrio}}</div>{{end}}</details>
+      {{if .IsEdit}}<span class="grow"></span><button type="submit" class="small" name="ed_dup" value="1">{{t $.Lang "web.rules.dup"}}</button><button type="submit" class="danger small" formmethod="post" name="op" value="rule.delete" onclick="return confirm('{{t $.Lang "web.rules.delete_confirm"}}')">{{t $.Lang "web.rules.delete"}}</button>{{end}}
+    </div>
+    <div class="acts">
+      <button type="submit" data-try>{{t $.Lang "web.rules.try"}}</button>
+      <button type="submit" class="primary" formmethod="post" name="op" value="rule.save">{{t $.Lang "web.rules.save"}}</button>
+      <a class="btn" href="{{.CloseHref}}">{{t $.Lang "web.rules.discard"}}</a>
+    </div>
   </div>
 </form>{{end}}{{end}}

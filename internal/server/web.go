@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"html/template"
 	"io"
 	"log"
@@ -42,6 +43,7 @@ var pageFuncs = template.FuncMap{
 		}
 		return out
 	},
+	"ridc": ridColor,
 	"dict": func(kv ...any) map[string]any {
 		m := map[string]any{}
 		for i := 0; i+1 < len(kv); i += 2 {
@@ -1092,4 +1094,16 @@ func (s *Server) static(w http.ResponseWriter, r *http.Request) {
 func (s *Server) tickets(ctx context.Context, cfg core.Config) core.Tickets {
 	links, _ := s.st.TicketLinks(ctx)
 	return core.NewTickets(links, cfg.Tickets)
+}
+
+// ridColors is the number of colours of rule ids (classes rc0 … rc11 in
+// hatrack.css).
+const ridColors = 12
+
+// ridColor is the colour class of a rule id: fixed by the id, so a rule has
+// the same colour everywhere. It only helps the eye; ids may share one.
+func ridColor(id string) string {
+	h := fnv.New32a()
+	h.Write([]byte(id))
+	return fmt.Sprintf("rc rc%d", h.Sum32()%ridColors)
 }
