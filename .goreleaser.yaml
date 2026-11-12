@@ -38,7 +38,7 @@ nfpms:
     formats: [deb]
     maintainer: Bert Speckels <skrrytch@speckels.net>
     description: "Switch between work contexts (hats): look, apps and time log."
-    homepage: https://github.com/Skrrytch/HatRack
+    homepage: https://github.com/be-spex/HatRack
     license: MIT
     section: utils
     priority: optional
@@ -67,7 +67,7 @@ dockers:
     goarch: amd64
     dockerfile: deploy/Dockerfile.release
     image_templates:
-      - "ghcr.io/skrrytch/hatrack:{{ .Version }}-amd64"
+      - "ghcr.io/be-spex/hatrack:{{ .Version }}-amd64"
     build_flag_templates: ["--platform=linux/amd64"]
   - id: server-arm64
     ids: [hat]
@@ -75,21 +75,21 @@ dockers:
     goarch: arm64
     dockerfile: deploy/Dockerfile.release
     image_templates:
-      - "ghcr.io/skrrytch/hatrack:{{ .Version }}-arm64"
+      - "ghcr.io/be-spex/hatrack:{{ .Version }}-arm64"
     build_flag_templates: ["--platform=linux/arm64"]
 
 docker_manifests:
-  - name_template: "ghcr.io/skrrytch/hatrack:{{ .Version }}"
+  - name_template: "ghcr.io/be-spex/hatrack:{{ .Version }}"
     image_templates:
-      - "ghcr.io/skrrytch/hatrack:{{ .Version }}-amd64"
-      - "ghcr.io/skrrytch/hatrack:{{ .Version }}-arm64"
+      - "ghcr.io/be-spex/hatrack:{{ .Version }}-amd64"
+      - "ghcr.io/be-spex/hatrack:{{ .Version }}-arm64"
 
 # Pre-releases (tags with "-", such as v0.6.0-rc1) are marked as such on GitHub
 # and do not move :latest; the workflow tags :latest for stable versions only.
 release:
   prerelease: auto
   github:
-    owner: Skrrytch
+    owner: be-spex
     name: HatRack
   # the README installs with this file, so it is a release asset of its own
   extra_files:

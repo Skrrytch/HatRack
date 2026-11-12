@@ -38,7 +38,7 @@ the same version in every artifact and a `checksums.txt`:
 |---|---|---|
 | `hatrack_<v>_linux_<arch>.tar.gz` (amd64, arm64) | `hat`, `install.sh`, README, licence | any distribution, no root |
 | `hatrack_<v>_<arch>.deb` | `/usr/bin/hat`, menu entry, icon | Debian, Ubuntu, Linux Mint |
-| `ghcr.io/skrrytch/hatrack:<v>` and `:latest` (amd64, arm64) | the server, as `deploy/Dockerfile` builds it today | NAS, home server, or locally in Docker/Podman |
+| `ghcr.io/be-spex/hatrack:<v>` and `:latest` (amd64, arm64) | the server, as `deploy/Dockerfile` builds it today | NAS, home server, or locally in Docker/Podman |
 
 - **`install.sh`** works from the unpacked tarball or as
   `curl -fsSL …/install.sh | sh`. It picks the architecture, downloads and
@@ -120,7 +120,7 @@ Target shape of the section (wording final when the slices exist):
 Works fully on Cinnamon (X11). On other desktops the time log, apps and
 notifications work; the look does not change yet.
 
-    curl -fsSL https://github.com/Skrrytch/HatRack/releases/latest/download/install.sh | sh
+    curl -fsSL https://github.com/be-spex/HatRack/releases/latest/download/install.sh | sh
 
 This puts the single binary `hat` into `~/.local/bin` (no root, nothing
 system-wide) and starts `hat setup`, which asks four questions: where the

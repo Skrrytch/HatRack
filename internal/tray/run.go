@@ -110,7 +110,7 @@ type app struct {
 // Version and ProjectURL are shown in the about screen.
 var (
 	Version    = "dev"
-	ProjectURL = "https://github.com/Skrrytch/HatRack"
+	ProjectURL = "https://github.com/be-spex/HatRack"
 )
 
 // PanelRemote asks a running tray to show the panel, centred on the pointer's

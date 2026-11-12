@@ -30,7 +30,7 @@ hat log today           # today's overview
 Works fully on Cinnamon (X11). On other desktops the time log, apps and
 notifications work; the look does not change yet.
 
-    curl -fsSL https://github.com/Skrrytch/HatRack/releases/latest/download/install.sh | sh
+    curl -fsSL https://github.com/be-spex/HatRack/releases/latest/download/install.sh | sh
 
 This puts the single binary `hat` into `~/.local/bin` (no root, nothing
 system-wide, so removing it later is one file), then starts `hat setup`. Setup

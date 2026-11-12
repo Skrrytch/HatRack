@@ -23,7 +23,7 @@ import (
 )
 
 // Repo is the GitHub repository of HatRack.
-const Repo = "Skrrytch/HatRack"
+const Repo = "be-spex/HatRack"
 
 // API and Web are the GitHub addresses; tests point them elsewhere.
 var (

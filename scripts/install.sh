@@ -3,13 +3,13 @@
 # to ~/.local/bin, then `hat setup` asks the few remaining questions.
 #
 #   from the unpacked tarball:   ./install.sh
-#   without downloading first:   curl -fsSL https://github.com/Skrrytch/HatRack/releases/latest/download/install.sh | sh
+#   without downloading first:   curl -fsSL https://github.com/be-spex/HatRack/releases/latest/download/install.sh | sh
 #
 # HAT_BIN changes the install path. Nothing else is written here: services,
 # the tray and the configuration all come from `hat setup`.
 set -eu
 
-REPO="Skrrytch/HatRack"
+REPO="be-spex/HatRack"
 DEST="${HAT_BIN:-$HOME/.local/bin/hat}"
 BASE="${HATRACK_RELEASE_URL:-https://github.com/$REPO/releases/latest/download}"  # override for tests
 

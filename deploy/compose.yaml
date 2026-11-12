@@ -4,7 +4,7 @@
 # Secrets (the MQTT password, see docs/mvp-5.md) go into .env next to this file.
 services:
   hatrack:
-    image: ghcr.io/skrrytch/hatrack:latest
+    image: ghcr.io/be-spex/hatrack:latest
     restart: unless-stopped
     ports:
       - "127.0.0.1:8421:8421"

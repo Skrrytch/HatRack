@@ -36,4 +36,4 @@ jobs:
         if: ${{ !contains(github.ref_name, '-') }}
         run: |
           v="${GITHUB_REF_NAME#v}"
-          docker buildx imagetools create -t ghcr.io/skrrytch/hatrack:latest "ghcr.io/skrrytch/hatrack:$v"
+          docker buildx imagetools create -t ghcr.io/be-spex/hatrack:latest "ghcr.io/be-spex/hatrack:$v"
