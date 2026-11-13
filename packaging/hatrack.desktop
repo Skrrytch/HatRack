@@ -1,7 +1,12 @@
 [Desktop Entry]
 Type=Application
 Name=HatRack
-Comment=Switch hats: look, apps and time log
+GenericName=Work Context Switcher
+GenericName[de]=Arbeitskontext-Wechsler
+Comment=Work context switcher: look, apps and time log per hat – by be-spex
+Comment[de]=Arbeitskontext-Wechsler: Look, Apps und Zeiterfassung je Hut – by be-spex
+Keywords=hat;context;time;tracking;be-spex;bespex;spex;
+Keywords[de]=hut;kontext;zeit;zeiterfassung;be-spex;bespex;spex;
 Exec=/usr/bin/hat tray show
 Icon=hatrack
 Terminal=false

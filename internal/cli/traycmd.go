@@ -149,7 +149,8 @@ func autostartText(exe string) string {
 	return fmt.Sprintf(`[Desktop Entry]
 Type=Application
 Name=HatTray
-Comment=HatRack tray icon
+Comment=HatRack tray icon – by be-spex
+Comment[de]=HatRack-Tray-Icon – by be-spex
 Exec=%q tray run
 X-GNOME-Autostart-enabled=true
 `, exe)
