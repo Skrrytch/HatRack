@@ -9,6 +9,8 @@ different wallpaper and colour scheme, the apps and websites that belong to it,
 and a new entry in the log. Over the day, that log becomes a time sheet: which
 hat, which activity, how long.
 
+Part of [be spex](https://be-spex.github.io) – small, focused apps for Linux
+
 ```
 hat on venom            # work on VENOM
 hat on venom do review  # ... with an activity
@@ -20,17 +22,15 @@ hat log today           # today's overview
 ```
 
 > **Status:** MVP 1 is implemented and waits for a test in daily use. MVP 2 and 3
-> are plans. See [docs/concept.md](docs/concept.md),
-> the stages [MVP 1](docs/mvp-1.md), [MVP 2](docs/mvp-2.md),
-> [MVP 3 and outlook](docs/mvp-3.md), [MVP 4](docs/mvp-4.md), [MVP 5](docs/mvp-5.md), [MVP 6](docs/mvp-6.md), and the open questions in
-> [docs/decisions.md](docs/decisions.md).
+> are plans; see [Documentation](#documentation).
 
 ## Install
 
-Works fully on Cinnamon (X11). On other desktops the time log, apps and
-notifications work; the look does not change yet.
+### With the install script (recommended)
 
-    curl -fsSL https://github.com/be-spex/HatRack/releases/latest/download/install.sh | sh
+```sh
+curl -fsSL https://github.com/be-spex/HatRack/releases/latest/download/install.sh | sh
+```
 
 This puts the single binary `hat` into `~/.local/bin` (no root, nothing
 system-wide, so removing it later is one file), then starts `hat setup`. Setup
@@ -38,26 +38,66 @@ asks where the server runs, starter hats and whether to show a tray icon; with
 a server on this computer it also asks for a web password. It installs the
 background services itself.
 
-The server runs on this computer as a user service by default, so there is
-nothing to host. To share one time log between computers, run it in a
-container: copy [deploy/compose.yaml](deploy/compose.yaml) to the server, run
-`docker compose up -d`, and create a token for each computer:
+### With APT (Debian, Ubuntu, Linux Mint)
 
+Once, add the be spex repository:
+
+```sh
+curl -fsSLO https://be-spex.github.io/packages/be-spex-archive-keyring.deb
+sudo apt install ./be-spex-archive-keyring.deb && sudo apt update
 ```
-docker compose exec hatrack /hat server device add laptop   # prints the token
-hat setup --server http://<server>:8421 --token <token>     # on the laptop
+
+Then:
+
+```sh
+sudo apt install hatrack
+hat setup
 ```
 
-The compose file binds the port to `127.0.0.1`, so only that machine reaches
-it. To reach it from other computers, change that port line and put TLS in
-front first (for example a reverse proxy): the token goes with every request.
+Updates arrive with `sudo apt upgrade`. The package puts `hat` into `/usr/bin`
+with a menu entry.
 
-- **Debian, Ubuntu, Mint:** the `.deb` from the releases puts `hat` into
-  `/usr/bin` with a menu entry; then run `hat setup` as well.
+### Other ways
+
+- **.deb directly:** take `hatrack_*.deb` for your architecture from the
+  [latest release](https://github.com/be-spex/HatRack/releases/latest), run
+  `sudo apt install ./hatrack_*.deb`, then `hat setup`.
+- **Server in a container:** the server runs on your computer as a user service
+  by default, so there is nothing to host. To share one time log between
+  computers, copy [deploy/compose.yaml](deploy/compose.yaml) to the server, run
+  `docker compose up -d`, and create a token for each computer:
+
+  ```
+  docker compose exec hatrack /hat server device add laptop   # prints the token
+  hat setup --server http://<server>:8421 --token <token>     # on the laptop
+  ```
+
+  The compose file binds the port to `127.0.0.1`, so only that machine reaches
+  it. To reach it from other computers, change that port line and put TLS in
+  front first (for example a reverse proxy): the token goes with every request.
 - **Update:** `hat update` (for the `.deb`: install the newer package; for the
   container: `docker compose pull && docker compose up -d`).
 - **Remove:** `hat setup --remove`. Your log stays in `~/.local/share` until you
   add `--purge`.
+
+Requirements: Ubuntu 24.04+, Linux Mint 22+ or Debian 13+ (x86_64, arm64).
+HatRack works fully on Cinnamon (X11). On other desktops the time log, apps and
+notifications work; the look does not change yet.
+
+## Features
+
+- **Modules for everything** – wallpaper, colour scheme, launching apps,
+  notifications and scripts are modules. A module has one backend per desktop
+  and drops out quietly where none exists.
+- **Any distribution, any display server, any desktop** – no feature may depend
+  on one of them. Some features come later for some desktops.
+- **Server optional** – with a server, all devices share hats, activities and
+  the log, and an AI can analyse your time through MCP. Without one, the same
+  core runs locally.
+- **The log is the truth** – events are appended, never changed. Corrections are
+  new events.
+
+## Usage
 
 Quick start after setup:
 
@@ -71,15 +111,10 @@ An AI assistant such as Claude Code can read your hats and the time log over
 MCP: create a token in Setup → AI access and run the `claude mcp add …` line
 shown there; then ask "how much time did I spend on VENOM last week?".
 
-## Build from source
+The built-in wallpapers (two for each of the six hat colours) are abstract
+colour gradients; set your own per hat if you prefer.
 
-Needs Go 1.24 or newer. `scripts/update.sh` builds, installs and restarts; add
-`--setup` the first time and `--test` to run the tests first. After every
-change to the code, run it again.
-
-## Components
-
-All parts are one Go binary, `hat`.
+All parts are one Go binary, `hat`:
 
 | Name | What | Command |
 |---|---|---|
@@ -89,25 +124,24 @@ All parts are one Go binary, `hat`.
 | **HatTray** | tray icon and menu | `hat tray run` |
 | **HatRack Server** | optional central server: web UI, API, MCP for AI tools | `hat server` |
 
-## Goals
+## Documentation
 
-- **Modules for everything.** Wallpaper, colour scheme, launching apps,
-  notifications and scripts are modules. A module has one backend per desktop
-  and drops out quietly where none exists.
-- **Any distribution, any display server, any desktop.** No feature may depend
-  on one of them. Some features come later for some desktops.
-- **Server optional.** With a server, all devices share hats, activities and
-  the log, and an AI can analyse your time through MCP. Without one, the same
-  core runs locally.
-- **The log is the truth.** Events are appended, never changed. Corrections are
-  new events.
+- [Concept](docs/concept.md)
+- Stages: [MVP 1](docs/mvp-1.md), [MVP 2](docs/mvp-2.md),
+  [MVP 3 and outlook](docs/mvp-3.md), [MVP 4](docs/mvp-4.md),
+  [MVP 5](docs/mvp-5.md), [MVP 6](docs/mvp-6.md)
+- [Decisions and open questions](docs/decisions.md)
+
+## Build from source
+
+Needs Go 1.24 or newer. `scripts/update.sh` builds, installs and restarts; add
+`--setup` the first time and `--test` to run the tests first. After every
+change to the code, run it again.
 
 ## License
 
-[MIT](LICENSE) © 2026 Bert Speckels
+MIT – see [LICENSE](LICENSE). © 2026 Bert Speckels
 
-## Wallpapers
-
-The built-in wallpapers (`internal/assets/wallpapers`, two for each of the six
-hat colours) are abstract colour gradients generated with Gemini for HatRack.
-They show nothing and are covered by the project's MIT licence.
+The built-in wallpapers (`internal/assets/wallpapers`) were generated with
+Gemini for HatRack. They show nothing and are covered by the project's MIT
+licence.
